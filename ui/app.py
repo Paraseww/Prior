@@ -209,23 +209,9 @@ class PriorApp(ctk.CTk):
         self.search_entry.pack()
         self.search_entry.bind("<KeyRelease>", self._on_search_key)
 
-        # Right: Quick Add + Theme Toggle + User Profile Badge
+        # Right: Theme Toggle + User Profile Badge
         actions_frame = ctk.CTkFrame(inner_top, fg_color="transparent")
         actions_frame.pack(side="right")
-
-        # + Add Task Button
-        btn_new_task = ctk.CTkButton(
-            actions_frame,
-            text="+ New Task",
-            font=(theme.FONT_FAMILY, 13, "bold"),
-            height=36,
-            corner_radius=8,
-            fg_color=theme.ACCENT_PRIMARY,
-            hover_color=theme.ACCENT_HOVER,
-            text_color="#FFFFFF",
-            command=lambda: self.open_task_modal(),
-        )
-        btn_new_task.pack(side="left", padx=(0, 12))
 
         # Theme Toggle Button
         is_dark = self.profile.get("theme", "dark") == "dark"
