@@ -4,6 +4,7 @@ First-time onboarding splash screen for Prior.
 Provides friendly name customization, theme preference, and smooth transition to workspace.
 """
 
+from pathlib import Path
 from typing import Callable
 import customtkinter as ctk
 
@@ -36,24 +37,32 @@ class SplashView(ctk.CTkFrame):
         card.place(relx=0.5, rely=0.5, anchor="center")
         card.pack_propagate(False)
 
-        # Decorative Top Logo Circle
-        logo_frame = ctk.CTkFrame(
-            card,
-            width=84,
-            height=84,
-            corner_radius=42,
-            fg_color=theme.ACCENT_PRIMARY,
-        )
-        logo_frame.pack(pady=(45, 15))
-        logo_frame.pack_propagate(False)
+        # Decorative Top Logo (Figma icon or Styled Badge)
+        icon_path = Path(__file__).resolve().parent.parent / "assets" / "icon.png"
+        if icon_path.exists():
+            from PIL import Image
+            pil_img = Image.open(icon_path)
+            ctk_img = ctk.CTkImage(light_image=pil_img, dark_image=pil_img, size=(84, 84))
+            lbl_logo_img = ctk.CTkLabel(card, image=ctk_img, text="")
+            lbl_logo_img.pack(pady=(35, 10))
+        else:
+            logo_frame = ctk.CTkFrame(
+                card,
+                width=84,
+                height=84,
+                corner_radius=42,
+                fg_color=theme.ACCENT_PRIMARY,
+            )
+            logo_frame.pack(pady=(35, 10))
+            logo_frame.pack_propagate(False)
 
-        logo_label = ctk.CTkLabel(
-            logo_frame,
-            text="P",
-            font=(theme.FONT_DISPLAY, 40, "bold"),
-            text_color="#FFFFFF",
-        )
-        logo_label.place(relx=0.5, rely=0.5, anchor="center")
+            logo_label = ctk.CTkLabel(
+                logo_frame,
+                text="P",
+                font=(theme.FONT_DISPLAY, 40, "bold"),
+                text_color="#FFFFFF",
+            )
+            logo_label.place(relx=0.5, rely=0.5, anchor="center")
 
         # App Title & Tagline
         title = ctk.CTkLabel(

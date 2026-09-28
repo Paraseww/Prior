@@ -1,11 +1,9 @@
-"""
-ui/app.py
-Main Application Window Controller for Prior.
-Manages screen transitions, sidebar navigation, top bar controls, and state updates.
-"""
-
+import os
+from pathlib import Path
+import sys
 from typing import Any, Dict, List, Optional
 import customtkinter as ctk
+from PIL import Image
 
 import database
 from project import filter_tasks
@@ -16,6 +14,7 @@ from ui.matrix_view import MatrixView
 from ui.settings_view import SettingsView
 from ui.splash_view import SplashView
 from ui.task_modal import TaskModal
+from ui.tray import TrayService
 
 
 class PriorApp(ctk.CTk):
@@ -34,6 +33,9 @@ class PriorApp(ctk.CTk):
         self.geometry("1120x740")
         self.minsize(980, 640)
 
+        # Set Window Icon
+        self._set_app_icon()
+
         # Set appearance theme
         app_mode = self.profile.get("theme", "dark")
         ctk.set_appearance_mode(app_mode)
@@ -45,11 +47,39 @@ class PriorApp(ctk.CTk):
         self.search_query = ""
         self.all_tasks: List[Dict[str, Any]] = []
 
+        # System Tray Integration
+        self.tray = TrayService(
+            on_show_app=self.show_window,
+            on_quick_add=self.show_and_quick_add,
+            on_exit_app=self.quit_completely,
+        )
+        self.tray.start()
+
+        # Intercept window close (X) to minimize to tray
+        self.protocol("WM_DELETE_WINDOW", self._on_window_close)
+
         # Root container
         self.root_container = ctk.CTkFrame(self, fg_color="transparent")
         self.root_container.pack(fill="both", expand=True)
 
         self._check_onboarding_and_render()
+
+    def _set_app_icon(self) -> None:
+        """Configures the window titlebar and taskbar icon."""
+        assets_dir = Path(__file__).resolve().parent.parent / "assets"
+        ico_path = assets_dir / "icon.ico"
+        png_path = assets_dir / "icon.png"
+
+        try:
+            if ico_path.exists() and sys.platform == "win32":
+                self.iconbitmap(str(ico_path))
+            elif png_path.exists():
+                from PIL import ImageTk
+                img = Image.open(png_path)
+                photo = ImageTk.PhotoImage(img)
+                self.wm_iconphoto(True, photo)
+        except Exception:
+            pass
 
     def _check_onboarding_and_render(self) -> None:
         # Clear existing container children
@@ -110,23 +140,31 @@ class PriorApp(ctk.CTk):
         brand_frame = ctk.CTkFrame(inner_top, fg_color="transparent")
         brand_frame.pack(side="left")
 
-        logo_badge = ctk.CTkFrame(
-            brand_frame,
-            width=36,
-            height=36,
-            corner_radius=18,
-            fg_color=theme.ACCENT_PRIMARY,
-        )
-        logo_badge.pack(side="left", padx=(0, 10))
-        logo_badge.pack_propagate(False)
+        # Custom Logo Image (Figma asset)
+        png_path = Path(__file__).resolve().parent.parent / "assets" / "icon.png"
+        if png_path.exists():
+            pil_img = Image.open(png_path)
+            ctk_img = ctk.CTkImage(light_image=pil_img, dark_image=pil_img, size=(36, 36))
+            lbl_logo = ctk.CTkLabel(brand_frame, image=ctk_img, text="")
+            lbl_logo.pack(side="left", padx=(0, 10))
+        else:
+            logo_badge = ctk.CTkFrame(
+                brand_frame,
+                width=36,
+                height=36,
+                corner_radius=18,
+                fg_color=theme.ACCENT_PRIMARY,
+            )
+            logo_badge.pack(side="left", padx=(0, 10))
+            logo_badge.pack_propagate(False)
 
-        lbl_logo = ctk.CTkLabel(
-            logo_badge,
-            text="P",
-            font=(theme.FONT_DISPLAY, 18, "bold"),
-            text_color="#FFFFFF",
-        )
-        lbl_logo.place(relx=0.5, rely=0.5, anchor="center")
+            lbl_logo = ctk.CTkLabel(
+                logo_badge,
+                text="P",
+                font=(theme.FONT_DISPLAY, 18, "bold"),
+                text_color="#FFFFFF",
+            )
+            lbl_logo.place(relx=0.5, rely=0.5, anchor="center")
 
         brand_text_box = ctk.CTkFrame(brand_frame, fg_color="transparent")
         brand_text_box.pack(side="left")
@@ -397,6 +435,41 @@ class PriorApp(ctk.CTk):
         """Clears all completed tasks."""
         database.clear_completed_tasks()
         self._load_and_refresh()
+
+    # ========================================================================
+    # Window & System Tray Management
+    # ========================================================================
+
+    def show_window(self) -> None:
+        """Restores and focuses the application window from tray."""
+        self.after(0, self._restore_window)
+
+    def _restore_window(self) -> None:
+        self.deiconify()
+        self.lift()
+        self.focus_force()
+
+    def show_and_quick_add(self) -> None:
+        """Restores window and immediately opens Add Task modal."""
+        self.show_window()
+        self.after(100, lambda: self.open_task_modal())
+
+    def _on_window_close(self) -> None:
+        """Minimizes the window to the system tray instead of terminating."""
+        self.withdraw()
+        # Notify user on first minimize
+        if hasattr(self, "tray") and self.tray:
+            self.tray.notify(
+                title="Prior is running in background",
+                message="Click the system tray icon to reopen anytime.",
+            )
+
+    def quit_completely(self) -> None:
+        """Terminates the application and cleans up tray icon."""
+        try:
+            self.after(0, self.destroy)
+        except Exception:
+            sys.exit(0)
 
 
 def launch_app() -> None:
