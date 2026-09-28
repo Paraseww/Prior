@@ -9,6 +9,7 @@ import database
 from project import filter_tasks
 from ui import theme
 from ui.analytics_view import AnalyticsView
+from ui.calendar_view import CalendarView
 from ui.list_view import ListView
 from ui.matrix_view import MatrixView
 from ui.pomodoro_modal import PomodoroModal
@@ -274,6 +275,7 @@ class PriorApp(ctk.CTk):
         nav_items = [
             ("matrix", "▦  Matrix View"),
             ("list", "☰  List View"),
+            ("calendar", "📅  Calendar"),
             ("analytics", "📊 Analytics"),
             ("settings", "⚙️  Settings"),
         ]
@@ -348,6 +350,19 @@ class PriorApp(ctk.CTk):
             )
             self.current_view.pack(fill="both", expand=True)
 
+        elif tab_id == "calendar":
+            self.current_view = CalendarView(
+                self.content_frame,
+                tasks=filtered_tasks,
+                on_toggle=self.toggle_task,
+                on_edit=self.open_task_modal,
+                on_move=self.move_task_quadrant,
+                on_delete=self.delete_task,
+                on_quick_add=self.open_quick_add_with_date,
+                on_pomodoro=self.open_pomodoro_modal,
+            )
+            self.current_view.pack(fill="both", expand=True)
+
         elif tab_id == "analytics":
             self.current_view = AnalyticsView(
                 self.content_frame,
@@ -397,7 +412,12 @@ class PriorApp(ctk.CTk):
     # Task Operations
     # ========================================================================
 
-    def open_task_modal(self, task: Optional[Dict[str, Any]] = None, default_quadrant: str = "Q1_DO") -> None:
+    def open_task_modal(
+        self,
+        task: Optional[Dict[str, Any]] = None,
+        default_quadrant: str = "Q1_DO",
+        default_due_date: Optional[str] = None,
+    ) -> None:
         """Opens Add/Edit Task Modal."""
         def handle_save(data: Dict[str, Any]) -> None:
             if task and "id" in task:
@@ -417,11 +437,21 @@ class PriorApp(ctk.CTk):
                 )
             self._load_and_refresh()
 
-        TaskModal(self, on_save=handle_save, task=task, default_quadrant=default_quadrant)
+        TaskModal(
+            self,
+            on_save=handle_save,
+            task=task,
+            default_quadrant=default_quadrant,
+            default_due_date=default_due_date,
+        )
 
     def open_quick_add(self, quadrant: str) -> None:
         """Opens Add Task Modal pre-selected with specified quadrant."""
         self.open_task_modal(default_quadrant=quadrant)
+
+    def open_quick_add_with_date(self, quadrant: str = "Q1_DO", due_date: Optional[str] = None) -> None:
+        """Opens Add Task Modal pre-selected with specified quadrant and due date."""
+        self.open_task_modal(default_quadrant=quadrant, default_due_date=due_date)
 
     def toggle_task(self, task_id: int) -> None:
         """Toggles task completion status."""

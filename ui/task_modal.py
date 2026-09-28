@@ -22,12 +22,14 @@ class TaskModal(ctk.CTkToplevel):
         on_save: Callable[[Dict[str, Any]], None],
         task: Optional[Dict[str, Any]] = None,
         default_quadrant: str = "Q1_DO",
+        default_due_date: Optional[str] = None,
     ) -> None:
         super().__init__(master)
         self.on_save_callback = on_save
         self.task = task
         self.is_edit = task is not None
         self.current_quadrant = task.get("quadrant", default_quadrant) if task else default_quadrant
+        self.default_due_date = default_due_date
 
         self.title("Edit Task" if self.is_edit else "Create New Task")
         self.geometry("540x620")
@@ -196,6 +198,8 @@ class TaskModal(ctk.CTkToplevel):
         self.entry_due.pack(side="left", padx=(0, 10))
         if self.task and self.task.get("due_date"):
             self.entry_due.insert(0, self.task["due_date"])
+        elif not self.task and self.default_due_date:
+            self.entry_due.insert(0, self.default_due_date)
 
         # Presets: Today, Tomorrow, +1 Wk, Clear
         btn_today = ctk.CTkButton(due_row, text="Today", width=60, height=34, corner_radius=6, fg_color=theme.BG_INPUT, text_color=theme.TEXT_PRIMARY, hover_color=theme.BG_CARD_HOVER, command=lambda: self._set_due_preset(0))
