@@ -79,105 +79,108 @@ class TaskCard(ctk.CTkFrame):
         self.hover_action = self._on_pomodoro_click
 
     def _build_normal_ui(self) -> None:
-        """Builds the standard task card view (visible when not hovering)."""
+        """Builds the standard task card view with clean left-aligned typography."""
         self.normal_frame = ctk.CTkFrame(self, fg_color="transparent")
         self.normal_frame.pack(fill="both", expand=True, padx=12, pady=10)
 
-        # Top row: Checkbox + Title + Edit/Delete
-        top_row = ctk.CTkFrame(self.normal_frame, fg_color="transparent")
-        top_row.pack(fill="x")
+        # 1. Left Section: Checkbox anchored to top-left
+        left_box = ctk.CTkFrame(self.normal_frame, fg_color="transparent")
+        left_box.pack(side="left", fill="y", anchor="n", padx=(0, 8))
 
-        # Checkbox
         self.check_var = ctk.BooleanVar(value=self.is_completed)
         self.cb = ctk.CTkCheckBox(
-            top_row,
+            left_box,
             text="",
             variable=self.check_var,
-            width=22,
-            height=22,
-            corner_radius=6,
+            width=20,
+            height=20,
+            corner_radius=5,
             fg_color=self.q_color,
             hover_color=self.q_info["color_dark"],
             command=lambda: self.on_toggle(self.task["id"]),
         )
-        self.cb.pack(side="left", padx=(0, 8))
+        self.cb.pack(side="top", pady=(2, 0))
 
-        # Task Title
+        # 2. Right Section: Action buttons anchored to top-right
+        right_box = ctk.CTkFrame(self.normal_frame, fg_color="transparent")
+        right_box.pack(side="right", fill="y", anchor="n", padx=(4, 0))
+
+        btn_del = ctk.CTkButton(
+            right_box,
+            text="✕",
+            width=22,
+            height=22,
+            corner_radius=5,
+            fg_color="transparent",
+            hover_color=("#FEE2E2", "#7F1D1D"),
+            text_color=("#EF4444", "#F87171"),
+            font=(theme.FONT_FAMILY, 11, "bold"),
+            command=lambda: self.on_delete(self.task["id"]),
+        )
+        btn_del.pack(side="right", padx=(2, 0))
+
+        btn_edit = ctk.CTkButton(
+            right_box,
+            text="✎",
+            width=22,
+            height=22,
+            corner_radius=5,
+            fg_color="transparent",
+            hover_color=theme.BG_CARD_HOVER,
+            text_color=theme.TEXT_SECONDARY,
+            font=(theme.FONT_FAMILY, 11),
+            command=lambda: self.on_edit(self.task),
+        )
+        btn_edit.pack(side="right", padx=(2, 0))
+
+        # 3. Center Section: Left-aligned Title, Description, and Due Date
+        self.center_box = ctk.CTkFrame(self.normal_frame, fg_color="transparent")
+        self.center_box.pack(side="left", fill="both", expand=True)
+
+        # Title
         title_text = self.task.get("title", "Untitled Task")
         title_color = theme.TEXT_MUTED if self.is_completed else theme.TEXT_PRIMARY
 
         self.lbl_title = ctk.CTkLabel(
-            top_row,
+            self.center_box,
             text=title_text,
             font=(theme.FONT_FAMILY, 13, "bold"),
             text_color=title_color,
             anchor="w",
             justify="left",
-            wraplength=190,
+            wraplength=220,
             cursor="fleur" if not self.is_completed else "arrow",
         )
-        self.lbl_title.pack(side="left", fill="x", expand=True)
+        self.lbl_title.pack(fill="x", anchor="w")
 
-        # Action Buttons on Right: Edit & Delete
-        btn_del = ctk.CTkButton(
-            top_row,
-            text="✕",
-            width=24,
-            height=24,
-            corner_radius=6,
-            fg_color="transparent",
-            hover_color=("#FEE2E2", "#7F1D1D"),
-            text_color=("#EF4444", "#F87171"),
-            font=(theme.FONT_FAMILY, 12, "bold"),
-            command=lambda: self.on_delete(self.task["id"]),
-        )
-        btn_del.pack(side="right", padx=(4, 0))
-
-        btn_edit = ctk.CTkButton(
-            top_row,
-            text="✎",
-            width=24,
-            height=24,
-            corner_radius=6,
-            fg_color="transparent",
-            hover_color=theme.BG_CARD_HOVER,
-            text_color=theme.TEXT_SECONDARY,
-            font=(theme.FONT_FAMILY, 12),
-            command=lambda: self.on_edit(self.task),
-        )
-        btn_edit.pack(side="right", padx=(2, 0))
-
-        # Description row (if present)
+        # Description (if present)
         description = self.task.get("description", "").strip()
         if description:
-            lbl_desc = ctk.CTkLabel(
-                self.normal_frame,
+            self.lbl_desc = ctk.CTkLabel(
+                self.center_box,
                 text=description,
                 font=(theme.FONT_FAMILY, 11),
                 text_color=theme.TEXT_MUTED if self.is_completed else theme.TEXT_SECONDARY,
                 anchor="w",
                 justify="left",
-                wraplength=260,
+                wraplength=220,
             )
-            lbl_desc.pack(fill="x", pady=(4, 6), padx=(30, 0))
+            self.lbl_desc.pack(fill="x", anchor="w", pady=(3, 2))
 
-        # Bottom row: Due Date Badge (only rendered when a valid due date is present)
+        # Due Date Badge (if present)
         due_date_str = self.task.get("due_date")
         if due_date_str:
             due_info = format_due_status(due_date_str)
             if due_info.get("status") not in ("NO_DUE_DATE", "INVALID_DATE"):
-                bottom_row = ctk.CTkFrame(self.normal_frame, fg_color="transparent")
-                bottom_row.pack(fill="x", pady=(6, 0), padx=(30, 0))
-
                 badge_frame = ctk.CTkFrame(
-                    bottom_row,
+                    self.center_box,
                     fg_color=self.q_info["bg_header"],
                     corner_radius=6,
                     height=20,
                     border_width=1,
                     border_color=self.q_info["border"],
                 )
-                badge_frame.pack(side="left")
+                badge_frame.pack(anchor="w", pady=(4, 0))
 
                 lbl_due = ctk.CTkLabel(
                     badge_frame,
@@ -187,6 +190,15 @@ class TaskCard(ctk.CTkFrame):
                 )
                 lbl_due.pack(padx=6, pady=1)
 
+        # Responsive wraplength adjustment based on container width
+        def _on_resize(event: Any) -> None:
+            wrap_w = max(140, event.width - 6)
+            self.lbl_title.configure(wraplength=wrap_w)
+            if hasattr(self, "lbl_desc"):
+                self.lbl_desc.configure(wraplength=wrap_w)
+
+        self.center_box.bind("<Configure>", _on_resize)
+
     def _setup_drag_and_drop(self) -> None:
         """Binds mouse dragging to move tasks across quadrants seamlessly."""
         self._drag_start_x = 0
@@ -195,7 +207,9 @@ class TaskCard(ctk.CTkFrame):
         self._drag_ghost: Optional[ctk.CTkToplevel] = None
 
         # Bind drag events to card container, normal frame, and title
-        drag_widgets = [self, self.normal_frame, self.lbl_title]
+        drag_widgets = [self, self.normal_frame, self.lbl_title, self.center_box]
+        if hasattr(self, "lbl_desc"):
+            drag_widgets.append(self.lbl_desc)
         if hasattr(self, "hover_frame"):
             drag_widgets.extend([self.hover_frame, self.inner_hover, self.lbl_action, self.lbl_icon])
 
