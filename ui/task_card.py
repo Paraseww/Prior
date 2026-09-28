@@ -213,15 +213,16 @@ class TaskCard(ctk.CTkFrame):
         opt_move.pack(side="right")
 
     def _build_hover_ui(self) -> None:
-        """Builds the full-card hover transformation (solid colored action pill)."""
+        """Builds the full-card hover transformation as an overlay."""
         self.hover_frame = ctk.CTkFrame(
             self,
-            fg_color="transparent",
+            fg_color=self.hover_bg,
+            corner_radius=9,
             cursor="hand2",
         )
 
         inner_hover = ctk.CTkFrame(self.hover_frame, fg_color="transparent")
-        inner_hover.pack(fill="both", expand=True, padx=12, pady=14)
+        inner_hover.pack(fill="both", expand=True, padx=14, pady=10)
 
         lbl_action = ctk.CTkLabel(
             inner_hover,
@@ -282,11 +283,10 @@ class TaskCard(ctk.CTkFrame):
             return
         self.is_hovered = True
 
-        # Shuffle to hover action view
-        self.normal_frame.pack_forget()
-        self.hover_frame.pack(fill="both", expand=True, padx=4, pady=4)
+        # Use place() overlay to maintain exact dimensions without shifting adjacent cards
+        self.hover_frame.place(relx=0, rely=0, relwidth=1, relheight=1)
+        self.hover_frame.lift()
         self.configure(
-            fg_color=self.hover_bg,
             border_color=self.q_color,
             border_width=2,
         )
@@ -309,11 +309,9 @@ class TaskCard(ctk.CTkFrame):
             return
         self.is_hovered = False
 
-        # Revert back to normal task view
-        self.hover_frame.pack_forget()
-        self.normal_frame.pack(fill="both", expand=True, padx=12, pady=10)
+        # Hide overlay without altering parent container dimensions
+        self.hover_frame.place_forget()
         self.configure(
-            fg_color=theme.BG_CARD,
             border_color=theme.BORDER_COLOR,
             border_width=1,
         )
