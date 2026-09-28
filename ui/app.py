@@ -493,6 +493,7 @@ class PriorApp(ctk.CTk):
             self,
             task=task,
             on_save_schedule=handle_save_schedule,
+            on_complete_task=self.toggle_task,
             on_edit_task=self.open_task_modal,
         )
 

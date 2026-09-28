@@ -23,15 +23,17 @@ class ScheduleModal(ctk.CTkToplevel):
         master: Any,
         task: Dict[str, Any],
         on_save_schedule: Callable[[int, Optional[str], Optional[str]], None],
+        on_complete_task: Optional[Callable[[int], None]] = None,
         on_edit_task: Optional[Callable[[Dict[str, Any]], None]] = None,
     ) -> None:
         super().__init__(master)
         self.task = task
         self.on_save_schedule = on_save_schedule
+        self.on_complete_task = on_complete_task
         self.on_edit_task = on_edit_task
 
         self.title("Prior — Schedule Task & Reminder")
-        self.geometry("520x680")
+        self.geometry("520x730")
         self.resizable(False, False)
         self.transient(master)
         self.grab_set()
@@ -71,7 +73,7 @@ class ScheduleModal(ctk.CTkToplevel):
         self.update_idletasks()
         try:
             x = master.winfo_x() + (master.winfo_width() - 520) // 2
-            y = master.winfo_y() + (master.winfo_height() - 680) // 2
+            y = master.winfo_y() + (master.winfo_height() - 730) // 2
             self.geometry(f"+{max(0, x)}+{max(0, y)}")
         except Exception:
             pass
@@ -373,6 +375,22 @@ class ScheduleModal(ctk.CTkToplevel):
         )
         btn_save.pack(side="right", fill="x", expand=True, padx=(6, 0))
 
+        # 6. Mark Task Completed & Finish Button
+        btn_complete = ctk.CTkButton(
+            container,
+            text="✓ Mark Task Completed & Finish",
+            font=(theme.FONT_FAMILY, 13, "bold"),
+            height=36,
+            corner_radius=8,
+            fg_color="transparent",
+            hover_color=("#ECFDF5", "#064E3B"),
+            text_color=("#10B981", "#34D399"),
+            border_width=1,
+            border_color=("#10B981", "#059669"),
+            command=self._on_mark_completed,
+        )
+        btn_complete.pack(fill="x", pady=(10, 0))
+
     def _render_mini_calendar(self) -> None:
         """Renders compact 7-column calendar grid inside the modal."""
         for child in self.grid_frame.winfo_children():
@@ -549,4 +567,9 @@ class ScheduleModal(ctk.CTkToplevel):
         due_date_str = self.selected_date.strftime("%Y-%m-%d") if self.selected_date else None
         reminder_time_str = self.selected_time if self.selected_date else None
         self.on_save_schedule(self.task["id"], due_date_str, reminder_time_str)
+        self.destroy()
+
+    def _on_mark_completed(self) -> None:
+        if self.on_complete_task and "id" in self.task:
+            self.on_complete_task(self.task["id"])
         self.destroy()
