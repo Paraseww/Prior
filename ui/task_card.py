@@ -29,6 +29,7 @@ class TaskCard(ctk.CTkFrame):
         on_move: Callable[[int, str], None],
         on_delete: Callable[[int], None],
         on_pomodoro: Optional[Callable[[Dict[str, Any]], None]] = None,
+        on_schedule: Optional[Callable[[Dict[str, Any]], None]] = None,
         find_target_quadrant: Optional[Callable[[int, int], Optional[str]]] = None,
         highlight_target_quadrant: Optional[Callable[[Optional[str]], None]] = None,
         **kwargs,
@@ -47,6 +48,7 @@ class TaskCard(ctk.CTkFrame):
         self.on_move = on_move
         self.on_delete = on_delete
         self.on_pomodoro = on_pomodoro
+        self.on_schedule = on_schedule
         self.find_target_quadrant = find_target_quadrant
         self.highlight_target_quadrant = highlight_target_quadrant
 
@@ -331,7 +333,10 @@ class TaskCard(ctk.CTkFrame):
             self.on_edit(self.task)
 
     def _on_schedule_click(self) -> None:
-        self.on_edit(self.task)
+        if self.on_schedule:
+            self.on_schedule(self.task)
+        else:
+            self.on_edit(self.task)
 
     def _on_hover_click(self) -> None:
         if self.hover_action:

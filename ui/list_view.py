@@ -26,6 +26,7 @@ class ListView(ctk.CTkFrame):
         on_delete: Callable[[int], None],
         on_clear_completed: Callable[[], None],
         on_pomodoro: Optional[Callable[[Dict[str, Any]], None]] = None,
+        on_schedule: Optional[Callable[[Dict[str, Any]], None]] = None,
         **kwargs,
     ) -> None:
         super().__init__(master, fg_color="transparent", **kwargs)
@@ -36,6 +37,7 @@ class ListView(ctk.CTkFrame):
         self.on_delete = on_delete
         self.on_clear_completed = on_clear_completed
         self.on_pomodoro = on_pomodoro
+        self.on_schedule = on_schedule
 
         self.filter_quadrant = "ALL"
         self.filter_status = "ALL"
@@ -160,6 +162,7 @@ class ListView(ctk.CTkFrame):
                 on_move=self.on_move,
                 on_delete=self.on_delete,
                 on_pomodoro=self.on_pomodoro,
+                on_schedule=self.on_schedule,
             )
             card.pack(fill="x", pady=4, padx=4)
 

@@ -75,6 +75,12 @@ def init_db(db_path: Optional[str] = None) -> None:
         "CREATE INDEX IF NOT EXISTS idx_tasks_completed ON tasks(is_completed)"
     )
 
+    # Optional column migration: reminder_time
+    try:
+        cursor.execute("ALTER TABLE tasks ADD COLUMN reminder_time TEXT")
+    except sqlite3.OperationalError:
+        pass
+
     # Ensure a single default profile record exists
     cursor.execute("SELECT COUNT(*) as count FROM profile WHERE id = 1")
     row = cursor.fetchone()
@@ -153,6 +159,7 @@ def add_task(
     description: str = "",
     quadrant: str = "Q1_DO",
     due_date: Optional[str] = None,
+    reminder_time: Optional[str] = None,
     db_path: Optional[str] = None,
 ) -> int:
     """
@@ -174,10 +181,10 @@ def add_task(
     cursor = conn.cursor()
     cursor.execute(
         """
-        INSERT INTO tasks (title, description, quadrant, due_date, is_completed, created_at, completed_at)
-        VALUES (?, ?, ?, ?, 0, ?, NULL)
+        INSERT INTO tasks (title, description, quadrant, due_date, reminder_time, is_completed, created_at, completed_at)
+        VALUES (?, ?, ?, ?, ?, 0, ?, NULL)
         """,
-        (clean_title, description.strip(), normalized_quadrant, due_date, created_at),
+        (clean_title, description.strip(), normalized_quadrant, due_date, reminder_time, created_at),
     )
     task_id = cursor.lastrowid
     conn.commit()
@@ -211,6 +218,7 @@ def update_task(
     description: Optional[str] = None,
     quadrant: Optional[str] = None,
     due_date: Optional[str] = None,
+    reminder_time: Optional[str] = None,
     is_completed: Optional[int] = None,
     db_path: Optional[str] = None,
 ) -> bool:
@@ -239,6 +247,10 @@ def update_task(
     if due_date is not None:
         fields.append("due_date = ?")
         values.append(due_date.strip() if due_date else None)
+
+    if reminder_time is not None:
+        fields.append("reminder_time = ?")
+        values.append(reminder_time.strip() if reminder_time else None)
 
     if is_completed is not None:
         val = 1 if is_completed else 0

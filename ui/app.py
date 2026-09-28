@@ -13,6 +13,7 @@ from ui.calendar_view import CalendarView
 from ui.list_view import ListView
 from ui.matrix_view import MatrixView
 from ui.pomodoro_modal import PomodoroModal
+from ui.schedule_modal import ScheduleModal
 from ui.settings_view import SettingsView
 from ui.splash_view import SplashView
 from ui.task_modal import TaskModal
@@ -334,6 +335,7 @@ class PriorApp(ctk.CTk):
                 on_delete=self.delete_task,
                 on_quick_add=self.open_quick_add,
                 on_pomodoro=self.open_pomodoro_modal,
+                on_schedule=self.open_schedule_modal,
             )
             self.current_view.pack(fill="both", expand=True)
 
@@ -347,6 +349,7 @@ class PriorApp(ctk.CTk):
                 on_delete=self.delete_task,
                 on_clear_completed=self.clear_completed,
                 on_pomodoro=self.open_pomodoro_modal,
+                on_schedule=self.open_schedule_modal,
             )
             self.current_view.pack(fill="both", expand=True)
 
@@ -360,6 +363,7 @@ class PriorApp(ctk.CTk):
                 on_delete=self.delete_task,
                 on_quick_add=self.open_quick_add_with_date,
                 on_pomodoro=self.open_pomodoro_modal,
+                on_schedule=self.open_schedule_modal,
             )
             self.current_view.pack(fill="both", expand=True)
 
@@ -474,6 +478,19 @@ class PriorApp(ctk.CTk):
             self,
             task=task,
             on_complete_task=self.toggle_task,
+            on_edit_task=self.open_task_modal,
+        )
+
+    def open_schedule_modal(self, task: Dict[str, Any]) -> None:
+        """Opens the dedicated Schedule & Reminder modal for the selected task."""
+        def handle_save_schedule(task_id: int, due_date: Optional[str], reminder_time: Optional[str]) -> None:
+            database.update_task(task_id=task_id, due_date=due_date, reminder_time=reminder_time)
+            self._load_and_refresh()
+
+        ScheduleModal(
+            self,
+            task=task,
+            on_save_schedule=handle_save_schedule,
             on_edit_task=self.open_task_modal,
         )
 

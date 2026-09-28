@@ -26,6 +26,7 @@ class MatrixView(ctk.CTkFrame):
         on_delete: Callable[[int], None],
         on_quick_add: Callable[[str], None],
         on_pomodoro: Optional[Callable[[Dict[str, Any]], None]] = None,
+        on_schedule: Optional[Callable[[Dict[str, Any]], None]] = None,
         **kwargs,
     ) -> None:
         super().__init__(master, fg_color="transparent", **kwargs)
@@ -36,6 +37,7 @@ class MatrixView(ctk.CTkFrame):
         self.on_delete = on_delete
         self.on_quick_add = on_quick_add
         self.on_pomodoro = on_pomodoro
+        self.on_schedule = on_schedule
 
         self._build_ui()
 
@@ -181,6 +183,7 @@ class MatrixView(ctk.CTkFrame):
                         on_move=self.on_move,
                         on_delete=self.on_delete,
                         on_pomodoro=self.on_pomodoro,
+                        on_schedule=self.on_schedule,
                         find_target_quadrant=self.get_quadrant_at_pointer,
                         highlight_target_quadrant=self.highlight_quadrant,
                     )
