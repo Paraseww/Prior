@@ -11,6 +11,7 @@ from ui import theme
 from ui.analytics_view import AnalyticsView
 from ui.list_view import ListView
 from ui.matrix_view import MatrixView
+from ui.pomodoro_modal import PomodoroModal
 from ui.settings_view import SettingsView
 from ui.splash_view import SplashView
 from ui.task_modal import TaskModal
@@ -47,13 +48,8 @@ class PriorApp(ctk.CTk):
         self.search_query = ""
         self.all_tasks: List[Dict[str, Any]] = []
 
-        # System Tray Integration
-        self.tray = TrayService(
-            on_show_app=self.show_window,
-            on_quick_add=self.show_and_quick_add,
-            on_exit_app=self.quit_completely,
-        )
-        self.tray.start()
+        # System Tray instance (created when minimized to tray)
+        self.tray: Optional[TrayService] = None
 
         # Intercept window close (X) to minimize to tray
         self.protocol("WM_DELETE_WINDOW", self._on_window_close)
@@ -63,6 +59,12 @@ class PriorApp(ctk.CTk):
         self.root_container.pack(fill="both", expand=True)
 
         self._check_onboarding_and_render()
+
+        # Bring window to front
+        self.lift()
+        self.attributes("-topmost", True)
+        self.after(100, lambda: self.attributes("-topmost", False))
+        self.focus_force()
 
     def _set_app_icon(self) -> None:
         """Configures the window titlebar and taskbar icon."""
@@ -329,6 +331,7 @@ class PriorApp(ctk.CTk):
                 on_move=self.move_task_quadrant,
                 on_delete=self.delete_task,
                 on_quick_add=self.open_quick_add,
+                on_pomodoro=self.open_pomodoro_modal,
             )
             self.current_view.pack(fill="both", expand=True)
 
@@ -341,6 +344,7 @@ class PriorApp(ctk.CTk):
                 on_move=self.move_task_quadrant,
                 on_delete=self.delete_task,
                 on_clear_completed=self.clear_completed,
+                on_pomodoro=self.open_pomodoro_modal,
             )
             self.current_view.pack(fill="both", expand=True)
 
@@ -431,6 +435,10 @@ class PriorApp(ctk.CTk):
         database.delete_task(task_id)
         self._load_and_refresh()
 
+    def open_pomodoro_modal(self, task: Dict[str, Any]) -> None:
+        """Opens the Pomodoro Focus timer modal for the selected task."""
+        PomodoroModal(self, task=task, on_complete_task=self.toggle_task)
+
     def clear_completed(self) -> None:
         """Clears all completed tasks."""
         database.clear_completed_tasks()
@@ -439,6 +447,18 @@ class PriorApp(ctk.CTk):
     # ========================================================================
     # Window & System Tray Management
     # ========================================================================
+
+    def _init_tray(self) -> None:
+        """Initializes system tray in the background."""
+        try:
+            self.tray = TrayService(
+                on_show_app=self.show_window,
+                on_quick_add=self.show_and_quick_add,
+                on_exit_app=self.quit_completely,
+            )
+            self.tray.start()
+        except Exception:
+            pass
 
     def show_window(self) -> None:
         """Restores and focuses the application window from tray."""
@@ -457,6 +477,8 @@ class PriorApp(ctk.CTk):
     def _on_window_close(self) -> None:
         """Minimizes the window to the system tray instead of terminating."""
         self.withdraw()
+        if not self.tray:
+            self._init_tray()
         # Notify user on first minimize
         if hasattr(self, "tray") and self.tray:
             self.tray.notify(

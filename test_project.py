@@ -11,6 +11,7 @@ from project import (
     determine_quadrant,
     filter_tasks,
     format_due_status,
+    format_timer_display,
 )
 
 
@@ -221,3 +222,28 @@ def test_format_due_status_comparisons():
     assert res_future["days_diff"] == 5
     assert res_future["label"] == "In 5 days"
     assert res_future["color_tag"] == "blue"
+
+
+# ============================================================================
+# 5. Tests for format_timer_display()
+# ============================================================================
+
+def test_format_timer_display_valid():
+    """Verify seconds to MM:SS formatting for Pomodoro intervals."""
+    assert format_timer_display(1500) == "25:00"   # 25-minute work block
+    assert format_timer_display(300) == "05:00"    # 5-minute short break
+    assert format_timer_display(900) == "15:00"    # 15-minute long break
+    assert format_timer_display(65) == "01:05"     # 1 minute 5 seconds
+    assert format_timer_display(0) == "00:00"      # Complete / zero
+
+
+def test_format_timer_display_invalid():
+    """Verify TypeError and ValueError handling on invalid timer inputs."""
+    with pytest.raises(TypeError):
+        format_timer_display("1500")  # type: ignore
+
+    with pytest.raises(TypeError):
+        format_timer_display(True)  # type: ignore
+
+    with pytest.raises(ValueError):
+        format_timer_display(-10)

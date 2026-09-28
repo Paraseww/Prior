@@ -4,7 +4,7 @@ The core 4-Quadrant Eisenhower Matrix workspace view for Prior.
 Displays tasks categorized into Do First, Schedule, Delegate, and Eliminate.
 """
 
-from typing import Any, Callable, Dict, List
+from typing import Any, Callable, Dict, List, Optional
 import customtkinter as ctk
 
 from ui import theme
@@ -25,6 +25,7 @@ class MatrixView(ctk.CTkFrame):
         on_move: Callable[[int, str], None],
         on_delete: Callable[[int], None],
         on_quick_add: Callable[[str], None],
+        on_pomodoro: Optional[Callable[[Dict[str, Any]], None]] = None,
         **kwargs,
     ) -> None:
         super().__init__(master, fg_color="transparent", **kwargs)
@@ -34,6 +35,7 @@ class MatrixView(ctk.CTkFrame):
         self.on_move = on_move
         self.on_delete = on_delete
         self.on_quick_add = on_quick_add
+        self.on_pomodoro = on_pomodoro
 
         self._build_ui()
 
@@ -178,6 +180,7 @@ class MatrixView(ctk.CTkFrame):
                         on_edit=self.on_edit,
                         on_move=self.on_move,
                         on_delete=self.on_delete,
+                        on_pomodoro=self.on_pomodoro,
                     )
                     card.pack(fill="x", pady=4, padx=2)
 

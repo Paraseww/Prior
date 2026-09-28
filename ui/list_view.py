@@ -3,7 +3,7 @@ ui/list_view.py
 Chronological and filterable List View for Prior tasks.
 """
 
-from typing import Any, Callable, Dict, List
+from typing import Any, Callable, Dict, List, Optional
 import customtkinter as ctk
 
 from project import filter_tasks
@@ -25,6 +25,7 @@ class ListView(ctk.CTkFrame):
         on_move: Callable[[int, str], None],
         on_delete: Callable[[int], None],
         on_clear_completed: Callable[[], None],
+        on_pomodoro: Optional[Callable[[Dict[str, Any]], None]] = None,
         **kwargs,
     ) -> None:
         super().__init__(master, fg_color="transparent", **kwargs)
@@ -34,6 +35,7 @@ class ListView(ctk.CTkFrame):
         self.on_move = on_move
         self.on_delete = on_delete
         self.on_clear_completed = on_clear_completed
+        self.on_pomodoro = on_pomodoro
 
         self.filter_quadrant = "ALL"
         self.filter_status = "ALL"
@@ -157,6 +159,7 @@ class ListView(ctk.CTkFrame):
                 on_edit=self.on_edit,
                 on_move=self.on_move,
                 on_delete=self.on_delete,
+                on_pomodoro=self.on_pomodoro,
             )
             card.pack(fill="x", pady=4, padx=4)
 

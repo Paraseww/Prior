@@ -250,5 +250,24 @@ def format_due_status(
         }
 
 
+def format_timer_display(seconds: int) -> str:
+    """
+    Formats total seconds into MM:SS display format for Pomodoro focus sessions.
+
+    :param seconds: Total integer seconds (non-negative).
+    :return: Formatted string (e.g. 1500 -> '25:00', 65 -> '01:05').
+    :raises TypeError: If seconds is not an integer.
+    :raises ValueError: If seconds is negative.
+    """
+    if not isinstance(seconds, int) or isinstance(seconds, bool):
+        raise TypeError("Seconds argument must be an integer.")
+    if seconds < 0:
+        raise ValueError("Seconds cannot be negative.")
+
+    mins = seconds // 60
+    secs = seconds % 60
+    return f"{mins:02d}:{secs:02d}"
+
+
 if __name__ == "__main__":
     main()

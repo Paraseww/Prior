@@ -139,7 +139,6 @@ class TrayService:
         )
 
         self.tray_icon = pystray.Icon("Prior", image, "Prior — Time Management", menu)
-
         self._thread = threading.Thread(target=self.tray_icon.run, daemon=True)
         self._thread.start()
 
