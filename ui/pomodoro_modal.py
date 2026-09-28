@@ -217,10 +217,10 @@ class PomodoroModal(ctk.CTkToplevel):
             height=36,
             corner_radius=10,
             fg_color="transparent",
-            hover_color=("#ECFDF5", "#064E3B"),
-            text_color=("#10B981", "#34D399"),
+            hover_color=("#FEF2F2", "#7F1D1D"),
+            text_color=("#EF4444", "#F87171"),
             border_width=1,
-            border_color=("#10B981", "#059669"),
+            border_color=("#EF4444", "#DC2626"),
             command=self._on_mark_completed,
         )
         btn_complete.pack(fill="x")
