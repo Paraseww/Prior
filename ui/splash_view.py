@@ -6,7 +6,7 @@ Step 2: Friendly personalization screen ('Hi there! What should we call you?') a
 """
 
 from pathlib import Path
-from typing import Callable
+from typing import Any, Callable
 import customtkinter as ctk
 from PIL import Image
 
@@ -154,7 +154,7 @@ class SplashView(ctk.CTkFrame):
         # Name Entry Box
         self.name_entry = ctk.CTkEntry(
             inner,
-            placeholder_text="Enter your name (e.g. Alex)",
+            placeholder_text="Enter your name...",
             font=(theme.FONT_FAMILY, 16),
             height=46,
             corner_radius=12,
@@ -163,10 +163,21 @@ class SplashView(ctk.CTkFrame):
             text_color=theme.TEXT_PRIMARY,
             border_width=2,
         )
-        self.name_entry.pack(fill="x", pady=(0, 20))
-        self.name_entry.insert(0, "Alex")
+        self.name_entry.pack(fill="x", pady=(0, 4))
         self.name_entry.focus_set()
+        self.name_entry.bind("<KeyRelease>", self._on_name_typed)
         self.name_entry.bind("<Return>", lambda _: self._save_and_launch())
+
+        # Error validation label
+        self.lbl_error = ctk.CTkLabel(
+            inner,
+            text="",
+            font=(theme.FONT_FAMILY, 12, "bold"),
+            text_color=("#EF4444", "#F87171"),
+            anchor="w",
+            height=18,
+        )
+        self.lbl_error.pack(fill="x", pady=(0, 14))
 
         # Theme Selector
         lbl_theme = ctk.CTkLabel(
@@ -188,7 +199,7 @@ class SplashView(ctk.CTkFrame):
             selected_hover_color=theme.ACCENT_HOVER,
             command=self._on_theme_toggle,
         )
-        self.theme_segment.pack(fill="x", pady=(0, 28))
+        self.theme_segment.pack(fill="x", pady=(0, 24))
         self.theme_segment.set("Dark Mode")
 
         # Action Buttons: Back + Continue
@@ -222,12 +233,23 @@ class SplashView(ctk.CTkFrame):
         )
         btn_continue.pack(side="right", fill="x", expand=True)
 
+    def _on_name_typed(self, _: Any) -> None:
+        """Clears validation error when user begins typing."""
+        self.name_entry.configure(border_color=theme.BORDER_COLOR)
+        self.lbl_error.configure(text="")
+
     def _on_theme_toggle(self, value: str) -> None:
         mode = "dark" if value == "Dark Mode" else "light"
         ctk.set_appearance_mode(mode)
 
     def _save_and_launch(self) -> None:
-        name = self.name_entry.get().strip() or "User"
+        name = self.name_entry.get().strip()
+        if not name:
+            self.name_entry.configure(border_color="#EF4444")
+            self.lbl_error.configure(text="⚠️ Please enter your name to continue")
+            self.name_entry.focus_set()
+            return
+
         selected_theme = "dark" if self.theme_segment.get() == "Dark Mode" else "light"
 
         # Update profile in SQLite
