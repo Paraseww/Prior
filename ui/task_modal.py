@@ -278,6 +278,7 @@ class TaskModal(ctk.CTkToplevel):
             "description": description,
             "quadrant": self.current_quadrant,
             "due_date": due_date,
+            "reminder_time": self.task.get("reminder_time") if self.task else None,
         }
 
         self.on_save_callback(data)

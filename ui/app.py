@@ -431,6 +431,7 @@ class PriorApp(ctk.CTk):
                     description=data["description"],
                     quadrant=data["quadrant"],
                     due_date=data["due_date"],
+                    reminder_time=data.get("reminder_time"),
                 )
             else:
                 database.add_task(
@@ -438,6 +439,7 @@ class PriorApp(ctk.CTk):
                     description=data["description"],
                     quadrant=data["quadrant"],
                     due_date=data["due_date"],
+                    reminder_time=data.get("reminder_time"),
                 )
             self._load_and_refresh()
 

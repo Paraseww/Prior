@@ -176,28 +176,60 @@ class TaskCard(ctk.CTkFrame):
             )
             self.lbl_desc.pack(fill="x", anchor="w", pady=(3, 2))
 
-        # Due Date Badge (if present)
+        # Badges Row: Due Date Badge & Reminder Time Badge
         due_date_str = self.task.get("due_date")
+        reminder_time_str = self.task.get("reminder_time")
+
+        has_due = False
+        due_info = None
         if due_date_str:
             due_info = format_due_status(due_date_str)
             if due_info.get("status") not in ("NO_DUE_DATE", "INVALID_DATE"):
-                badge_frame = ctk.CTkFrame(
-                    self.center_box,
+                has_due = True
+
+        has_reminder = bool(reminder_time_str and str(reminder_time_str).strip())
+
+        if has_due or has_reminder:
+            badges_row = ctk.CTkFrame(self.center_box, fg_color="transparent")
+            badges_row.pack(anchor="w", pady=(4, 0))
+
+            if has_due and due_info:
+                due_badge = ctk.CTkFrame(
+                    badges_row,
                     fg_color=self.q_info["bg_header"],
                     corner_radius=6,
                     height=20,
                     border_width=1,
                     border_color=self.q_info["border"],
                 )
-                badge_frame.pack(anchor="w", pady=(4, 0))
+                due_badge.pack(side="left", padx=(0, 6))
 
                 lbl_due = ctk.CTkLabel(
-                    badge_frame,
+                    due_badge,
                     text=f"📅 {due_info['label']}",
                     font=(theme.FONT_FAMILY, 10, "bold"),
                     text_color=self.q_info["text"],
                 )
                 lbl_due.pack(padx=6, pady=1)
+
+            if has_reminder:
+                time_badge = ctk.CTkFrame(
+                    badges_row,
+                    fg_color=self.q_info["bg_header"],
+                    corner_radius=6,
+                    height=20,
+                    border_width=1,
+                    border_color=self.q_info["border"],
+                )
+                time_badge.pack(side="left")
+
+                lbl_time = ctk.CTkLabel(
+                    time_badge,
+                    text=f"⏰ {str(reminder_time_str).strip()}",
+                    font=(theme.FONT_FAMILY, 10, "bold"),
+                    text_color=self.q_info["text"],
+                )
+                lbl_time.pack(padx=6, pady=1)
 
         # Responsive wraplength adjustment based on container width
         def _on_resize(event: Any) -> None:
