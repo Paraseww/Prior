@@ -1,0 +1,409 @@
+"""
+ui/app.py
+Main Application Window Controller for Prior.
+Manages screen transitions, sidebar navigation, top bar controls, and state updates.
+"""
+
+from typing import Any, Dict, List, Optional
+import customtkinter as ctk
+
+import database
+from project import filter_tasks
+from ui import theme
+from ui.analytics_view import AnalyticsView
+from ui.list_view import ListView
+from ui.matrix_view import MatrixView
+from ui.settings_view import SettingsView
+from ui.splash_view import SplashView
+from ui.task_modal import TaskModal
+
+
+class PriorApp(ctk.CTk):
+    """
+    Main desktop application window for Prior.
+    """
+
+    def __init__(self) -> None:
+        super().__init__()
+
+        # Fetch local user profile
+        self.profile: Dict[str, Any] = database.get_profile()
+
+        # Configure Window Properties
+        self.title("Prior — Eisenhower Matrix Task Manager")
+        self.geometry("1120x740")
+        self.minsize(980, 640)
+
+        # Set appearance theme
+        app_mode = self.profile.get("theme", "dark")
+        ctk.set_appearance_mode(app_mode)
+        ctk.set_default_color_theme("blue")
+        self.configure(fg_color=theme.BG_MAIN)
+
+        # State Variables
+        self.current_tab = "matrix"
+        self.search_query = ""
+        self.all_tasks: List[Dict[str, Any]] = []
+
+        # Root container
+        self.root_container = ctk.CTkFrame(self, fg_color="transparent")
+        self.root_container.pack(fill="both", expand=True)
+
+        self._check_onboarding_and_render()
+
+    def _check_onboarding_and_render(self) -> None:
+        # Clear existing container children
+        for child in self.root_container.winfo_children():
+            child.destroy()
+
+        # Reload profile
+        self.profile = database.get_profile()
+        onboarding_done = bool(self.profile.get("onboarding_completed", 0))
+
+        if not onboarding_done:
+            self.splash = SplashView(
+                self.root_container,
+                on_complete=self._on_onboarding_completed,
+            )
+            self.splash.pack(fill="both", expand=True)
+        else:
+            self._render_main_workspace()
+
+    def _on_onboarding_completed(self) -> None:
+        self.profile = database.get_profile()
+        self._check_onboarding_and_render()
+
+    def _render_main_workspace(self) -> None:
+        # Top App Bar
+        self._build_top_bar()
+
+        # Main Body (Sidebar + Content area)
+        self.body_frame = ctk.CTkFrame(self.root_container, fg_color="transparent")
+        self.body_frame.pack(fill="both", expand=True)
+
+        # Sidebar
+        self._build_sidebar()
+
+        # Content Area
+        self.content_frame = ctk.CTkFrame(self.body_frame, fg_color="transparent")
+        self.content_frame.pack(side="right", fill="both", expand=True, padx=8, pady=8)
+
+        # Load tasks from database & show initial tab
+        self._load_and_refresh()
+
+    def _build_top_bar(self) -> None:
+        top_bar = ctk.CTkFrame(
+            self.root_container,
+            fg_color=theme.BG_SIDEBAR,
+            corner_radius=0,
+            height=64,
+            border_width=1,
+            border_color=theme.BORDER_COLOR,
+        )
+        top_bar.pack(fill="x")
+        top_bar.pack_propagate(False)
+
+        inner_top = ctk.CTkFrame(top_bar, fg_color="transparent")
+        inner_top.pack(fill="both", expand=True, padx=20, pady=10)
+
+        # Left: App Logo + Title + Tagline
+        brand_frame = ctk.CTkFrame(inner_top, fg_color="transparent")
+        brand_frame.pack(side="left")
+
+        logo_badge = ctk.CTkFrame(
+            brand_frame,
+            width=36,
+            height=36,
+            corner_radius=18,
+            fg_color=theme.ACCENT_PRIMARY,
+        )
+        logo_badge.pack(side="left", padx=(0, 10))
+        logo_badge.pack_propagate(False)
+
+        lbl_logo = ctk.CTkLabel(
+            logo_badge,
+            text="P",
+            font=(theme.FONT_DISPLAY, 18, "bold"),
+            text_color="#FFFFFF",
+        )
+        lbl_logo.place(relx=0.5, rely=0.5, anchor="center")
+
+        brand_text_box = ctk.CTkFrame(brand_frame, fg_color="transparent")
+        brand_text_box.pack(side="left")
+
+        lbl_brand = ctk.CTkLabel(
+            brand_text_box,
+            text="Prior.",
+            font=(theme.FONT_DISPLAY, 18, "bold"),
+            text_color=theme.TEXT_PRIMARY,
+            anchor="w",
+        )
+        lbl_brand.pack(anchor="w")
+
+        lbl_tag = ctk.CTkLabel(
+            brand_text_box,
+            text="Prioritize what matters.",
+            font=(theme.FONT_FAMILY, 11),
+            text_color=theme.TEXT_SECONDARY,
+            anchor="w",
+        )
+        lbl_tag.pack(anchor="w")
+
+        # Center: Live Search Bar
+        search_box = ctk.CTkFrame(inner_top, fg_color="transparent")
+        search_box.pack(side="left", expand=True, padx=40)
+
+        self.search_entry = ctk.CTkEntry(
+            search_box,
+            placeholder_text="🔍 Search tasks by title or notes...",
+            font=(theme.FONT_FAMILY, 13),
+            width=360,
+            height=38,
+            corner_radius=10,
+            fg_color=theme.BG_INPUT,
+            border_color=theme.BORDER_COLOR,
+            text_color=theme.TEXT_PRIMARY,
+        )
+        self.search_entry.pack()
+        self.search_entry.bind("<KeyRelease>", self._on_search_key)
+
+        # Right: Quick Add + Theme Toggle + User Profile Badge
+        actions_frame = ctk.CTkFrame(inner_top, fg_color="transparent")
+        actions_frame.pack(side="right")
+
+        # + Add Task Button
+        btn_new_task = ctk.CTkButton(
+            actions_frame,
+            text="+ New Task",
+            font=(theme.FONT_FAMILY, 13, "bold"),
+            height=36,
+            corner_radius=8,
+            fg_color=theme.ACCENT_PRIMARY,
+            hover_color=theme.ACCENT_HOVER,
+            text_color="#FFFFFF",
+            command=lambda: self.open_task_modal(),
+        )
+        btn_new_task.pack(side="left", padx=(0, 12))
+
+        # Theme Toggle Button
+        is_dark = self.profile.get("theme", "dark") == "dark"
+        self.btn_theme = ctk.CTkButton(
+            actions_frame,
+            text="🌙" if is_dark else "☀️",
+            width=36,
+            height=36,
+            corner_radius=8,
+            fg_color=theme.BG_INPUT,
+            hover_color=theme.BG_CARD_HOVER,
+            text_color=theme.TEXT_PRIMARY,
+            font=(theme.FONT_FAMILY, 14),
+            command=self._toggle_quick_theme,
+        )
+        self.btn_theme.pack(side="left", padx=(0, 12))
+
+        # Profile Badge
+        user_name = self.profile.get("name", "User")
+        self.btn_profile = ctk.CTkButton(
+            actions_frame,
+            text=f"👤 {user_name}",
+            font=(theme.FONT_FAMILY, 13, "bold"),
+            height=36,
+            corner_radius=8,
+            fg_color=theme.BG_INPUT,
+            hover_color=theme.BG_CARD_HOVER,
+            text_color=theme.TEXT_PRIMARY,
+            command=lambda: self._switch_tab("settings"),
+        )
+        self.btn_profile.pack(side="left")
+
+    def _build_sidebar(self) -> None:
+        self.sidebar = ctk.CTkFrame(
+            self.body_frame,
+            fg_color=theme.BG_SIDEBAR,
+            corner_radius=0,
+            width=180,
+            border_width=1,
+            border_color=theme.BORDER_COLOR,
+        )
+        self.sidebar.pack(side="left", fill="y")
+        self.sidebar.pack_propagate(False)
+
+        inner_side = ctk.CTkFrame(self.sidebar, fg_color="transparent")
+        inner_side.pack(fill="both", expand=True, padx=10, pady=16)
+
+        nav_items = [
+            ("matrix", "▦  Matrix View"),
+            ("list", "☰  List View"),
+            ("analytics", "📊 Analytics"),
+            ("settings", "⚙️  Settings"),
+        ]
+
+        self.nav_buttons: Dict[str, ctk.CTkButton] = {}
+
+        for tab_id, label in nav_items:
+            btn = ctk.CTkButton(
+                inner_side,
+                text=label,
+                font=(theme.FONT_FAMILY, 13, "bold"),
+                height=40,
+                corner_radius=8,
+                anchor="w",
+                fg_color="transparent",
+                hover_color=theme.BG_CARD_HOVER,
+                text_color=theme.TEXT_SECONDARY,
+                command=lambda t=tab_id: self._switch_tab(t),
+            )
+            btn.pack(fill="x", pady=3)
+            self.nav_buttons[tab_id] = btn
+
+        self._highlight_nav_button("matrix")
+
+    def _highlight_nav_button(self, active_tab: str) -> None:
+        for tab_id, btn in self.nav_buttons.items():
+            if tab_id == active_tab:
+                btn.configure(
+                    fg_color=theme.BG_INPUT,
+                    text_color=theme.TEXT_PRIMARY,
+                )
+            else:
+                btn.configure(
+                    fg_color="transparent",
+                    text_color=theme.TEXT_SECONDARY,
+                )
+
+    def _switch_tab(self, tab_id: str) -> None:
+        self.current_tab = tab_id
+        self._highlight_nav_button(tab_id)
+
+        # Clear content area
+        for child in self.content_frame.winfo_children():
+            child.destroy()
+
+        # Get filtered tasks based on search
+        filtered_tasks = filter_tasks(self.all_tasks, search_query=self.search_query)
+
+        if tab_id == "matrix":
+            self.current_view = MatrixView(
+                self.content_frame,
+                tasks=filtered_tasks,
+                on_toggle=self.toggle_task,
+                on_edit=self.open_task_modal,
+                on_move=self.move_task_quadrant,
+                on_delete=self.delete_task,
+                on_quick_add=self.open_quick_add,
+            )
+            self.current_view.pack(fill="both", expand=True)
+
+        elif tab_id == "list":
+            self.current_view = ListView(
+                self.content_frame,
+                tasks=filtered_tasks,
+                on_toggle=self.toggle_task,
+                on_edit=self.open_task_modal,
+                on_move=self.move_task_quadrant,
+                on_delete=self.delete_task,
+                on_clear_completed=self.clear_completed,
+            )
+            self.current_view.pack(fill="both", expand=True)
+
+        elif tab_id == "analytics":
+            self.current_view = AnalyticsView(
+                self.content_frame,
+                tasks=self.all_tasks,
+            )
+            self.current_view.pack(fill="both", expand=True)
+
+        elif tab_id == "settings":
+            self.current_view = SettingsView(
+                self.content_frame,
+                profile=self.profile,
+                on_profile_updated=self._on_profile_updated,
+                on_data_cleared=self._load_and_refresh,
+            )
+            self.current_view.pack(fill="both", expand=True)
+
+    def _load_and_refresh(self) -> None:
+        """Reloads all tasks from SQLite and refreshes current active tab."""
+        self.all_tasks = database.get_all_tasks()
+        self._switch_tab(self.current_tab)
+
+    def _on_search_key(self, _: Any) -> None:
+        self.search_query = self.search_entry.get().strip()
+        # Refresh current view
+        filtered = filter_tasks(self.all_tasks, search_query=self.search_query)
+        if hasattr(self, "current_view") and hasattr(self.current_view, "refresh_tasks"):
+            self.current_view.refresh_tasks(filtered)
+
+    def _toggle_quick_theme(self) -> None:
+        current_mode = ctk.get_appearance_mode().lower()
+        new_mode = "light" if current_mode == "dark" else "dark"
+        ctk.set_appearance_mode(new_mode)
+        database.update_profile(theme=new_mode)
+        self.profile["theme"] = new_mode
+        self.btn_theme.configure(text="🌙" if new_mode == "dark" else "☀️")
+        self._load_and_refresh()
+
+    def _on_profile_updated(self) -> None:
+        self.profile = database.get_profile()
+        self.btn_profile.configure(text=f"👤 {self.profile.get('name', 'User')}")
+        self._load_and_refresh()
+
+    # ========================================================================
+    # Task Operations
+    # ========================================================================
+
+    def open_task_modal(self, task: Optional[Dict[str, Any]] = None, default_quadrant: str = "Q1_DO") -> None:
+        """Opens Add/Edit Task Modal."""
+        def handle_save(data: Dict[str, Any]) -> None:
+            if task and "id" in task:
+                database.update_task(
+                    task_id=task["id"],
+                    title=data["title"],
+                    description=data["description"],
+                    quadrant=data["quadrant"],
+                    due_date=data["due_date"],
+                )
+            else:
+                database.add_task(
+                    title=data["title"],
+                    description=data["description"],
+                    quadrant=data["quadrant"],
+                    due_date=data["due_date"],
+                )
+            self._load_and_refresh()
+
+        TaskModal(self, on_save=handle_save, task=task, default_quadrant=default_quadrant)
+
+    def open_quick_add(self, quadrant: str) -> None:
+        """Opens Add Task Modal pre-selected with specified quadrant."""
+        self.open_task_modal(default_quadrant=quadrant)
+
+    def toggle_task(self, task_id: int) -> None:
+        """Toggles task completion status."""
+        database.toggle_task_completion(task_id)
+        self._load_and_refresh()
+
+    def move_task_quadrant(self, task_id: int, new_quadrant: str) -> None:
+        """Moves task to another Eisenhower quadrant."""
+        database.update_task(task_id=task_id, quadrant=new_quadrant)
+        self._load_and_refresh()
+
+    def delete_task(self, task_id: int) -> None:
+        """Deletes a task."""
+        database.delete_task(task_id)
+        self._load_and_refresh()
+
+    def clear_completed(self) -> None:
+        """Clears all completed tasks."""
+        database.clear_completed_tasks()
+        self._load_and_refresh()
+
+
+def launch_app() -> None:
+    """Entrypoint function to launch the Prior desktop GUI application."""
+    app = PriorApp()
+    app.mainloop()
+
+
+if __name__ == "__main__":
+    launch_app()
