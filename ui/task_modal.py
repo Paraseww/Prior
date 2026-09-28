@@ -4,6 +4,7 @@ Modal dialog for creating and editing tasks with real-time Eisenhower quadrant e
 """
 
 from datetime import date, timedelta
+from pathlib import Path
 from typing import Any, Callable, Dict, Optional
 import customtkinter as ctk
 
@@ -32,10 +33,18 @@ class TaskModal(ctk.CTkToplevel):
         self.default_due_date = default_due_date
 
         self.title("Edit Task" if self.is_edit else "Create New Task")
-        self.geometry("540x620")
+        self.geometry("540x510")
         self.resizable(False, False)
         self.transient(master)
         self.grab_set()
+
+        # Set Window Titlebar & Taskbar Icon
+        ico_path = Path(__file__).resolve().parent.parent / "assets" / "icon.ico"
+        if ico_path.exists():
+            try:
+                self.after(200, lambda: self.iconbitmap(str(ico_path)))
+            except Exception:
+                pass
 
         # Center modal relative to master window
         self._center_modal(master)
@@ -46,7 +55,7 @@ class TaskModal(ctk.CTkToplevel):
         self.update_idletasks()
         try:
             x = master.winfo_x() + (master.winfo_width() - 540) // 2
-            y = master.winfo_y() + (master.winfo_height() - 620) // 2
+            y = master.winfo_y() + (master.winfo_height() - 510) // 2
             self.geometry(f"+{max(0, x)}+{max(0, y)}")
         except Exception:
             pass
@@ -171,52 +180,9 @@ class TaskModal(ctk.CTkToplevel):
         self.lbl_quadrant_badge.pack(fill="x", pady=(0, 15))
         self._update_quadrant_badge()
 
-        # Due Date Field & Quick Presets
-        lbl_due = ctk.CTkLabel(
-            container,
-            text="Due Date (YYYY-MM-DD)",
-            font=(theme.FONT_FAMILY, 13, "bold"),
-            text_color=theme.TEXT_PRIMARY,
-            anchor="w",
-        )
-        lbl_due.pack(fill="x", pady=(0, 4))
-
-        due_row = ctk.CTkFrame(container, fg_color="transparent")
-        due_row.pack(fill="x", pady=(0, 20))
-
-        self.entry_due = ctk.CTkEntry(
-            due_row,
-            placeholder_text="YYYY-MM-DD",
-            font=(theme.FONT_FAMILY, 13),
-            height=34,
-            corner_radius=6,
-            fg_color=theme.BG_INPUT,
-            border_color=theme.BORDER_COLOR,
-            text_color=theme.TEXT_PRIMARY,
-            width=150,
-        )
-        self.entry_due.pack(side="left", padx=(0, 10))
-        if self.task and self.task.get("due_date"):
-            self.entry_due.insert(0, self.task["due_date"])
-        elif not self.task and self.default_due_date:
-            self.entry_due.insert(0, self.default_due_date)
-
-        # Presets: Today, Tomorrow, +1 Wk, Clear
-        btn_today = ctk.CTkButton(due_row, text="Today", width=60, height=34, corner_radius=6, fg_color=theme.BG_INPUT, text_color=theme.TEXT_PRIMARY, hover_color=theme.BG_CARD_HOVER, command=lambda: self._set_due_preset(0))
-        btn_today.pack(side="left", padx=2)
-
-        btn_tmr = ctk.CTkButton(due_row, text="Tmrw", width=60, height=34, corner_radius=6, fg_color=theme.BG_INPUT, text_color=theme.TEXT_PRIMARY, hover_color=theme.BG_CARD_HOVER, command=lambda: self._set_due_preset(1))
-        btn_tmr.pack(side="left", padx=2)
-
-        btn_week = ctk.CTkButton(due_row, text="+7 Days", width=65, height=34, corner_radius=6, fg_color=theme.BG_INPUT, text_color=theme.TEXT_PRIMARY, hover_color=theme.BG_CARD_HOVER, command=lambda: self._set_due_preset(7))
-        btn_week.pack(side="left", padx=2)
-
-        btn_clear = ctk.CTkButton(due_row, text="Clear", width=55, height=34, corner_radius=6, fg_color=theme.BG_INPUT, text_color=theme.TEXT_SECONDARY, hover_color=theme.BG_CARD_HOVER, command=lambda: self._set_due_preset(None))
-        btn_clear.pack(side="left", padx=2)
-
         # Action Buttons: Cancel / Save
         btn_row = ctk.CTkFrame(container, fg_color="transparent")
-        btn_row.pack(fill="x", pady=(10, 0))
+        btn_row.pack(fill="x", pady=(14, 0))
 
         btn_cancel = ctk.CTkButton(
             btn_row,
@@ -258,12 +224,6 @@ class TaskModal(ctk.CTkToplevel):
             text_color="#FFFFFF",
         )
 
-    def _set_due_preset(self, days_offset: Optional[int]) -> None:
-        self.entry_due.delete(0, "end")
-        if days_offset is not None:
-            target_date = date.today() + timedelta(days=days_offset)
-            self.entry_due.insert(0, target_date.strftime("%Y-%m-%d"))
-
     def _on_save_clicked(self) -> None:
         title = self.entry_title.get().strip()
         if not title:
@@ -271,14 +231,15 @@ class TaskModal(ctk.CTkToplevel):
             return
 
         description = self.txt_desc.get("1.0", "end-1c").strip()
-        due_date = self.entry_due.get().strip() or None
+        due_date = self.task.get("due_date") if self.task else self.default_due_date
+        reminder_time = self.task.get("reminder_time") if self.task else None
 
         data = {
             "title": title,
             "description": description,
             "quadrant": self.current_quadrant,
             "due_date": due_date,
-            "reminder_time": self.task.get("reminder_time") if self.task else None,
+            "reminder_time": reminder_time,
         }
 
         self.on_save_callback(data)
