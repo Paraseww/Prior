@@ -3,7 +3,7 @@ ui/task_modal.py
 Modal dialog for creating and editing tasks with real-time Eisenhower quadrant evaluation.
 """
 
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Any, Callable, Dict, Optional
 import customtkinter as ctk
@@ -68,7 +68,16 @@ class TaskModal(ctk.CTkToplevel):
 
         # Header Title
         title_text = "Edit Task" if self.is_edit else "Create New Priority Task"
-        subtitle_text = "Adjust task parameters and classification" if self.is_edit else "Categorize and schedule your task on the Eisenhower Matrix"
+        if self.is_edit:
+            subtitle_text = "Adjust task parameters and classification"
+        elif self.default_due_date:
+            try:
+                d_obj = datetime.strptime(self.default_due_date, "%Y-%m-%d")
+                subtitle_text = f"📅 Scheduled for {d_obj.strftime('%A, %b %d, %Y')}"
+            except Exception:
+                subtitle_text = f"📅 Scheduled for {self.default_due_date}"
+        else:
+            subtitle_text = "Categorize and schedule your task on the Eisenhower Matrix"
 
         lbl_title = ctk.CTkLabel(
             container,

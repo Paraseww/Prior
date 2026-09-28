@@ -234,9 +234,9 @@ class CalendarView(ctk.CTkFrame):
                 )
                 cell.grid(row=row_idx + 1, column=col_idx, sticky="nsew", padx=2, pady=2)
 
-                # Top row inside cell: Day number + Badge
+                # Top row inside cell: Day number + Quick Add (+) button
                 cell_top = ctk.CTkFrame(cell, fg_color="transparent")
-                cell_top.pack(fill="x", padx=6, pady=(4, 2))
+                cell_top.pack(fill="x", padx=6, pady=(3, 2))
 
                 if is_curr_month:
                     day_color = theme.ACCENT_PRIMARY if is_today else theme.TEXT_PRIMARY
@@ -253,38 +253,115 @@ class CalendarView(ctk.CTkFrame):
                 )
                 lbl_num.pack(side="left")
 
-                if day_tasks:
-                    lbl_badge = ctk.CTkLabel(
+                if is_curr_month:
+                    def _make_add_handler(ds: str):
+                        return lambda: self.on_quick_add("Q1_DO", ds)
+
+                    btn_add_cell = ctk.CTkButton(
                         cell_top,
-                        text=str(len(day_tasks)),
-                        font=(theme.FONT_FAMILY, 9, "bold"),
-                        fg_color=theme.ACCENT_PRIMARY,
-                        text_color="#FFFFFF",
-                        corner_radius=6,
-                        width=16,
-                        height=16,
+                        text="+",
+                        width=18,
+                        height=18,
+                        corner_radius=4,
+                        font=(theme.FONT_FAMILY, 11, "bold"),
+                        fg_color="transparent",
+                        hover_color=theme.BG_CARD_HOVER,
+                        text_color=theme.TEXT_SECONDARY,
+                        command=_make_add_handler(date_str),
                     )
-                    lbl_badge.pack(side="right")
-                    lbl_badge.bind("<Button-1>", handler)
+                    btn_add_cell.pack(side="right")
 
-                # Indicator dots for tasks
-                dots_frame = ctk.CTkFrame(cell, fg_color="transparent", height=12)
-                dots_frame.pack(fill="x", padx=6, pady=(2, 4))
-                dots_frame.pack_propagate(False)
+                # Render Colored Task Chips inside the cell
+                if day_tasks and is_curr_month:
+                    tasks_frame = ctk.CTkFrame(cell, fg_color="transparent")
+                    tasks_frame.pack(fill="both", expand=True, padx=4, pady=(1, 3))
 
-                # Show up to 4 quadrant colored dots
-                for t in day_tasks[:4]:
-                    q = t.get("quadrant", "Q1_DO")
-                    q_color = theme.QUADRANTS.get(q, theme.QUADRANTS["Q1_DO"])["color"]
-                    dot = ctk.CTkFrame(dots_frame, width=6, height=6, corner_radius=3, fg_color=q_color)
-                    dot.pack(side="left", padx=1)
-                    dot.bind("<Button-1>", handler)
+                    max_chips = 2  # Show up to 2 colored task chips, then +N more
+                    for t in day_tasks[:max_chips]:
+                        q_key = t.get("quadrant", "Q1_DO")
+                        q_info = theme.QUADRANTS.get(q_key, theme.QUADRANTS["Q1_DO"])
+                        is_done = bool(t.get("is_completed", 0))
 
-                # Click event on cell to select date
+                        if is_done:
+                            chip_bg = ("#E2E8F0", "#334155")
+                            chip_border = ("#CBD5E1", "#475569")
+                            chip_text = ("#64748B", "#94A3B8")
+                            prefix = "✓ "
+                        else:
+                            chip_bg = q_info["bg_header"]
+                            chip_border = q_info["border"]
+                            chip_text = q_info["text"]
+                            prefix = ""
+
+                        chip = ctk.CTkFrame(
+                            tasks_frame,
+                            fg_color=chip_bg,
+                            corner_radius=4,
+                            border_width=1,
+                            border_color=chip_border,
+                            height=20,
+                        )
+                        chip.pack(fill="x", pady=1)
+                        chip.pack_propagate(False)
+
+                        raw_title = str(t.get("title", "Task")).strip()
+                        display_title = (raw_title[:14] + "…") if len(raw_title) > 14 else raw_title
+
+                        lbl_chip = ctk.CTkLabel(
+                            chip,
+                            text=f"{prefix}{display_title}",
+                            font=(theme.FONT_FAMILY, 10, "bold"),
+                            text_color=chip_text,
+                            anchor="w",
+                        )
+                        lbl_chip.pack(side="left", fill="x", expand=True, padx=4)
+
+                        def _make_chip_click(task_dict: Dict[str, Any], d: date):
+                            def _chip_handler(ev: Any = None):
+                                self._select_date(d)
+                                self.on_edit(task_dict)
+                            return _chip_handler
+
+                        chip_handler = _make_chip_click(t, cell_date)
+                        chip.bind("<Button-1>", chip_handler)
+                        lbl_chip.bind("<Button-1>", chip_handler)
+
+                    if len(day_tasks) > max_chips:
+                        rem = len(day_tasks) - max_chips
+                        lbl_more = ctk.CTkLabel(
+                            tasks_frame,
+                            text=f"+{rem} more",
+                            font=(theme.FONT_FAMILY, 9, "bold"),
+                            text_color=theme.TEXT_SECONDARY,
+                            anchor="w",
+                        )
+                        lbl_more.pack(fill="x", padx=4)
+                        lbl_more.bind("<Button-1>", handler)
+
+                # Single click selects date; Double click opens task add
+                def _make_dbl_handler(ds: str):
+                    return lambda _: self.on_quick_add("Q1_DO", ds)
+
+                dbl_handler = _make_dbl_handler(date_str) if is_curr_month else None
+
                 cell.bind("<Button-1>", handler)
                 cell_top.bind("<Button-1>", handler)
-                lbl_num.bind("<Button-1>", handler)
-                dots_frame.bind("<Button-1>", handler)
+
+                if is_curr_month:
+                    def _make_num_click_handler(d: date, ds: str):
+                        def _num_handler(ev: Any = None):
+                            self._select_date(d)
+                            self.on_quick_add("Q1_DO", ds)
+                        return _num_handler
+
+                    lbl_num.configure(cursor="hand2")
+                    lbl_num.bind("<Button-1>", _make_num_click_handler(cell_date, date_str))
+                else:
+                    lbl_num.bind("<Button-1>", handler)
+
+                if dbl_handler:
+                    cell.bind("<Double-Button-1>", dbl_handler)
+                    cell_top.bind("<Double-Button-1>", dbl_handler)
 
     def _render_day_schedule(self) -> None:
         """Renders the task list and schedule details for the selected date."""
