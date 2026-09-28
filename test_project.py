@@ -193,35 +193,40 @@ def test_format_due_status_comparisons():
     res_overdue_3 = format_due_status("2026-10-12", current_date_str=ref_date)
     assert res_overdue_3["status"] == "OVERDUE"
     assert res_overdue_3["days_diff"] == -3
-    assert res_overdue_3["label"] == "Overdue by 3 days"
+    assert res_overdue_3["label"] == "Overdue: Oct 12"
     assert res_overdue_3["color_tag"] == "red"
 
-    # Overdue by 1 day (singular text)
+    # Overdue by 1 day
     res_overdue_1 = format_due_status("2026-10-14", current_date_str=ref_date)
     assert res_overdue_1["status"] == "OVERDUE"
     assert res_overdue_1["days_diff"] == -1
-    assert res_overdue_1["label"] == "Overdue by 1 day"
+    assert res_overdue_1["label"] == "Overdue: Oct 14"
 
     # Due Today
     res_today = format_due_status("2026-10-15", current_date_str=ref_date)
     assert res_today["status"] == "DUE_TODAY"
     assert res_today["days_diff"] == 0
-    assert res_today["label"] == "Due Today"
+    assert res_today["label"] == "Due: Oct 15"
     assert res_today["color_tag"] == "amber"
 
     # Due Tomorrow
     res_tomorrow = format_due_status("2026-10-16", current_date_str=ref_date)
     assert res_tomorrow["status"] == "UPCOMING"
     assert res_tomorrow["days_diff"] == 1
-    assert res_tomorrow["label"] == "Due Tomorrow"
+    assert res_tomorrow["label"] == "Due: Oct 16"
     assert res_tomorrow["color_tag"] == "blue"
 
     # Future date (5 days ahead)
     res_future = format_due_status("2026-10-20", current_date_str=ref_date)
     assert res_future["status"] == "UPCOMING"
     assert res_future["days_diff"] == 5
-    assert res_future["label"] == "In 5 days"
+    assert res_future["label"] == "Due: Oct 20"
     assert res_future["color_tag"] == "blue"
+
+    # Future date in different year
+    res_next_year = format_due_status("2027-01-10", current_date_str=ref_date)
+    assert res_next_year["status"] == "UPCOMING"
+    assert res_next_year["label"] == "Due: Jan 10, 2027"
 
 
 # ============================================================================

@@ -218,34 +218,27 @@ def format_due_status(
 
     diff_days = (due - today).days
 
+    due_formatted = due.strftime("%b %d, %Y") if due.year != today.year else due.strftime("%b %d")
+
     if diff_days < 0:
-        days_past = abs(diff_days)
-        label = f"Overdue by {days_past} day" if days_past == 1 else f"Overdue by {days_past} days"
         return {
             "status": "OVERDUE",
             "days_diff": diff_days,
-            "label": label,
+            "label": f"Overdue: {due_formatted}",
             "color_tag": "red",
         }
     elif diff_days == 0:
         return {
             "status": "DUE_TODAY",
             "days_diff": 0,
-            "label": "Due Today",
+            "label": f"Due: {due_formatted}",
             "color_tag": "amber",
-        }
-    elif diff_days == 1:
-        return {
-            "status": "UPCOMING",
-            "days_diff": 1,
-            "label": "Due Tomorrow",
-            "color_tag": "blue",
         }
     else:
         return {
             "status": "UPCOMING",
             "days_diff": diff_days,
-            "label": f"In {diff_days} days",
+            "label": f"Due: {due_formatted}",
             "color_tag": "blue",
         }
 
