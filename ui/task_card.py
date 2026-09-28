@@ -168,15 +168,13 @@ class TaskCard(ctk.CTkFrame):
                 bottom_row = ctk.CTkFrame(self.normal_frame, fg_color="transparent")
                 bottom_row.pack(fill="x", pady=(6, 0), padx=(30, 0))
 
-                badge_colors = theme.DUE_BADGE_COLORS.get(
-                    due_info["color_tag"], theme.DUE_BADGE_COLORS["gray"]
-                )
-
                 badge_frame = ctk.CTkFrame(
                     bottom_row,
-                    fg_color=(badge_colors[0], badge_colors[1]),
+                    fg_color=self.q_info["bg_header"],
                     corner_radius=6,
                     height=20,
+                    border_width=1,
+                    border_color=self.q_info["border"],
                 )
                 badge_frame.pack(side="left")
 
@@ -184,7 +182,7 @@ class TaskCard(ctk.CTkFrame):
                     badge_frame,
                     text=f"📅 {due_info['label']}",
                     font=(theme.FONT_FAMILY, 10, "bold"),
-                    text_color=(badge_colors[2], badge_colors[3]),
+                    text_color=self.q_info["text"],
                 )
                 lbl_due.pack(padx=6, pady=1)
 
