@@ -46,6 +46,7 @@ class CalendarView(ctk.CTkFrame):
         self.current_year = today.year
         self.current_month = today.month
         self.selected_date = today
+        self.cell_widgets: Dict[date, Dict[str, Any]] = {}
 
         self._build_ui()
 
@@ -155,6 +156,7 @@ class CalendarView(ctk.CTkFrame):
 
     def _render_calendar_grid(self) -> None:
         """Renders the 7-day header and monthly grid using uniform grid layout."""
+        self.cell_widgets.clear()
         for child in self.grid_container.winfo_children():
             child.destroy()
 
@@ -253,6 +255,14 @@ class CalendarView(ctk.CTkFrame):
                 )
                 lbl_num.pack(side="left")
 
+                # Track cell widget for instant, non-flickering selection
+                self.cell_widgets[cell_date] = {
+                    "cell": cell,
+                    "lbl_num": lbl_num,
+                    "is_curr_month": is_curr_month,
+                    "is_today": is_today,
+                }
+
                 if is_curr_month:
                     def _make_add_handler(ds: str):
                         return lambda: self.on_quick_add("Q1_DO", ds)
@@ -260,13 +270,14 @@ class CalendarView(ctk.CTkFrame):
                     btn_add_cell = ctk.CTkButton(
                         cell_top,
                         text="+",
-                        width=18,
-                        height=18,
-                        corner_radius=4,
-                        font=(theme.FONT_FAMILY, 11, "bold"),
-                        fg_color="transparent",
-                        hover_color=theme.BG_CARD_HOVER,
-                        text_color=theme.TEXT_SECONDARY,
+                        width=22,
+                        height=22,
+                        corner_radius=11,
+                        font=(theme.FONT_FAMILY, 14, "bold"),
+                        fg_color=theme.ACCENT_PRIMARY,
+                        hover_color=theme.ACCENT_HOVER,
+                        text_color="#FFFFFF",
+                        cursor="hand2",
                         command=_make_add_handler(date_str),
                     )
                     btn_add_cell.pack(side="right")
@@ -435,14 +446,60 @@ class CalendarView(ctk.CTkFrame):
                 card.pack(fill="x", pady=4, padx=2)
 
     def _select_date(self, selected: date) -> None:
+        prev_date = self.selected_date
+
         if selected.year != self.current_year or selected.month != self.current_month:
             self.current_year = selected.year
             self.current_month = selected.month
             month_name = calendar.month_name[self.current_month]
             self.lbl_month_year.configure(text=f"📅 {month_name} {self.current_year}")
+            self.selected_date = selected
+            self._render_calendar_grid()
+            self._render_day_schedule()
+            return
+
+        if selected == prev_date:
+            return
 
         self.selected_date = selected
-        self._render_calendar_grid()
+
+        # 1. Reset previous cell styling in-place (no full grid re-render/flicker)
+        if prev_date in self.cell_widgets:
+            prev_info = self.cell_widgets[prev_date]
+            p_cell = prev_info["cell"]
+            p_today = prev_info["is_today"]
+            p_curr = prev_info["is_curr_month"]
+
+            if p_today:
+                p_cell.configure(
+                    fg_color=("#EEF2FF", "#1E1B4B"),
+                    border_color=theme.ACCENT_PRIMARY,
+                    border_width=1,
+                )
+            elif p_curr:
+                p_cell.configure(
+                    fg_color=theme.BG_INPUT,
+                    border_color=theme.BORDER_COLOR,
+                    border_width=1,
+                )
+            else:
+                p_cell.configure(
+                    fg_color="transparent",
+                    border_color=theme.BORDER_COLOR,
+                    border_width=0,
+                )
+
+        # 2. Highlight newly selected cell
+        if selected in self.cell_widgets:
+            curr_info = self.cell_widgets[selected]
+            c_cell = curr_info["cell"]
+            c_cell.configure(
+                fg_color=theme.BG_INPUT,
+                border_color=theme.ACCENT_PRIMARY,
+                border_width=2,
+            )
+
+        # 3. Update right-side day schedule
         self._render_day_schedule()
 
     def _prev_month(self) -> None:
@@ -469,14 +526,19 @@ class CalendarView(ctk.CTkFrame):
 
     def _go_today(self) -> None:
         today = date.today()
+        month_changed = (self.current_year != today.year or self.current_month != today.month)
         self.current_year = today.year
         self.current_month = today.month
-        self.selected_date = today
 
         month_name = calendar.month_name[self.current_month]
         self.lbl_month_year.configure(text=f"📅 {month_name} {self.current_year}")
-        self._render_calendar_grid()
-        self._render_day_schedule()
+
+        if month_changed:
+            self.selected_date = today
+            self._render_calendar_grid()
+            self._render_day_schedule()
+        else:
+            self._select_date(today)
 
     def refresh_tasks(self, tasks: List[Dict[str, Any]]) -> None:
         """Refreshes calendar and day schedule with updated task list."""
