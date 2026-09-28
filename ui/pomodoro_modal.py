@@ -25,10 +25,12 @@ class PomodoroModal(ctk.CTkToplevel):
         master: Any,
         task: Dict[str, Any],
         on_complete_task: Optional[Callable[[int], None]] = None,
+        on_edit_task: Optional[Callable[[Dict[str, Any]], None]] = None,
     ) -> None:
         super().__init__(master)
         self.task = task
         self.on_complete_task = on_complete_task
+        self.on_edit_task = on_edit_task
 
         self.title("Prior — Pomodoro Focus Session")
         self.geometry("480x520")
@@ -74,14 +76,33 @@ class PomodoroModal(ctk.CTkToplevel):
         inner_task = ctk.CTkFrame(task_box, fg_color="transparent")
         inner_task.pack(fill="x", padx=14, pady=10)
 
+        # Header row in task card: Target Tag + Edit Button
+        header_row = ctk.CTkFrame(inner_task, fg_color="transparent")
+        header_row.pack(fill="x")
+
         lbl_target = ctk.CTkLabel(
-            inner_task,
+            header_row,
             text="🎯 CURRENT FOCUS TARGET",
             font=(theme.FONT_FAMILY, 11, "bold"),
             text_color=theme.ACCENT_PRIMARY,
             anchor="w",
         )
-        lbl_target.pack(fill="x")
+        lbl_target.pack(side="left")
+
+        btn_edit = ctk.CTkButton(
+            header_row,
+            text="✎ Edit Task",
+            font=(theme.FONT_FAMILY, 11, "bold"),
+            height=24,
+            corner_radius=6,
+            fg_color=theme.BG_CARD,
+            hover_color=theme.BG_CARD_HOVER,
+            text_color=theme.TEXT_PRIMARY,
+            border_width=1,
+            border_color=theme.BORDER_COLOR,
+            command=self._on_edit_click,
+        )
+        btn_edit.pack(side="right")
 
         task_title = self.task.get("title", "Prior Focus Task")
         lbl_title = ctk.CTkLabel(
@@ -93,7 +114,7 @@ class PomodoroModal(ctk.CTkToplevel):
             wraplength=380,
             justify="left",
         )
-        lbl_title.pack(fill="x", pady=(2, 0))
+        lbl_title.pack(fill="x", pady=(4, 0))
 
         # 2. Mode Selector: Focus (25m) / Short Break (5m) / Long Break (15m)
         self.mode_segment = ctk.CTkSegmentedButton(
@@ -270,6 +291,14 @@ class PomodoroModal(ctk.CTkToplevel):
             self.bell()
         except Exception:
             pass
+
+    def _on_edit_click(self) -> None:
+        self._stop_timer_loop()
+        task_data = self.task
+        edit_callback = self.on_edit_task
+        self.destroy()
+        if edit_callback:
+            edit_callback(task_data)
 
     def _on_mark_completed(self) -> None:
         self._stop_timer_loop()

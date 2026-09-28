@@ -437,7 +437,12 @@ class PriorApp(ctk.CTk):
 
     def open_pomodoro_modal(self, task: Dict[str, Any]) -> None:
         """Opens the Pomodoro Focus timer modal for the selected task."""
-        PomodoroModal(self, task=task, on_complete_task=self.toggle_task)
+        PomodoroModal(
+            self,
+            task=task,
+            on_complete_task=self.toggle_task,
+            on_edit_task=self.open_task_modal,
+        )
 
     def clear_completed(self) -> None:
         """Clears all completed tasks."""
