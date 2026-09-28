@@ -62,8 +62,8 @@ class TaskCard(ctk.CTkFrame):
 
         self._build_normal_ui()
 
-        # Hover shuffle is exclusively for Urgent & Important (Q1) tasks
-        if self.q_key == "Q1_DO":
+        # Hover shuffle is active for Q1 (Do First) and Q2 (Schedule) tasks
+        if self.q_key in ("Q1_DO", "Q2_SCHEDULE"):
             self._setup_hover_config()
             self._build_hover_ui()
             self._bind_hover_events()
@@ -71,12 +71,19 @@ class TaskCard(ctk.CTkFrame):
         self._setup_drag_and_drop()
 
     def _setup_hover_config(self) -> None:
-        """Sets up the hover text, icons, and colors specifically for Urgent & Important (Q1)."""
-        self.hover_text = "Focus with Pomodoro"
-        self.hover_icon = "🍅"
-        self.hover_bg = ("#D1FAE5", "#064E3B")
-        self.hover_text_color = ("#065F46", "#ECFDF5")
-        self.hover_action = self._on_pomodoro_click
+        """Sets up the hover text, icons, and colors for Q1 (Pomodoro) and Q2 (Schedule)."""
+        if self.q_key == "Q1_DO":
+            self.hover_text = "Focus with Pomodoro"
+            self.hover_icon = "🍅"
+            self.hover_bg = ("#D1FAE5", "#064E3B")
+            self.hover_text_color = ("#065F46", "#ECFDF5")
+            self.hover_action = self._on_pomodoro_click
+        elif self.q_key == "Q2_SCHEDULE":
+            self.hover_text = "Schedule tasks using calendar"
+            self.hover_icon = "📅"
+            self.hover_bg = ("#DBEAFE", "#1E3A8A")
+            self.hover_text_color = ("#1E40AF", "#EFF6FF")
+            self.hover_action = self._on_schedule_click
 
     def _build_normal_ui(self) -> None:
         """Builds the standard task card view with clean left-aligned typography."""
@@ -283,8 +290,8 @@ class TaskCard(ctk.CTkFrame):
                 if target_q and target_q != self.q_key:
                     self.on_move(self.task["id"], target_q)
         else:
-            # Click action on Q1 hover overlay (opens Pomodoro timer)
-            if self.is_hovered and self.q_key == "Q1_DO":
+            # Click action on hover overlay (opens Pomodoro for Q1, Schedule for Q2)
+            if self.is_hovered and self.q_key in ("Q1_DO", "Q2_SCHEDULE"):
                 self._on_hover_click()
 
     def _build_hover_ui(self) -> None:
@@ -323,13 +330,16 @@ class TaskCard(ctk.CTkFrame):
         else:
             self.on_edit(self.task)
 
+    def _on_schedule_click(self) -> None:
+        self.on_edit(self.task)
+
     def _on_hover_click(self) -> None:
         if self.hover_action:
             self.hover_action()
 
     def _bind_hover_events(self) -> None:
-        """Recursively binds hover triggers for seamless, flicker-free shuffle for Q1."""
-        if self.q_key != "Q1_DO":
+        """Recursively binds hover triggers for seamless, flicker-free shuffle for Q1 and Q2."""
+        if self.q_key not in ("Q1_DO", "Q2_SCHEDULE"):
             return
         self._bind_to_widget(self)
         if hasattr(self, "hover_frame"):
@@ -344,8 +354,8 @@ class TaskCard(ctk.CTkFrame):
                 self._bind_to_widget(child)
 
     def _on_mouse_enter(self, event: Any = None) -> None:
-        # Only Urgent & Important (Q1_DO) active tasks perform the hover shuffle
-        if self.q_key != "Q1_DO" or self.is_completed:
+        # Only active Q1 and Q2 tasks perform the hover shuffle
+        if self.q_key not in ("Q1_DO", "Q2_SCHEDULE") or self.is_completed:
             return
 
         if self.is_hovered or not hasattr(self, "hover_frame"):
@@ -361,7 +371,7 @@ class TaskCard(ctk.CTkFrame):
         )
 
     def _on_mouse_leave(self, event: Any = None) -> None:
-        if self.q_key != "Q1_DO":
+        if self.q_key not in ("Q1_DO", "Q2_SCHEDULE"):
             return
 
         # Check if cursor is still within the bounding box of TaskCard
