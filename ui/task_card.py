@@ -56,39 +56,21 @@ class TaskCard(ctk.CTkFrame):
         self.q_color = self.q_info["color"]
         self.q_border = self.q_info["border"]
 
-        # Quadrant-specific hover configuration
-        self._setup_hover_config()
-
         self._build_normal_ui()
-        self._build_hover_ui()
-        self._bind_hover_events()
+
+        # Hover shuffle is exclusively for Urgent & Important (Q1) tasks
+        if self.q_key == "Q1_DO":
+            self._setup_hover_config()
+            self._build_hover_ui()
+            self._bind_hover_events()
 
     def _setup_hover_config(self) -> None:
-        """Sets up the hover text, icons, and colors per quadrant."""
-        if self.q_key == "Q1_DO":
-            self.hover_text = "Focus with Pomodoro"
-            self.hover_icon = "🍅"
-            self.hover_bg = ("#D1FAE5", "#064E3B")
-            self.hover_text_color = ("#065F46", "#ECFDF5")
-            self.hover_action = self._on_pomodoro_click
-        elif self.q_key == "Q2_SCHEDULE":
-            self.hover_text = "Schedule tasks using calendar"
-            self.hover_icon = "📅"
-            self.hover_bg = ("#DBEAFE", "#1E3A8A")
-            self.hover_text_color = ("#1E40AF", "#EFF6FF")
-            self.hover_action = lambda: self.on_edit(self.task)
-        elif self.q_key == "Q3_DELEGATE":
-            self.hover_text = "Delegate tasks to team"
-            self.hover_icon = "🤝"
-            self.hover_bg = ("#FEF3C7", "#78350F")
-            self.hover_text_color = ("#92400E", "#FFFBEB")
-            self.hover_action = lambda: self.on_edit(self.task)
-        else:  # Q4_ELIMINATE
-            self.hover_text = "Eliminate distractions"
-            self.hover_icon = "🗑️"
-            self.hover_bg = ("#FEE2E2", "#7F1D1D")
-            self.hover_text_color = ("#991B1B", "#FEF2F2")
-            self.hover_action = lambda: self.on_edit(self.task)
+        """Sets up the hover text, icons, and colors specifically for Urgent & Important (Q1)."""
+        self.hover_text = "Focus with Pomodoro"
+        self.hover_icon = "🍅"
+        self.hover_bg = ("#D1FAE5", "#064E3B")
+        self.hover_text_color = ("#065F46", "#ECFDF5")
+        self.hover_action = self._on_pomodoro_click
 
     def _build_normal_ui(self) -> None:
         """Builds the standard task card view (visible when not hovering)."""
@@ -276,9 +258,12 @@ class TaskCard(ctk.CTkFrame):
             self.hover_action()
 
     def _bind_hover_events(self) -> None:
-        """Recursively binds hover triggers for seamless, flicker-free shuffle."""
+        """Recursively binds hover triggers for seamless, flicker-free shuffle for Q1."""
+        if self.q_key != "Q1_DO":
+            return
         self._bind_to_widget(self)
-        self._bind_to_widget(self.hover_frame)
+        if hasattr(self, "hover_frame"):
+            self._bind_to_widget(self.hover_frame)
 
     def _bind_to_widget(self, widget: Any) -> None:
         widget.bind("<Enter>", self._on_mouse_enter, add="+")
@@ -289,11 +274,11 @@ class TaskCard(ctk.CTkFrame):
                 self._bind_to_widget(child)
 
     def _on_mouse_enter(self, event: Any = None) -> None:
-        # Completed tasks do not flip
-        if self.is_completed:
+        # Only Urgent & Important (Q1_DO) active tasks perform the hover shuffle
+        if self.q_key != "Q1_DO" or self.is_completed:
             return
 
-        if self.is_hovered:
+        if self.is_hovered or not hasattr(self, "hover_frame"):
             return
         self.is_hovered = True
 
@@ -307,6 +292,9 @@ class TaskCard(ctk.CTkFrame):
         )
 
     def _on_mouse_leave(self, event: Any = None) -> None:
+        if self.q_key != "Q1_DO":
+            return
+
         # Check if cursor is still within the bounding box of TaskCard
         try:
             x, y = self.winfo_pointerx(), self.winfo_pointery()
@@ -317,7 +305,7 @@ class TaskCard(ctk.CTkFrame):
         except Exception:
             pass
 
-        if not self.is_hovered:
+        if not self.is_hovered or not hasattr(self, "hover_frame"):
             return
         self.is_hovered = False
 
