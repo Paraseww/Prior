@@ -29,6 +29,8 @@ class TaskCard(ctk.CTkFrame):
         on_move: Callable[[int, str], None],
         on_delete: Callable[[int], None],
         on_pomodoro: Optional[Callable[[Dict[str, Any]], None]] = None,
+        find_target_quadrant: Optional[Callable[[int, int], Optional[str]]] = None,
+        highlight_target_quadrant: Optional[Callable[[Optional[str]], None]] = None,
         **kwargs,
     ) -> None:
         super().__init__(
@@ -45,6 +47,8 @@ class TaskCard(ctk.CTkFrame):
         self.on_move = on_move
         self.on_delete = on_delete
         self.on_pomodoro = on_pomodoro
+        self.find_target_quadrant = find_target_quadrant
+        self.highlight_target_quadrant = highlight_target_quadrant
 
         # Hover state flag
         self.is_hovered = False
@@ -57,6 +61,7 @@ class TaskCard(ctk.CTkFrame):
         self.q_border = self.q_info["border"]
 
         self._build_normal_ui()
+        self._setup_drag_and_drop()
 
         # Hover shuffle is exclusively for Urgent & Important (Q1) tasks
         if self.q_key == "Q1_DO":
@@ -100,7 +105,7 @@ class TaskCard(ctk.CTkFrame):
         title_text = self.task.get("title", "Untitled Task")
         title_color = theme.TEXT_MUTED if self.is_completed else theme.TEXT_PRIMARY
 
-        lbl_title = ctk.CTkLabel(
+        self.lbl_title = ctk.CTkLabel(
             top_row,
             text=title_text,
             font=(theme.FONT_FAMILY, 13, "bold"),
@@ -108,8 +113,9 @@ class TaskCard(ctk.CTkFrame):
             anchor="w",
             justify="left",
             wraplength=190,
+            cursor="fleur" if not self.is_completed else "arrow",
         )
-        lbl_title.pack(side="left", fill="x", expand=True)
+        self.lbl_title.pack(side="left", fill="x", expand=True)
 
         # Action Buttons on Right: Edit & Delete
         btn_del = ctk.CTkButton(
@@ -154,15 +160,14 @@ class TaskCard(ctk.CTkFrame):
             )
             lbl_desc.pack(fill="x", pady=(4, 6), padx=(30, 0))
 
-        # Bottom row: Due Date Badge & Move Quadrant Dropdown
-        bottom_row = ctk.CTkFrame(self.normal_frame, fg_color="transparent")
-        bottom_row.pack(fill="x", pady=(6, 0), padx=(30, 0))
-
-        # Due Date Badge (only rendered when a valid due date is present)
+        # Bottom row: Due Date Badge (only rendered when a valid due date is present)
         due_date_str = self.task.get("due_date")
         if due_date_str:
             due_info = format_due_status(due_date_str)
             if due_info.get("status") not in ("NO_DUE_DATE", "INVALID_DATE"):
+                bottom_row = ctk.CTkFrame(self.normal_frame, fg_color="transparent")
+                bottom_row.pack(fill="x", pady=(6, 0), padx=(30, 0))
+
                 badge_colors = theme.DUE_BADGE_COLORS.get(
                     due_info["color_tag"], theme.DUE_BADGE_COLORS["gray"]
                 )
@@ -183,39 +188,83 @@ class TaskCard(ctk.CTkFrame):
                 )
                 lbl_due.pack(padx=6, pady=1)
 
-        # Move to Quadrant Menu
-        quadrant_options = {
-            "Q1_DO": "Move: Q1 Do",
-            "Q2_SCHEDULE": "Move: Q2 Schedule",
-            "Q3_DELEGATE": "Move: Q3 Delegate",
-            "Q4_ELIMINATE": "Move: Q4 Eliminate",
-        }
+    def _setup_drag_and_drop(self) -> None:
+        """Binds mouse dragging to move tasks across quadrants seamlessly."""
+        self._drag_start_x = 0
+        self._drag_start_y = 0
+        self._is_dragging = False
+        self._drag_ghost: Optional[ctk.CTkToplevel] = None
 
-        # Menu options exclude current quadrant
-        move_menu_options = [label for k, label in quadrant_options.items() if k != self.q_key]
+        # Bind drag events to card container and title
+        for widget in (self, self.normal_frame, self.lbl_title):
+            widget.bind("<ButtonPress-1>", self._on_drag_start, add="+")
+            widget.bind("<B1-Motion>", self._on_drag_motion, add="+")
+            widget.bind("<ButtonRelease-1>", self._on_drag_release, add="+")
 
-        def _on_move_select(choice: str) -> None:
-            for k, v in quadrant_options.items():
-                if v == choice:
-                    self.on_move(self.task["id"], k)
-                    break
+    def _on_drag_start(self, event: Any) -> None:
+        self._drag_start_x = event.x_root
+        self._drag_start_y = event.y_root
+        self._is_dragging = False
 
-        opt_move = ctk.CTkOptionMenu(
-            bottom_row,
-            values=move_menu_options,
-            command=_on_move_select,
-            width=100,
-            height=20,
-            corner_radius=6,
-            font=(theme.FONT_FAMILY, 10),
-            fg_color=theme.BG_INPUT,
-            text_color=theme.TEXT_SECONDARY,
-            button_color=theme.BG_INPUT,
-            button_hover_color=theme.BG_CARD_HOVER,
-            dropdown_font=(theme.FONT_FAMILY, 11),
-        )
-        opt_move.set("Move ▾")
-        opt_move.pack(side="right")
+    def _on_drag_motion(self, event: Any) -> None:
+        dx = abs(event.x_root - self._drag_start_x)
+        dy = abs(event.y_root - self._drag_start_y)
+
+        # Start drag after passing movement threshold
+        if not self._is_dragging and (dx > 6 or dy > 6):
+            self._is_dragging = True
+            try:
+                self._drag_ghost = ctk.CTkToplevel(self)
+                self._drag_ghost.overrideredirect(True)
+                self._drag_ghost.attributes("-topmost", True)
+                self._drag_ghost.attributes("-alpha", 0.92)
+                self._drag_ghost.configure(fg_color=self.q_color)
+
+                ghost_inner = ctk.CTkFrame(self._drag_ghost, fg_color=self.q_color, corner_radius=8)
+                ghost_inner.pack(padx=8, pady=4)
+
+                short_title = self.task.get("title", "Task")
+                if len(short_title) > 22:
+                    short_title = short_title[:20] + "..."
+
+                lbl = ctk.CTkLabel(
+                    ghost_inner,
+                    text=f"✋ Move: {short_title}",
+                    font=(theme.FONT_FAMILY, 11, "bold"),
+                    text_color="#FFFFFF",
+                )
+                lbl.pack()
+            except Exception:
+                self._drag_ghost = None
+
+        if self._is_dragging and self._drag_ghost:
+            try:
+                self._drag_ghost.geometry(f"+{event.x_root + 15}+{event.y_root + 10}")
+            except Exception:
+                pass
+
+            if self.find_target_quadrant and self.highlight_target_quadrant:
+                target_q = self.find_target_quadrant(event.x_root, event.y_root)
+                self.highlight_target_quadrant(target_q)
+
+    def _on_drag_release(self, event: Any) -> None:
+        if self._is_dragging:
+            self._is_dragging = False
+
+            if self._drag_ghost:
+                try:
+                    self._drag_ghost.destroy()
+                except Exception:
+                    pass
+                self._drag_ghost = None
+
+            if self.highlight_target_quadrant:
+                self.highlight_target_quadrant(None)
+
+            if self.find_target_quadrant and self.on_move:
+                target_q = self.find_target_quadrant(event.x_root, event.y_root)
+                if target_q and target_q != self.q_key:
+                    self.on_move(self.task["id"], target_q)
 
     def _build_hover_ui(self) -> None:
         """Builds the full-card hover transformation as an overlay."""

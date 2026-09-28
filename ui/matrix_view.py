@@ -181,8 +181,35 @@ class MatrixView(ctk.CTkFrame):
                         on_move=self.on_move,
                         on_delete=self.on_delete,
                         on_pomodoro=self.on_pomodoro,
+                        find_target_quadrant=self.get_quadrant_at_pointer,
+                        highlight_target_quadrant=self.highlight_quadrant,
                     )
                     card.pack(fill="x", pady=4, padx=2)
+
+    def get_quadrant_at_pointer(self, root_x: int, root_y: int) -> Optional[str]:
+        """Identifies which quadrant container is under the screen coordinates."""
+        for q_key, pane in self.panes.items():
+            container = pane["container"]
+            try:
+                rx = container.winfo_rootx()
+                ry = container.winfo_rooty()
+                rw = container.winfo_width()
+                rh = container.winfo_height()
+                if rx <= root_x <= rx + rw and ry <= root_y <= ry + rh:
+                    return q_key
+            except Exception:
+                continue
+        return None
+
+    def highlight_quadrant(self, target_q: Optional[str]) -> None:
+        """Visual highlight on quadrant container during mouse dragging."""
+        for q_key, pane in self.panes.items():
+            container = pane["container"]
+            info = pane["info"]
+            if q_key == target_q:
+                container.configure(border_width=3, border_color=info["color"])
+            else:
+                container.configure(border_width=1, border_color=info["border"])
 
     def refresh_tasks(self, tasks: List[Dict[str, Any]]) -> None:
         """Refreshes the matrix with an updated task list."""
