@@ -1,0 +1,187 @@
+"""
+ui/matrix_view.py
+The core 4-Quadrant Eisenhower Matrix workspace view for Prior.
+Displays tasks categorized into Do First, Schedule, Delegate, and Eliminate.
+"""
+
+from typing import Any, Callable, Dict, List
+import customtkinter as ctk
+
+from ui import theme
+from ui.task_card import TaskCard
+
+
+class MatrixView(ctk.CTkFrame):
+    """
+    4-Quadrant Eisenhower Grid View.
+    """
+
+    def __init__(
+        self,
+        master: Any,
+        tasks: List[Dict[str, Any]],
+        on_toggle: Callable[[int], None],
+        on_edit: Callable[[Dict[str, Any]], None],
+        on_move: Callable[[int, str], None],
+        on_delete: Callable[[int], None],
+        on_quick_add: Callable[[str], None],
+        **kwargs,
+    ) -> None:
+        super().__init__(master, fg_color="transparent", **kwargs)
+        self.tasks = tasks
+        self.on_toggle = on_toggle
+        self.on_edit = on_edit
+        self.on_move = on_move
+        self.on_delete = on_delete
+        self.on_quick_add = on_quick_add
+
+        self._build_ui()
+
+    def _build_ui(self) -> None:
+        # 2x2 Grid Configuration
+        self.grid_rowconfigure(0, weight=1, uniform="row")
+        self.grid_rowconfigure(1, weight=1, uniform="row")
+        self.grid_columnconfigure(0, weight=1, uniform="col")
+        self.grid_columnconfigure(1, weight=1, uniform="col")
+
+        # Create 4 Quadrant Panes
+        self.panes = {
+            "Q1_DO": self._create_quadrant_pane("Q1_DO", row=0, col=0),
+            "Q2_SCHEDULE": self._create_quadrant_pane("Q2_SCHEDULE", row=0, col=1),
+            "Q3_DELEGATE": self._create_quadrant_pane("Q3_DELEGATE", row=1, col=0),
+            "Q4_ELIMINATE": self._create_quadrant_pane("Q4_ELIMINATE", row=1, col=1),
+        }
+
+        self._populate_tasks()
+
+    def _create_quadrant_pane(self, q_key: str, row: int, col: int) -> Dict[str, Any]:
+        info = theme.QUADRANTS[q_key]
+
+        # Container Frame with border
+        container = ctk.CTkFrame(
+            self,
+            fg_color=theme.BG_CARD,
+            corner_radius=12,
+            border_width=1,
+            border_color=info["border"],
+        )
+        container.grid(row=row, column=col, padx=8, pady=8, sticky="nsew")
+
+        # Top Header Bar
+        header = ctk.CTkFrame(
+            container,
+            fg_color=info["bg_header"],
+            corner_radius=10,
+            height=46,
+        )
+        header.pack(fill="x", padx=6, pady=(6, 4))
+        header.pack_propagate(False)
+
+        # Left: Color Dot + Title + Count Badge
+        header_left = ctk.CTkFrame(header, fg_color="transparent")
+        header_left.pack(side="left", fill="y", padx=10)
+
+        dot = ctk.CTkFrame(header_left, width=10, height=10, corner_radius=5, fg_color=info["color"])
+        dot.pack(side="left", padx=(0, 6), pady=18)
+
+        lbl_title = ctk.CTkLabel(
+            header_left,
+            text=info["title"],
+            font=(theme.FONT_DISPLAY, 13, "bold"),
+            text_color=info["text"],
+        )
+        lbl_title.pack(side="left", padx=(0, 8), pady=12)
+
+        lbl_count = ctk.CTkLabel(
+            header_left,
+            text="0",
+            font=(theme.FONT_FAMILY, 11, "bold"),
+            fg_color=info["color"],
+            text_color="#FFFFFF",
+            corner_radius=8,
+            width=22,
+            height=20,
+        )
+        lbl_count.pack(side="left", pady=13)
+
+        # Right: Quick Add Button (+)
+        btn_add = ctk.CTkButton(
+            header,
+            text="+ Add",
+            font=(theme.FONT_FAMILY, 11, "bold"),
+            width=60,
+            height=26,
+            corner_radius=6,
+            fg_color=info["color"],
+            hover_color=info["color_dark"],
+            text_color="#FFFFFF",
+            command=lambda: self.on_quick_add(q_key),
+        )
+        btn_add.pack(side="right", padx=10, pady=10)
+
+        # Scrollable Task Container
+        scroll_frame = ctk.CTkScrollableFrame(
+            container,
+            fg_color="transparent",
+            corner_radius=0,
+        )
+        scroll_frame.pack(fill="both", expand=True, padx=4, pady=4)
+
+        return {
+            "container": container,
+            "count_label": lbl_count,
+            "scroll_frame": scroll_frame,
+            "info": info,
+        }
+
+    def _populate_tasks(self) -> None:
+        # Group tasks by quadrant
+        grouped: Dict[str, List[Dict[str, Any]]] = {
+            "Q1_DO": [],
+            "Q2_SCHEDULE": [],
+            "Q3_DELEGATE": [],
+            "Q4_ELIMINATE": [],
+        }
+
+        for task in self.tasks:
+            q = task.get("quadrant", "Q1_DO")
+            if q in grouped:
+                grouped[q].append(task)
+
+        # Render tasks in each quadrant
+        for q_key, pane in self.panes.items():
+            scroll_frame = pane["scroll_frame"]
+            q_tasks = grouped[q_key]
+
+            # Update count pill
+            pane["count_label"].configure(text=str(len(q_tasks)))
+
+            # Clear previous widgets
+            for child in scroll_frame.winfo_children():
+                child.destroy()
+
+            if not q_tasks:
+                empty_lbl = ctk.CTkLabel(
+                    scroll_frame,
+                    text="No tasks in this quadrant.\nClick '+ Add' to create one.",
+                    font=(theme.FONT_FAMILY, 12),
+                    text_color=theme.TEXT_MUTED,
+                    justify="center",
+                )
+                empty_lbl.pack(pady=40, fill="x")
+            else:
+                for task in q_tasks:
+                    card = TaskCard(
+                        scroll_frame,
+                        task=task,
+                        on_toggle=self.on_toggle,
+                        on_edit=self.on_edit,
+                        on_move=self.on_move,
+                        on_delete=self.on_delete,
+                    )
+                    card.pack(fill="x", pady=4, padx=2)
+
+    def refresh_tasks(self, tasks: List[Dict[str, Any]]) -> None:
+        """Refreshes the matrix with an updated task list."""
+        self.tasks = tasks
+        self._populate_tasks()
