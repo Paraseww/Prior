@@ -219,7 +219,7 @@ class CalendarView(ctk.CTkFrame):
                 else:
                     # Adjacent month day
                     cell_bg = "transparent"
-                    border_color = "transparent"
+                    border_color = theme.BORDER_COLOR
                     border_w = 0
 
                 cell = ctk.CTkFrame(
