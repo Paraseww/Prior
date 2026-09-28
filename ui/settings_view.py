@@ -160,6 +160,19 @@ class SettingsView(ctk.CTkScrollableFrame):
         )
         btn_clear_comp.pack(side="left", padx=(0, 10))
 
+        btn_replay_intro = ctk.CTkButton(
+            data_row,
+            text="🔄 Replay Welcome Onboarding",
+            font=(theme.FONT_FAMILY, 12),
+            height=36,
+            corner_radius=8,
+            fg_color=theme.BG_INPUT,
+            hover_color=theme.BG_CARD_HOVER,
+            text_color=theme.TEXT_PRIMARY,
+            command=self._replay_onboarding,
+        )
+        btn_replay_intro.pack(side="left")
+
         # ====================================================================
         # 5. About Prior Section
         # ====================================================================
@@ -225,3 +238,8 @@ class SettingsView(ctk.CTkScrollableFrame):
     def _clear_completed(self) -> None:
         database.clear_completed_tasks()
         self.on_data_cleared()
+
+    def _replay_onboarding(self) -> None:
+        database.update_profile(onboarding_completed=0)
+        self.profile["onboarding_completed"] = 0
+        self.on_profile_updated()

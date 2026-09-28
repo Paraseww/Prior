@@ -388,7 +388,10 @@ class PriorApp(ctk.CTk):
     def _on_profile_updated(self) -> None:
         self.profile = database.get_profile()
         self.btn_profile.configure(text=f"👤 {self.profile.get('name', 'User')}")
-        self._load_and_refresh()
+        if not bool(self.profile.get("onboarding_completed", 0)):
+            self._check_onboarding_and_render()
+        else:
+            self._load_and_refresh()
 
     # ========================================================================
     # Task Operations
