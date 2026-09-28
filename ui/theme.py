@@ -83,10 +83,38 @@ DUE_BADGE_COLORS = {
 }
 
 # ============================================================================
-# Typography
+# Typography & Custom Wireframe Fonts
 # ============================================================================
-FONT_FAMILY = "Segoe UI"
-FONT_DISPLAY = "Segoe UI Variable Display"
+
+import ctypes
+import os
+from pathlib import Path
+import sys
+
+_FONTS_LOADED = False
+
+def load_custom_fonts() -> None:
+    """Loads bundled TrueType wireframe fonts (Comic Neue) into Windows process memory."""
+    global _FONTS_LOADED
+    if _FONTS_LOADED:
+        return
+
+    if sys.platform == "win32":
+        try:
+            gdi32 = ctypes.windll.gdi32
+            fonts_dir = Path(__file__).resolve().parent.parent / "assets" / "fonts"
+            if fonts_dir.exists():
+                for font_file in fonts_dir.glob("*.ttf"):
+                    gdi32.AddFontResourceExW(str(font_file), 0x10, 0)
+        except Exception:
+            pass
+    _FONTS_LOADED = True
+
+# Call font loader immediately upon module import
+load_custom_fonts()
+
+FONT_FAMILY = "Comic Neue"
+FONT_DISPLAY = "Comic Neue"
 
 def get_font(size: int = 14, weight: str = "normal") -> tuple:
     """Returns a standardized font tuple for CustomTkinter widgets."""
