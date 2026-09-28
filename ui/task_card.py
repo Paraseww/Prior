@@ -158,25 +158,30 @@ class TaskCard(ctk.CTkFrame):
         bottom_row = ctk.CTkFrame(self.normal_frame, fg_color="transparent")
         bottom_row.pack(fill="x", pady=(6, 0), padx=(30, 0))
 
-        # Due Date Badge
-        due_info = format_due_status(self.task.get("due_date"))
-        badge_colors = theme.DUE_BADGE_COLORS.get(due_info["color_tag"], theme.DUE_BADGE_COLORS["gray"])
+        # Due Date Badge (only rendered when a valid due date is present)
+        due_date_str = self.task.get("due_date")
+        if due_date_str:
+            due_info = format_due_status(due_date_str)
+            if due_info.get("status") not in ("NO_DUE_DATE", "INVALID_DATE"):
+                badge_colors = theme.DUE_BADGE_COLORS.get(
+                    due_info["color_tag"], theme.DUE_BADGE_COLORS["gray"]
+                )
 
-        badge_frame = ctk.CTkFrame(
-            bottom_row,
-            fg_color=(badge_colors[0], badge_colors[1]),
-            corner_radius=6,
-            height=20,
-        )
-        badge_frame.pack(side="left")
+                badge_frame = ctk.CTkFrame(
+                    bottom_row,
+                    fg_color=(badge_colors[0], badge_colors[1]),
+                    corner_radius=6,
+                    height=20,
+                )
+                badge_frame.pack(side="left")
 
-        lbl_due = ctk.CTkLabel(
-            badge_frame,
-            text=f"📅 {due_info['label']}",
-            font=(theme.FONT_FAMILY, 10, "bold"),
-            text_color=(badge_colors[2], badge_colors[3]),
-        )
-        lbl_due.pack(padx=6, pady=1)
+                lbl_due = ctk.CTkLabel(
+                    badge_frame,
+                    text=f"📅 {due_info['label']}",
+                    font=(theme.FONT_FAMILY, 10, "bold"),
+                    text_color=(badge_colors[2], badge_colors[3]),
+                )
+                lbl_due.pack(padx=6, pady=1)
 
         # Move to Quadrant Menu
         quadrant_options = {
