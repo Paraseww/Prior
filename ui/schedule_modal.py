@@ -218,7 +218,7 @@ class ScheduleModal(ctk.CTkToplevel):
         # 3. Section: Reminder & Time Picker
         lbl_section_time = ctk.CTkLabel(
             scroll_container,
-            text="2. Optional Reminder Time",
+            text="2. Reminder Time",
             font=(theme.FONT_DISPLAY, 13, "bold"),
             text_color=theme.TEXT_PRIMARY,
             anchor="w",

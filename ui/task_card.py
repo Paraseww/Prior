@@ -81,7 +81,7 @@ class TaskCard(ctk.CTkFrame):
             self.hover_text_color = ("#065F46", "#ECFDF5")
             self.hover_action = self._on_pomodoro_click
         elif self.q_key == "Q2_SCHEDULE":
-            self.hover_text = "Schedule tasks using calendar"
+            self.hover_text = "Schedule Date & Reminder Time"
             self.hover_icon = "📅"
             self.hover_bg = ("#DBEAFE", "#1E3A8A")
             self.hover_text_color = ("#1E40AF", "#EFF6FF")
