@@ -61,13 +61,14 @@ class TaskCard(ctk.CTkFrame):
         self.q_border = self.q_info["border"]
 
         self._build_normal_ui()
-        self._setup_drag_and_drop()
 
         # Hover shuffle is exclusively for Urgent & Important (Q1) tasks
         if self.q_key == "Q1_DO":
             self._setup_hover_config()
             self._build_hover_ui()
             self._bind_hover_events()
+
+        self._setup_drag_and_drop()
 
     def _setup_hover_config(self) -> None:
         """Sets up the hover text, icons, and colors specifically for Urgent & Important (Q1)."""
@@ -193,8 +194,12 @@ class TaskCard(ctk.CTkFrame):
         self._is_dragging = False
         self._drag_ghost: Optional[ctk.CTkToplevel] = None
 
-        # Bind drag events to card container and title
-        for widget in (self, self.normal_frame, self.lbl_title):
+        # Bind drag events to card container, normal frame, and title
+        drag_widgets = [self, self.normal_frame, self.lbl_title]
+        if hasattr(self, "hover_frame"):
+            drag_widgets.extend([self.hover_frame, self.inner_hover, self.lbl_action, self.lbl_icon])
+
+        for widget in drag_widgets:
             widget.bind("<ButtonPress-1>", self._on_drag_start, add="+")
             widget.bind("<B1-Motion>", self._on_drag_motion, add="+")
             widget.bind("<ButtonRelease-1>", self._on_drag_release, add="+")
@@ -263,6 +268,10 @@ class TaskCard(ctk.CTkFrame):
                 target_q = self.find_target_quadrant(event.x_root, event.y_root)
                 if target_q and target_q != self.q_key:
                     self.on_move(self.task["id"], target_q)
+        else:
+            # Click action on Q1 hover overlay (opens Pomodoro timer)
+            if self.is_hovered and self.q_key == "Q1_DO":
+                self._on_hover_click()
 
     def _build_hover_ui(self) -> None:
         """Builds the full-card hover transformation as an overlay."""
@@ -270,35 +279,29 @@ class TaskCard(ctk.CTkFrame):
             self,
             fg_color=self.hover_bg,
             corner_radius=9,
-            cursor="hand2",
+            cursor="fleur",
         )
 
-        inner_hover = ctk.CTkFrame(self.hover_frame, fg_color="transparent")
-        inner_hover.pack(fill="both", expand=True, padx=14, pady=10)
+        self.inner_hover = ctk.CTkFrame(self.hover_frame, fg_color="transparent")
+        self.inner_hover.pack(fill="both", expand=True, padx=14, pady=10)
 
-        lbl_action = ctk.CTkLabel(
-            inner_hover,
+        self.lbl_action = ctk.CTkLabel(
+            self.inner_hover,
             text=self.hover_text,
             font=(theme.FONT_FAMILY, 13, "bold"),
             text_color=self.hover_text_color,
             anchor="w",
-            cursor="hand2",
+            cursor="fleur",
         )
-        lbl_action.pack(side="left", fill="x", expand=True)
+        self.lbl_action.pack(side="left", fill="x", expand=True)
 
-        lbl_icon = ctk.CTkLabel(
-            inner_hover,
+        self.lbl_icon = ctk.CTkLabel(
+            self.inner_hover,
             text=self.hover_icon,
             font=(theme.FONT_FAMILY, 18),
-            cursor="hand2",
+            cursor="fleur",
         )
-        lbl_icon.pack(side="right", padx=(4, 0))
-
-        # Bind click event on hover frame and its children
-        self.hover_frame.bind("<Button-1>", lambda _: self._on_hover_click())
-        inner_hover.bind("<Button-1>", lambda _: self._on_hover_click())
-        lbl_action.bind("<Button-1>", lambda _: self._on_hover_click())
-        lbl_icon.bind("<Button-1>", lambda _: self._on_hover_click())
+        self.lbl_icon.pack(side="right", padx=(4, 0))
 
     def _on_pomodoro_click(self) -> None:
         if self.on_pomodoro:
