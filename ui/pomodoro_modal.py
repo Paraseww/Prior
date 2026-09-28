@@ -4,6 +4,7 @@ Interactive Pomodoro Focus Timer modal dialog for Prior.
 Enables dedicated deep-work sessions (25m work / 5m break) on tasks with live countdown and progress.
 """
 
+from pathlib import Path
 from typing import Any, Callable, Dict, Optional
 import customtkinter as ctk
 
@@ -37,6 +38,14 @@ class PomodoroModal(ctk.CTkToplevel):
         self.resizable(False, False)
         self.transient(master)
         self.grab_set()
+
+        # Set Window Titlebar & Taskbar Icon
+        ico_path = Path(__file__).resolve().parent.parent / "assets" / "icon.ico"
+        if ico_path.exists():
+            try:
+                self.after(200, lambda: self.iconbitmap(str(ico_path)))
+            except Exception:
+                pass
 
         # State Variables
         self.current_mode = "work"  # "work", "short_break", "long_break"
@@ -84,7 +93,7 @@ class PomodoroModal(ctk.CTkToplevel):
             header_row,
             text="🎯 CURRENT FOCUS TARGET",
             font=(theme.FONT_FAMILY, 11, "bold"),
-            text_color=theme.ACCENT_PRIMARY,
+            text_color="#EF4444",
             anchor="w",
         )
         lbl_target.pack(side="left")
@@ -123,8 +132,8 @@ class PomodoroModal(ctk.CTkToplevel):
             font=(theme.FONT_FAMILY, 12, "bold"),
             height=36,
             corner_radius=10,
-            selected_color=theme.ACCENT_PRIMARY,
-            selected_hover_color=theme.ACCENT_HOVER,
+            selected_color="#EF4444",
+            selected_hover_color="#DC2626",
             command=self._on_mode_selected,
         )
         self.mode_segment.pack(fill="x", pady=(0, 25))
@@ -136,7 +145,7 @@ class PomodoroModal(ctk.CTkToplevel):
             fg_color=theme.BG_INPUT,
             corner_radius=20,
             border_width=2,
-            border_color=theme.ACCENT_PRIMARY,
+            border_color="#EF4444",
             height=140,
         )
         timer_frame.pack(fill="x", pady=(0, 15))
@@ -163,7 +172,7 @@ class PomodoroModal(ctk.CTkToplevel):
             container,
             height=8,
             corner_radius=4,
-            progress_color=theme.ACCENT_PRIMARY,
+            progress_color="#EF4444",
             fg_color=theme.BG_INPUT,
         )
         self.progress_bar.pack(fill="x", pady=(0, 25))
@@ -179,8 +188,8 @@ class PomodoroModal(ctk.CTkToplevel):
             font=(theme.FONT_FAMILY, 15, "bold"),
             height=46,
             corner_radius=12,
-            fg_color=theme.ACCENT_PRIMARY,
-            hover_color=theme.ACCENT_HOVER,
+            fg_color="#EF4444",
+            hover_color="#DC2626",
             text_color="#FFFFFF",
             command=self._toggle_timer,
         )

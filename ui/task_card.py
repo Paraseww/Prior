@@ -77,14 +77,14 @@ class TaskCard(ctk.CTkFrame):
         if self.q_key == "Q1_DO":
             self.hover_text = "Focus with Pomodoro"
             self.hover_icon = "🍅"
-            self.hover_bg = ("#D1FAE5", "#064E3B")
-            self.hover_text_color = ("#065F46", "#ECFDF5")
+            self.hover_bg = ("#FEE2E2", "#7F1D1D")
+            self.hover_text_color = ("#991B1B", "#FEF2F2")
             self.hover_action = self._on_pomodoro_click
         elif self.q_key == "Q2_SCHEDULE":
             self.hover_text = "Schedule Date & Reminder Time"
             self.hover_icon = "📅"
-            self.hover_bg = ("#DBEAFE", "#1E3A8A")
-            self.hover_text_color = ("#1E40AF", "#EFF6FF")
+            self.hover_bg = ("#ECFDF5", "#064E3B")
+            self.hover_text_color = ("#065F46", "#ECFDF5")
             self.hover_action = self._on_schedule_click
 
     def _build_normal_ui(self) -> None:

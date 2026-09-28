@@ -6,6 +6,7 @@ Allows users to assign due dates, choose quick presets, select calendar days, an
 
 import calendar
 from datetime import date, datetime, timedelta
+from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
 import customtkinter as ctk
 
@@ -35,6 +36,14 @@ class ScheduleModal(ctk.CTkToplevel):
         self.transient(master)
         self.grab_set()
 
+        # Set Window Titlebar & Taskbar Icon
+        ico_path = Path(__file__).resolve().parent.parent / "assets" / "icon.ico"
+        if ico_path.exists():
+            try:
+                self.after(200, lambda: self.iconbitmap(str(ico_path)))
+            except Exception:
+                pass
+
         # Parse initial task schedule state
         today = date.today()
         self.selected_date: Optional[date] = None
@@ -52,7 +61,7 @@ class ScheduleModal(ctk.CTkToplevel):
 
         # Reminder Time state
         self.reminder_enabled = bool(self.task.get("reminder_time"))
-        self.selected_time: str = self.task.get("reminder_time") or "09:00 AM"
+        self.selected_time: str = self.task.get("reminder_time") or "06:00 AM"
 
         # Center modal
         self._center_modal(master)
@@ -70,18 +79,18 @@ class ScheduleModal(ctk.CTkToplevel):
     def _build_ui(self) -> None:
         self.configure(fg_color=theme.BG_CARD)
 
-        scroll_container = ctk.CTkScrollableFrame(self, fg_color="transparent")
-        scroll_container.pack(fill="both", expand=True, padx=24, pady=20)
+        container = ctk.CTkFrame(self, fg_color="transparent")
+        container.pack(fill="both", expand=True, padx=24, pady=18)
 
         # 1. Target Task Header Card
         task_box = ctk.CTkFrame(
-            scroll_container,
+            container,
             fg_color=theme.BG_INPUT,
             corner_radius=12,
             border_width=1,
             border_color=theme.BORDER_COLOR,
         )
-        task_box.pack(fill="x", pady=(0, 14))
+        task_box.pack(fill="x", pady=(0, 12))
 
         inner_task = ctk.CTkFrame(task_box, fg_color="transparent")
         inner_task.pack(fill="x", padx=14, pady=10)
@@ -93,7 +102,7 @@ class ScheduleModal(ctk.CTkToplevel):
             header_row,
             text="📅 SCHEDULING TARGET",
             font=(theme.FONT_FAMILY, 10, "bold"),
-            text_color="#3B82F6",
+            text_color="#10B981",
         )
         lbl_sched_tag.pack(side="left")
 
@@ -119,14 +128,14 @@ class ScheduleModal(ctk.CTkToplevel):
             font=(theme.FONT_FAMILY, 14, "bold"),
             text_color=theme.TEXT_PRIMARY,
             anchor="w",
-            wraplength=420,
+            wraplength=440,
             justify="left",
         )
         lbl_task_title.pack(fill="x", pady=(4, 0))
 
         # 2. Section: Date Selection & Quick Presets
         lbl_section_date = ctk.CTkLabel(
-            scroll_container,
+            container,
             text="1. Choose Due Date",
             font=(theme.FONT_DISPLAY, 13, "bold"),
             text_color=theme.TEXT_PRIMARY,
@@ -134,52 +143,51 @@ class ScheduleModal(ctk.CTkToplevel):
         )
         lbl_section_date.pack(fill="x", pady=(0, 6))
 
-        # Quick Date Presets Row
-        presets_row = ctk.CTkFrame(scroll_container, fg_color="transparent")
-        presets_row.pack(fill="x", pady=(0, 10))
+        # Quick Date Presets Row (Uniform Grid)
+        presets_row = ctk.CTkFrame(container, fg_color="transparent")
+        presets_row.pack(fill="x", pady=(0, 8))
 
         presets = [
             ("Today", 0),
-            ("Tmrw", 1),
-            ("This Weekend", self._get_weekend_offset()),
-            ("Next Mon", self._get_next_monday_offset()),
+            ("Tomorrow", 1),
             ("+7 Days", 7),
-            ("Clear", None),
         ]
 
-        for label, offset in presets:
+        for col, (label, offset) in enumerate(presets):
+            presets_row.grid_columnconfigure(col, weight=1, uniform="date_col")
             btn_p = ctk.CTkButton(
                 presets_row,
                 text=label,
                 font=(theme.FONT_FAMILY, 11),
+                width=0,
                 height=28,
                 corner_radius=6,
                 fg_color=theme.BG_INPUT,
                 hover_color=theme.BG_CARD_HOVER,
-                text_color=theme.TEXT_PRIMARY if offset is not None else theme.TEXT_MUTED,
+                text_color=theme.TEXT_PRIMARY,
                 command=lambda off=offset: self._apply_date_offset(off),
             )
-            btn_p.pack(side="left", fill="x", expand=True, padx=2)
+            btn_p.grid(row=0, column=col, sticky="nsew", padx=2)
 
         # Embedded Calendar Box
         cal_box = ctk.CTkFrame(
-            scroll_container,
+            container,
             fg_color=theme.BG_INPUT,
             corner_radius=10,
             border_width=1,
             border_color=theme.BORDER_COLOR,
         )
-        cal_box.pack(fill="x", pady=(0, 14))
+        cal_box.pack(fill="x", pady=(0, 12))
 
         # Month Nav Header
-        cal_header = ctk.CTkFrame(cal_box, fg_color="transparent", height=36)
-        cal_header.pack(fill="x", padx=10, pady=(8, 4))
+        cal_header = ctk.CTkFrame(cal_box, fg_color="transparent", height=34)
+        cal_header.pack(fill="x", padx=10, pady=(6, 2))
 
         btn_prev = ctk.CTkButton(
             cal_header,
             text="◀",
-            width=32,
-            height=26,
+            width=30,
+            height=24,
             corner_radius=5,
             fg_color=theme.BG_CARD,
             hover_color=theme.BG_CARD_HOVER,
@@ -200,8 +208,8 @@ class ScheduleModal(ctk.CTkToplevel):
         btn_next = ctk.CTkButton(
             cal_header,
             text="▶",
-            width=32,
-            height=26,
+            width=30,
+            height=24,
             corner_radius=5,
             fg_color=theme.BG_CARD,
             hover_color=theme.BG_CARD_HOVER,
@@ -212,12 +220,12 @@ class ScheduleModal(ctk.CTkToplevel):
 
         # Calendar Days Grid Frame
         self.grid_frame = ctk.CTkFrame(cal_box, fg_color="transparent")
-        self.grid_frame.pack(fill="x", padx=8, pady=(0, 8))
+        self.grid_frame.pack(fill="x", padx=8, pady=(0, 6))
         self._render_mini_calendar()
 
         # 3. Section: Reminder & Time Picker
         lbl_section_time = ctk.CTkLabel(
-            scroll_container,
+            container,
             text="2. Reminder Time",
             font=(theme.FONT_DISPLAY, 13, "bold"),
             text_color=theme.TEXT_PRIMARY,
@@ -225,36 +233,37 @@ class ScheduleModal(ctk.CTkToplevel):
         )
         lbl_section_time.pack(fill="x", pady=(0, 6))
 
-        # Time Presets Row
-        time_presets_row = ctk.CTkFrame(scroll_container, fg_color="transparent")
-        time_presets_row.pack(fill="x", pady=(0, 10))
+        # Time Presets Row (Uniform Grid)
+        time_presets_row = ctk.CTkFrame(container, fg_color="transparent")
+        time_presets_row.pack(fill="x", pady=(0, 8))
 
         time_presets = [
-            ("🌅 09:00 AM", "09:00 AM"),
-            ("☀️ 01:00 PM", "01:00 PM"),
-            ("🌆 05:00 PM", "05:00 PM"),
-            ("🌙 08:00 PM", "08:00 PM"),
+            ("🌅 06:00 AM", "06:00 AM"),
+            ("☀️ 12:00 PM", "12:00 PM"),
+            ("🌆 06:00 PM", "06:00 PM"),
         ]
 
         self.time_buttons: Dict[str, ctk.CTkButton] = {}
-        for label, val in time_presets:
+        for col, (label, val) in enumerate(time_presets):
+            time_presets_row.grid_columnconfigure(col, weight=1, uniform="time_col")
             btn_t = ctk.CTkButton(
                 time_presets_row,
                 text=label,
                 font=(theme.FONT_FAMILY, 11),
+                width=0,
                 height=28,
                 corner_radius=6,
-                fg_color=theme.BG_INPUT if val != self.selected_time else "#3B82F6",
-                hover_color=theme.BG_CARD_HOVER if val != self.selected_time else "#2563EB",
+                fg_color=theme.BG_INPUT if val != self.selected_time else "#10B981",
+                hover_color=theme.BG_CARD_HOVER if val != self.selected_time else "#059669",
                 text_color=theme.TEXT_PRIMARY if val != self.selected_time else "#FFFFFF",
                 command=lambda v=val: self._select_preset_time(v),
             )
-            btn_t.pack(side="left", fill="x", expand=True, padx=2)
+            btn_t.grid(row=0, column=col, sticky="nsew", padx=2)
             self.time_buttons[val] = btn_t
 
         # Custom Time Selector Row
-        custom_time_box = ctk.CTkFrame(scroll_container, fg_color="transparent")
-        custom_time_box.pack(fill="x", pady=(0, 14))
+        custom_time_box = ctk.CTkFrame(container, fg_color="transparent")
+        custom_time_box.pack(fill="x", pady=(0, 10))
 
         lbl_custom = ctk.CTkLabel(
             custom_time_box,
@@ -273,6 +282,10 @@ class ScheduleModal(ctk.CTkToplevel):
             values=hours,
             width=64,
             height=30,
+            fg_color="#10B981",
+            button_color="#059669",
+            button_hover_color="#047857",
+            dropdown_hover_color="#059669",
             command=self._on_custom_time_changed,
         )
         self.opt_hour.set(init_hour)
@@ -287,6 +300,10 @@ class ScheduleModal(ctk.CTkToplevel):
             values=minutes,
             width=64,
             height=30,
+            fg_color="#10B981",
+            button_color="#059669",
+            button_hover_color="#047857",
+            dropdown_hover_color="#059669",
             command=self._on_custom_time_changed,
         )
         self.opt_minute.set(init_min)
@@ -298,6 +315,10 @@ class ScheduleModal(ctk.CTkToplevel):
             values=ampm_list,
             width=64,
             height=30,
+            fg_color="#10B981",
+            button_color="#059669",
+            button_hover_color="#047857",
+            dropdown_hover_color="#059669",
             command=self._on_custom_time_changed,
         )
         self.opt_ampm.set(init_ampm)
@@ -305,11 +326,11 @@ class ScheduleModal(ctk.CTkToplevel):
 
         # 4. Schedule Live Summary Banner
         self.summary_card = ctk.CTkFrame(
-            scroll_container,
-            fg_color=("#EFF6FF", "#1E3A8A"),
+            container,
+            fg_color=("#ECFDF5", "#064E3B"),
             corner_radius=8,
             border_width=1,
-            border_color=("#BFDBFE", "#1D4ED8"),
+            border_color=("#A7F3D0", "#047857"),
         )
         self.summary_card.pack(fill="x", pady=(0, 16))
 
@@ -317,13 +338,13 @@ class ScheduleModal(ctk.CTkToplevel):
             self.summary_card,
             text="",
             font=(theme.FONT_FAMILY, 12, "bold"),
-            text_color=("#1E40AF", "#EFF6FF"),
+            text_color=("#065F46", "#ECFDF5"),
         )
         self.lbl_summary.pack(padx=12, pady=8)
         self._update_summary_banner()
 
         # 5. Action Buttons
-        btn_row = ctk.CTkFrame(scroll_container, fg_color="transparent")
+        btn_row = ctk.CTkFrame(container, fg_color="transparent")
         btn_row.pack(fill="x", pady=(4, 0))
 
         btn_cancel = ctk.CTkButton(
@@ -345,8 +366,8 @@ class ScheduleModal(ctk.CTkToplevel):
             font=(theme.FONT_FAMILY, 13, "bold"),
             height=38,
             corner_radius=8,
-            fg_color="#3B82F6",
-            hover_color="#2563EB",
+            fg_color="#10B981",
+            hover_color="#059669",
             text_color="#FFFFFF",
             command=self._on_save_clicked,
         )
@@ -383,11 +404,11 @@ class ScheduleModal(ctk.CTkToplevel):
                 is_today = (cell_date == today)
 
                 if is_selected:
-                    btn_fg = "#3B82F6"
+                    btn_fg = "#10B981"
                     text_color = "#FFFFFF"
                 elif is_today:
-                    btn_fg = ("#DBEAFE", "#1E3A8A")
-                    text_color = "#3B82F6"
+                    btn_fg = ("#ECFDF5", "#064E3B")
+                    text_color = "#10B981"
                 elif is_curr_month:
                     btn_fg = theme.BG_CARD
                     text_color = theme.TEXT_PRIMARY
@@ -406,7 +427,7 @@ class ScheduleModal(ctk.CTkToplevel):
                     height=26,
                     corner_radius=6,
                     fg_color=btn_fg,
-                    hover_color="#2563EB" if is_selected else theme.BG_CARD_HOVER,
+                    hover_color="#059669" if is_selected else theme.BG_CARD_HOVER,
                     text_color=text_color,
                     command=_make_handler(cell_date),
                 )
@@ -477,7 +498,7 @@ class ScheduleModal(ctk.CTkToplevel):
 
         for val, btn in self.time_buttons.items():
             if val == time_val:
-                btn.configure(fg_color="#3B82F6", hover_color="#2563EB", text_color="#FFFFFF")
+                btn.configure(fg_color="#10B981", hover_color="#059669", text_color="#FFFFFF")
             else:
                 btn.configure(fg_color=theme.BG_INPUT, hover_color=theme.BG_CARD_HOVER, text_color=theme.TEXT_PRIMARY)
 
@@ -491,7 +512,7 @@ class ScheduleModal(ctk.CTkToplevel):
 
         for val, btn in self.time_buttons.items():
             if val == self.selected_time:
-                btn.configure(fg_color="#3B82F6", hover_color="#2563EB", text_color="#FFFFFF")
+                btn.configure(fg_color="#10B981", hover_color="#059669", text_color="#FFFFFF")
             else:
                 btn.configure(fg_color=theme.BG_INPUT, hover_color=theme.BG_CARD_HOVER, text_color=theme.TEXT_PRIMARY)
 
@@ -506,7 +527,7 @@ class ScheduleModal(ctk.CTkToplevel):
             m = f"{int(time_parts[1]):02d}"
             return h, m, ampm
         except Exception:
-            return "09", "00", "AM"
+            return "06", "00", "AM"
 
     def _update_summary_banner(self) -> None:
         if self.selected_date:

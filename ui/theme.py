@@ -36,27 +36,27 @@ QUADRANTS: Dict[str, Dict[str, Any]] = {
         "title": "Urgent & Important",
         "subtitle": "Do First — Immediate crises & critical deadlines",
         "badge": "DO FIRST",
-        "color": "#10B981",          # Emerald 500
-        "color_dark": "#059669",     # Emerald 600
-        "bg_header": ("#ECFDF5", "#064E3B"),  # Emerald 50 / Emerald 900
-        "border": ("#A7F3D0", "#047857"),     # Emerald 200 / Emerald 700
-        "text": ("#065F46", "#34D399"),       # Emerald 800 / Emerald 400
+        "color": "#EF4444",          # Red 500 (Signals urgency / act now)
+        "color_dark": "#DC2626",     # Red 600
+        "bg_header": ("#FEF2F2", "#7F1D1D"),  # Red 50 / Red 900
+        "border": ("#FECACA", "#B91C1C"),     # Red 200 / Red 700
+        "text": ("#991B1B", "#F87171"),       # Red 800 / Red 400
     },
     "Q2_SCHEDULE": {
         "title": "Not Urgent & Important",
         "subtitle": "Schedule — Long-term growth, planning & deep work",
         "badge": "SCHEDULE",
-        "color": "#3B82F6",          # Blue 500
-        "color_dark": "#2563EB",     # Blue 600
-        "bg_header": ("#EFF6FF", "#1E3A8A"),  # Blue 50 / Blue 900
-        "border": ("#BFDBFE", "#1D4ED8"),     # Blue 200 / Blue 700
-        "text": ("#1E40AF", "#60A5FA"),       # Blue 800 / Blue 400
+        "color": "#10B981",          # Emerald 500 / Green (Growth & long-term value)
+        "color_dark": "#059669",     # Emerald 600
+        "bg_header": ("#ECFDF5", "#064E3B"),  # Emerald 50 / Emerald 900
+        "border": ("#A7F3D0", "#047857"),     # Emerald 200 / Emerald 700
+        "text": ("#065F46", "#34D399"),       # Emerald 800 / Emerald 400
     },
     "Q3_DELEGATE": {
         "title": "Urgent & Not Important",
         "subtitle": "Delegate — Interruptions, quick requests & busywork",
         "badge": "DELEGATE",
-        "color": "#F59E0B",          # Amber 500
+        "color": "#F59E0B",          # Amber 500 / Yellow (Caution - needs attention)
         "color_dark": "#D97706",     # Amber 600
         "bg_header": ("#FFFBEB", "#78350F"),  # Amber 50 / Amber 900
         "border": ("#FDE68A", "#B45309"),     # Amber 200 / Amber 700
@@ -65,12 +65,12 @@ QUADRANTS: Dict[str, Dict[str, Any]] = {
     "Q4_ELIMINATE": {
         "title": "Not Urgent & Not Important",
         "subtitle": "Eliminate — Distractions, time wasters & clutter",
-        "badge": "ELIMINATE",
-        "color": "#EF4444",          # Red 500
-        "color_dark": "#DC2626",     # Red 600
-        "bg_header": ("#FEF2F2", "#7F1D1D"),  # Red 50 / Red 900
-        "border": ("#FECACA", "#B91C1C"),     # Red 200 / Red 700
-        "text": ("#991B1B", "#F87171"),       # Red 800 / Red 400
+        "badge": "DELETE",
+        "color": "#3B82F6",          # Blue 500 (Calm, low energy - safe to drop)
+        "color_dark": "#2563EB",     # Blue 600
+        "bg_header": ("#EFF6FF", "#1E3A8A"),  # Blue 50 / Blue 900
+        "border": ("#BFDBFE", "#1D4ED8"),     # Blue 200 / Blue 700
+        "text": ("#1E40AF", "#60A5FA"),       # Blue 800 / Blue 400
     },
 }
 
