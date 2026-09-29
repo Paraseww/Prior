@@ -6,13 +6,14 @@ import customtkinter as ctk
 from PIL import Image
 
 import database
-from project import filter_tasks
+from project import filter_tasks, get_task_notifications
 from ui import theme
 from ui.analytics_view import AnalyticsView
 from ui.calendar_view import CalendarView
 from ui.dot_pattern import DottedFrame
 from ui.list_view import ListView
 from ui.matrix_view import MatrixView
+from ui.notification_modal import NotificationModal
 from ui.pomodoro_modal import PomodoroModal
 from ui.schedule_modal import ScheduleModal
 from ui.settings_view import SettingsView
@@ -210,9 +211,23 @@ class PriorApp(ctk.CTk):
         self.search_entry.pack()
         self.search_entry.bind("<KeyRelease>", self._on_search_key)
 
-        # Right: Theme Toggle + User Profile Badge
+        # Right: Notifications + Theme Toggle + User Profile Badge
         actions_frame = ctk.CTkFrame(inner_top, fg_color="transparent")
         actions_frame.pack(side="right")
+
+        # Notification Bell Button
+        self.btn_notifications = ctk.CTkButton(
+            actions_frame,
+            text="🔔",
+            height=36,
+            corner_radius=8,
+            fg_color=theme.BG_INPUT,
+            hover_color=theme.BG_CARD_HOVER,
+            text_color=theme.TEXT_PRIMARY,
+            font=(theme.FONT_FAMILY, 13, "bold"),
+            command=self._open_notifications,
+        )
+        self.btn_notifications.pack(side="left", padx=(0, 10))
 
         # Theme Toggle Button
         is_dark = self.profile.get("theme", "dark") == "dark"
@@ -228,7 +243,7 @@ class PriorApp(ctk.CTk):
             font=(theme.FONT_FAMILY, 14),
             command=self._toggle_quick_theme,
         )
-        self.btn_theme.pack(side="left", padx=(0, 12))
+        self.btn_theme.pack(side="left", padx=(0, 10))
 
         # Profile Badge
         user_name = self.profile.get("name", "User")
@@ -371,9 +386,40 @@ class PriorApp(ctk.CTk):
             self.current_view.pack(fill="both", expand=True)
 
     def _load_and_refresh(self) -> None:
-        """Reloads all tasks from SQLite and refreshes current active tab."""
+        """Reloads all tasks from SQLite, updates notification badges, and refreshes current active tab."""
         self.all_tasks = database.get_all_tasks()
+        self._update_notification_badge()
         self._switch_tab(self.current_tab)
+
+    def _update_notification_badge(self) -> None:
+        """Updates the notification bell button badge and highlight state."""
+        if not hasattr(self, "btn_notifications"):
+            return
+        notifs = get_task_notifications(self.all_tasks)
+        total = notifs["total_count"]
+        if total > 0:
+            self.btn_notifications.configure(
+                text=f"🔔 {total}",
+                fg_color=("#FEE2E2", "#2A0A0A") if notifs["overdue_count"] > 0 else theme.BG_INPUT,
+                text_color=("#B91C1C", "#F87171") if notifs["overdue_count"] > 0 else theme.TEXT_PRIMARY,
+            )
+        else:
+            self.btn_notifications.configure(
+                text="🔔",
+                fg_color=theme.BG_INPUT,
+                text_color=theme.TEXT_PRIMARY,
+            )
+
+    def _open_notifications(self) -> None:
+        """Opens the notification & reminders modal dialog."""
+        NotificationModal(
+            self,
+            tasks=self.all_tasks,
+            on_toggle=self.toggle_task,
+            on_edit=self.open_task_modal,
+            on_schedule=self.open_schedule_modal,
+            on_refresh=self._load_and_refresh,
+        )
 
     def _on_search_key(self, _: Any) -> None:
         self.search_query = self.search_entry.get().strip()

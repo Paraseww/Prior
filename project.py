@@ -262,5 +262,122 @@ def format_timer_display(seconds: int) -> str:
     return f"{mins:02d}:{secs:02d}"
 
 
+def get_task_notifications(
+    tasks: Optional[List[Dict[str, Any]]],
+    current_date_str: Optional[str] = None,
+) -> Dict[str, Any]:
+    """
+    Categorizes tasks into notification buckets based on their due date:
+    - overdue: due_date < current_date (sorted oldest first)
+    - today: due_date == current_date
+    - tomorrow: due_date == current_date + 1 day
+    - upcoming: due_date is within 2 to 3 days (current_date + 2 <= due_date <= current_date + 3)
+
+    Only active / pending (non-completed) tasks with valid due_dates are considered.
+
+    :param tasks: List of task dictionaries.
+    :param current_date_str: Optional reference date in 'YYYY-MM-DD' format (defaults to today).
+    :return: Dictionary containing:
+             - 'total_count': Total number of notifying tasks
+             - 'overdue_count': Count of overdue tasks
+             - 'today_count': Count of tasks due today
+             - 'tomorrow_count': Count of tasks due tomorrow
+             - 'upcoming_count': Count of tasks due in 2-3 days
+             - 'overdue': List of overdue task dicts (with 'days_diff' added, sorted oldest first)
+             - 'today': List of today's task dicts (with 'days_diff' added)
+             - 'tomorrow': List of tomorrow's task dicts (with 'days_diff' added)
+             - 'upcoming': List of upcoming task dicts (with 'days_diff' added, sorted soonest first)
+    """
+    empty_result: Dict[str, Any] = {
+        "total_count": 0,
+        "overdue_count": 0,
+        "today_count": 0,
+        "tomorrow_count": 0,
+        "upcoming_count": 0,
+        "overdue": [],
+        "today": [],
+        "tomorrow": [],
+        "upcoming": [],
+    }
+
+    if not tasks:
+        return empty_result
+
+    # Determine reference date
+    if current_date_str and isinstance(current_date_str, str):
+        try:
+            today = datetime.strptime(current_date_str.strip(), "%Y-%m-%d").date()
+        except ValueError:
+            today = date.today()
+    else:
+        today = date.today()
+
+    date_pattern = r"^\d{4}-\d{2}-\d{2}$"
+
+    overdue_list: List[Dict[str, Any]] = []
+    today_list: List[Dict[str, Any]] = []
+    tomorrow_list: List[Dict[str, Any]] = []
+    upcoming_list: List[Dict[str, Any]] = []
+
+    for task in tasks:
+        # Ignore completed tasks
+        if bool(task.get("is_completed", 0)):
+            continue
+
+        due_date_str = task.get("due_date")
+        if not due_date_str or not isinstance(due_date_str, str) or not due_date_str.strip():
+            continue
+
+        clean_due = due_date_str.strip()
+        if not re.match(date_pattern, clean_due):
+            continue
+
+        try:
+            due = datetime.strptime(clean_due, "%Y-%m-%d").date()
+        except ValueError:
+            continue
+
+        diff_days = (due - today).days
+
+        # Create a shallow copy with days_diff attached
+        task_item = dict(task)
+        task_item["days_diff"] = diff_days
+
+        if diff_days < 0:
+            overdue_list.append(task_item)
+        elif diff_days == 0:
+            today_list.append(task_item)
+        elif diff_days == 1:
+            tomorrow_list.append(task_item)
+        elif 2 <= diff_days <= 3:
+            upcoming_list.append(task_item)
+
+    # Sort overdue list by diff_days ascending (most overdue / oldest first)
+    overdue_list.sort(key=lambda x: x["days_diff"])
+
+    # Sort upcoming list by diff_days ascending (2 days left before 3 days left)
+    upcoming_list.sort(key=lambda x: x["days_diff"])
+
+    total_count = (
+        len(overdue_list)
+        + len(today_list)
+        + len(tomorrow_list)
+        + len(upcoming_list)
+    )
+
+    return {
+        "total_count": total_count,
+        "overdue_count": len(overdue_list),
+        "today_count": len(today_list),
+        "tomorrow_count": len(tomorrow_list),
+        "upcoming_count": len(upcoming_list),
+        "overdue": overdue_list,
+        "today": today_list,
+        "tomorrow": tomorrow_list,
+        "upcoming": upcoming_list,
+    }
+
+
 if __name__ == "__main__":
     main()
+

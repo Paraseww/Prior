@@ -12,6 +12,7 @@ from project import (
     filter_tasks,
     format_due_status,
     format_timer_display,
+    get_task_notifications,
 )
 
 
@@ -252,3 +253,83 @@ def test_format_timer_display_invalid():
 
     with pytest.raises(ValueError):
         format_timer_display(-10)
+
+
+# ============================================================================
+# 6. Tests for get_task_notifications()
+# ============================================================================
+
+def test_get_task_notifications_empty():
+    """Verify notification categorization on empty/None task list."""
+    res_empty = get_task_notifications([])
+    assert res_empty["total_count"] == 0
+    assert res_empty["overdue_count"] == 0
+    assert res_empty["today_count"] == 0
+    assert res_empty["tomorrow_count"] == 0
+    assert res_empty["upcoming_count"] == 0
+    assert res_empty["overdue"] == []
+    assert res_empty["today"] == []
+    assert res_empty["tomorrow"] == []
+    assert res_empty["upcoming"] == []
+
+    res_none = get_task_notifications(None)
+    assert res_none["total_count"] == 0
+
+
+def test_get_task_notifications_completed_and_invalid_ignored():
+    """Verify completed tasks and tasks with missing/invalid due dates are excluded."""
+    ref_date = "2026-10-15"
+    sample_tasks = [
+        {"id": 1, "title": "Completed overdue", "due_date": "2026-10-10", "is_completed": 1},
+        {"id": 2, "title": "No date task", "due_date": None, "is_completed": 0},
+        {"id": 3, "title": "Empty date task", "due_date": "", "is_completed": 0},
+        {"id": 4, "title": "Invalid date task", "due_date": "not-a-date", "is_completed": 0},
+    ]
+
+    res = get_task_notifications(sample_tasks, current_date_str=ref_date)
+    assert res["total_count"] == 0
+    assert res["overdue"] == []
+    assert res["today"] == []
+    assert res["tomorrow"] == []
+    assert res["upcoming"] == []
+
+
+def test_get_task_notifications_categorization_and_sorting():
+    """Verify correct classification into overdue, today, tomorrow, and upcoming buckets with sorting."""
+    ref_date = "2026-10-15"
+    sample_tasks = [
+        {"id": 1, "title": "Severely Overdue", "due_date": "2026-10-10", "is_completed": 0},  # -5 days
+        {"id": 2, "title": "Yesterday Overdue", "due_date": "2026-10-14", "is_completed": 0},  # -1 day
+        {"id": 3, "title": "Due Today Task", "due_date": "2026-10-15", "is_completed": 0},    # 0 days
+        {"id": 4, "title": "Due Tomorrow Task", "due_date": "2026-10-16", "is_completed": 0}, # 1 day
+        {"id": 5, "title": "Due in 2 Days", "due_date": "2026-10-17", "is_completed": 0},     # 2 days
+        {"id": 6, "title": "Due in 3 Days", "due_date": "2026-10-18", "is_completed": 0},     # 3 days
+        {"id": 7, "title": "Far Future Task", "due_date": "2026-10-25", "is_completed": 0},   # 10 days (excluded from 3d window)
+    ]
+
+    res = get_task_notifications(sample_tasks, current_date_str=ref_date)
+
+    assert res["total_count"] == 6  # 2 overdue + 1 today + 1 tomorrow + 2 upcoming
+    assert res["overdue_count"] == 2
+    assert res["today_count"] == 1
+    assert res["tomorrow_count"] == 1
+    assert res["upcoming_count"] == 2
+
+    # Overdue should be sorted oldest first (id: 1 then id: 2)
+    assert [t["id"] for t in res["overdue"]] == [1, 2]
+    assert res["overdue"][0]["days_diff"] == -5
+    assert res["overdue"][1]["days_diff"] == -1
+
+    # Today
+    assert res["today"][0]["id"] == 3
+    assert res["today"][0]["days_diff"] == 0
+
+    # Tomorrow
+    assert res["tomorrow"][0]["id"] == 4
+    assert res["tomorrow"][0]["days_diff"] == 1
+
+    # Upcoming (2-3 days) should be sorted soonest first (id: 5 then id: 6)
+    assert [t["id"] for t in res["upcoming"]] == [5, 6]
+    assert res["upcoming"][0]["days_diff"] == 2
+    assert res["upcoming"][1]["days_diff"] == 3
+
