@@ -441,7 +441,7 @@ class PriorApp(ctk.CTk):
         """Opens Add Task Modal pre-selected with specified quadrant."""
         self.open_task_modal(default_quadrant=quadrant)
 
-    def open_quick_add_with_date(self, quadrant: str = "Q1_DO", due_date: Optional[str] = None) -> None:
+    def open_quick_add_with_date(self, quadrant: str = "Q2_SCHEDULE", due_date: Optional[str] = None) -> None:
         """Opens Add Task Modal pre-selected with specified quadrant and due date."""
         self.open_task_modal(default_quadrant=quadrant, default_due_date=due_date)
 

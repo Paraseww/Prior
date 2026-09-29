@@ -265,7 +265,7 @@ class CalendarView(ctk.CTkFrame):
 
                 if is_curr_month:
                     def _make_add_handler(ds: str):
-                        return lambda: self.on_quick_add("Q1_DO", ds)
+                        return lambda: self.on_quick_add("Q2_SCHEDULE", ds)
 
                     btn_add_cell = ctk.CTkButton(
                         cell_top,
@@ -325,7 +325,7 @@ class CalendarView(ctk.CTkFrame):
 
                 # Single click selects date; Double click opens task add
                 def _make_dbl_handler(ds: str):
-                    return lambda _: self.on_quick_add("Q1_DO", ds)
+                    return lambda _: self.on_quick_add("Q2_SCHEDULE", ds)
 
                 dbl_handler = _make_dbl_handler(date_str) if is_curr_month else None
 
@@ -336,7 +336,7 @@ class CalendarView(ctk.CTkFrame):
                     def _make_num_click_handler(d: date, ds: str):
                         def _num_handler(ev: Any = None):
                             self._select_date(d)
-                            self.on_quick_add("Q1_DO", ds)
+                            self.on_quick_add("Q2_SCHEDULE", ds)
                         return _num_handler
 
                     lbl_num.configure(cursor="hand2")
@@ -381,7 +381,7 @@ class CalendarView(ctk.CTkFrame):
             fg_color=theme.ACCENT_PRIMARY,
             hover_color=theme.ACCENT_HOVER,
             text_color="#FFFFFF",
-            command=lambda: self.on_quick_add("Q1_DO", date_str),
+            command=lambda: self.on_quick_add("Q2_SCHEDULE", date_str),
         )
         btn_add_day.pack(fill="x", pady=(8, 0))
 
