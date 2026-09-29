@@ -39,6 +39,9 @@ class PomodoroModal(ctk.CTkToplevel):
         self.transient(master)
         self.grab_set()
 
+        # Apply Prior application icon
+        theme.apply_prior_icon(self)
+
         # State Variables
         self.current_mode = "work"  # "work", "short_break", "long_break"
         self.total_seconds = self.WORK_TIME

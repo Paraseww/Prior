@@ -38,6 +38,9 @@ class ScheduleModal(ctk.CTkToplevel):
         self.transient(master)
         self.grab_set()
 
+        # Apply Prior application icon
+        theme.apply_prior_icon(self)
+
         # Parse initial task schedule state
         today = date.today()
         self.selected_date: Optional[date] = None

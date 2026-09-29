@@ -41,6 +41,9 @@ class NotificationModal(ctk.CTkToplevel):
         self.transient(master)
         self.grab_set()
 
+        # Apply Prior application icon
+        theme.apply_prior_icon(self)
+
         # Center modal relative to master window
         self._center_modal(master)
         self._build_ui()

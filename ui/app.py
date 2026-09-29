@@ -31,6 +31,59 @@ if sys.platform == "win32":
         pass
 
 
+def apply_prior_icon(window: Any) -> None:
+    """
+    Applies the custom Prior application logo to any Tk/CTk/CTkToplevel window
+    and prevents CustomTkinter from overriding it with its default blue 'C' icon.
+    """
+    assets_dir = Path(__file__).resolve().parent.parent / "assets"
+    png_path = assets_dir / "icon.png"
+    ico_path = assets_dir / "icon.ico"
+
+    window._iconbitmap_method_called = True
+
+    try:
+        if png_path.exists():
+            from PIL import ImageTk
+            base_img = Image.open(png_path).convert("RGBA")
+            photo = ImageTk.PhotoImage(base_img.resize((128, 128), Image.Resampling.LANCZOS))
+            window.iconphoto(True, photo)
+            window._icon_photo = photo
+
+        if sys.platform == "win32" and ico_path.exists():
+            try:
+                window.iconbitmap(str(ico_path))
+            except Exception:
+                pass
+
+            try:
+                import ctypes
+                window.update_idletasks()
+                wid = window.winfo_id()
+                parent = ctypes.windll.user32.GetParent(wid) or wid
+                hicon_big = ctypes.windll.user32.LoadImageW(None, str(ico_path), 1, 48, 48, 0x00000010)
+                hicon_small = ctypes.windll.user32.LoadImageW(None, str(ico_path), 1, 16, 16, 0x00000010)
+                for h in (wid, parent):
+                    if hicon_big:
+                        ctypes.windll.user32.SendMessageW(h, 0x0080, 1, hicon_big)
+                    if hicon_small:
+                        ctypes.windll.user32.SendMessageW(h, 0x0080, 0, hicon_small)
+            except Exception:
+                pass
+    except Exception:
+        pass
+
+
+def _custom_windows_set_titlebar_icon(self: Any) -> None:
+    """Global hook replacing CustomTkinter's default blue 'C' icon on Windows."""
+    apply_prior_icon(self)
+
+
+# Hook CustomTkinter window classes globally so all windows & modals always show Prior's logo
+ctk.CTk._windows_set_titlebar_icon = _custom_windows_set_titlebar_icon
+ctk.CTkToplevel._windows_set_titlebar_icon = _custom_windows_set_titlebar_icon
+
+
 class PriorApp(ctk.CTk):
     """
     Main desktop application window for Prior.
@@ -82,40 +135,7 @@ class PriorApp(ctk.CTk):
 
     def _set_app_icon(self) -> None:
         """Configures the window titlebar, taskbar, and Alt-Tab switcher icon."""
-        assets_dir = Path(__file__).resolve().parent.parent / "assets"
-        png_path = assets_dir / "icon.png"
-        ico_path = assets_dir / "icon.ico"
-
-        try:
-            if png_path.exists():
-                from PIL import ImageTk
-                base_img = Image.open(png_path).convert("RGBA")
-                self._icon_photo = ImageTk.PhotoImage(base_img.resize((128, 128), Image.Resampling.LANCZOS))
-                self.iconphoto(True, self._icon_photo)
-
-            if sys.platform == "win32" and ico_path.exists():
-                try:
-                    self.iconbitmap(str(ico_path))
-                except Exception:
-                    pass
-
-                # Explicitly send Win32 WM_SETICON to client HWND and parent wrapper HWND
-                try:
-                    import ctypes
-                    self.update_idletasks()
-                    wid = self.winfo_id()
-                    parent = ctypes.windll.user32.GetParent(wid) or wid
-                    hicon_big = ctypes.windll.user32.LoadImageW(None, str(ico_path), 1, 48, 48, 0x00000010)
-                    hicon_small = ctypes.windll.user32.LoadImageW(None, str(ico_path), 1, 16, 16, 0x00000010)
-                    for h in (wid, parent):
-                        if hicon_big:
-                            ctypes.windll.user32.SendMessageW(h, 0x0080, 1, hicon_big)
-                        if hicon_small:
-                            ctypes.windll.user32.SendMessageW(h, 0x0080, 0, hicon_small)
-                except Exception:
-                    pass
-        except Exception:
-            pass
+        apply_prior_icon(self)
 
     def _check_onboarding_and_render(self) -> None:
         # Clear existing container children
