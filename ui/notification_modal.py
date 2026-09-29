@@ -41,14 +41,6 @@ class NotificationModal(ctk.CTkToplevel):
         self.transient(master)
         self.grab_set()
 
-        # Set Window Titlebar & Taskbar Icon
-        ico_path = Path(__file__).resolve().parent.parent / "assets" / "icon.ico"
-        if ico_path.exists():
-            try:
-                self.after(200, lambda: self.iconbitmap(str(ico_path)))
-            except Exception:
-                pass
-
         # Center modal relative to master window
         self._center_modal(master)
         self._build_ui()

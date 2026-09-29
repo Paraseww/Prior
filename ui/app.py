@@ -83,23 +83,19 @@ class PriorApp(ctk.CTk):
                 pass
 
         assets_dir = Path(__file__).resolve().parent.parent / "assets"
-        ico_path = assets_dir / "icon.ico"
         png_path = assets_dir / "icon.png"
 
         try:
             if png_path.exists():
                 from PIL import ImageTk
                 base_img = Image.open(png_path).convert("RGBA")
-                # Provide crisp multi-resolution PhotoImages (Lanczos anti-aliased)
-                # to prevent Windows and Tkinter from using low-quality nearest-neighbor downscaling
+                # Provide high-quality Lanczos-sampled PhotoImages across all resolutions
                 self._icon_photos = [
                     ImageTk.PhotoImage(base_img.resize((s, s), Image.Resampling.LANCZOS))
-                    for s in (16, 20, 24, 32, 40, 48, 64, 96, 128, 256)
+                    for s in (16, 20, 24, 32, 40, 48, 64, 96, 128, 256, 512)
                 ]
+                # default=True sets it for main window and all modal toplevel windows
                 self.wm_iconphoto(True, *self._icon_photos)
-
-            if ico_path.exists() and sys.platform == "win32":
-                self.iconbitmap(str(ico_path))
         except Exception:
             pass
 

@@ -16,18 +16,12 @@ from pystray import Menu, MenuItem
 # Path to icon assets
 BASE_DIR = Path(__file__).resolve().parent.parent
 ICON_PNG = BASE_DIR / "assets" / "icon.png"
-ICON_ICO = BASE_DIR / "assets" / "icon.ico"
 
 
 def get_tray_image() -> Image.Image:
-    """Loads the application icon for system tray, with dynamic fallback."""
+    """Loads the application icon purely from PNG for system tray."""
     if ICON_PNG.exists():
         img = Image.open(ICON_PNG)
-        if img.mode != "RGBA":
-            img = img.convert("RGBA")
-        return img
-    elif ICON_ICO.exists():
-        img = Image.open(ICON_ICO)
         if img.mode != "RGBA":
             img = img.convert("RGBA")
         return img

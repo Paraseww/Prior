@@ -39,14 +39,6 @@ class PomodoroModal(ctk.CTkToplevel):
         self.transient(master)
         self.grab_set()
 
-        # Set Window Titlebar & Taskbar Icon
-        ico_path = Path(__file__).resolve().parent.parent / "assets" / "icon.ico"
-        if ico_path.exists():
-            try:
-                self.after(200, lambda: self.iconbitmap(str(ico_path)))
-            except Exception:
-                pass
-
         # State Variables
         self.current_mode = "work"  # "work", "short_break", "long_break"
         self.total_seconds = self.WORK_TIME
