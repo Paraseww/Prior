@@ -62,6 +62,24 @@ class TaskCard(ctk.CTkFrame):
         self.q_color = self.q_info["color"]
         self.q_border = self.q_info["border"]
 
+        super().__init__(
+            master,
+            fg_color=theme.BG_CARD,
+            corner_radius=10,
+            border_width=1,
+            border_color=self.q_border,
+            **kwargs,
+        )
+        self.task = task
+        self.on_toggle = on_toggle
+        self.on_edit = on_edit
+        self.on_move = on_move
+        self.on_delete = on_delete
+        self.on_pomodoro = on_pomodoro
+        self.on_schedule = on_schedule
+        self.find_target_quadrant = find_target_quadrant
+        self.highlight_target_quadrant = highlight_target_quadrant
+
         self._build_normal_ui()
 
         # Hover shuffle is active for Q1 (Do First) and Q2 (Schedule) tasks
@@ -92,7 +110,17 @@ class TaskCard(ctk.CTkFrame):
         self.normal_frame = ctk.CTkFrame(self, fg_color="transparent")
         self.normal_frame.pack(fill="both", expand=True, padx=12, pady=10)
 
-        # 1. Left Section: Checkbox anchored to top-left
+        # 1. Left Vertical Quadrant Accent Stripe
+        stripe_color = ("#94A3B8", "#64748B") if self.is_completed else self.q_color
+        self.stripe = ctk.CTkFrame(
+            self.normal_frame,
+            width=4,
+            corner_radius=2,
+            fg_color=stripe_color,
+        )
+        self.stripe.pack(side="left", fill="y", padx=(0, 8))
+
+        # 2. Checkbox Section anchored to top-left
         left_box = ctk.CTkFrame(self.normal_frame, fg_color="transparent")
         left_box.pack(side="left", fill="y", anchor="n", padx=(0, 8))
 
@@ -106,11 +134,13 @@ class TaskCard(ctk.CTkFrame):
             corner_radius=5,
             fg_color=self.q_color,
             hover_color=self.q_info["color_dark"],
+            border_color=self.q_color if not self.is_completed else theme.BORDER_COLOR,
+            border_width=2,
             command=lambda: self.on_toggle(self.task["id"]),
         )
         self.cb.pack(side="top", pady=(2, 0))
 
-        # 2. Right Section: Action buttons anchored to top-right
+        # 3. Right Section: Action buttons anchored to top-right
         right_box = ctk.CTkFrame(self.normal_frame, fg_color="transparent")
         right_box.pack(side="right", fill="y", anchor="n", padx=(4, 0))
 
@@ -142,7 +172,7 @@ class TaskCard(ctk.CTkFrame):
         )
         btn_edit.pack(side="right", padx=(2, 0))
 
-        # 3. Center Section: Left-aligned Title, Description, and Due Date
+        # 4. Center Section: Left-aligned Title, Description, and Badges
         self.center_box = ctk.CTkFrame(self.normal_frame, fg_color="transparent")
         self.center_box.pack(side="left", fill="both", expand=True)
 
@@ -176,7 +206,41 @@ class TaskCard(ctk.CTkFrame):
             )
             self.lbl_desc.pack(fill="x", anchor="w", pady=(3, 2))
 
-        # Badges Row: Due Date Badge & Reminder Time Badge
+        # Badges Row: Persistent Quadrant Category Badge + Due Date Badge + Reminder Time Badge
+        badges_row = ctk.CTkFrame(self.center_box, fg_color="transparent")
+        badges_row.pack(anchor="w", pady=(5, 0))
+
+        # 4a. Priority Category Badge
+        if self.is_completed:
+            badge_bg = ("#E2E8F0", "#334155")
+            badge_border = ("#CBD5E1", "#475569")
+            badge_text_color = ("#64748B", "#94A3B8")
+            badge_title = f"✓ {self.q_info['badge']}"
+        else:
+            badge_bg = self.q_info["bg_header"]
+            badge_border = self.q_info["border"]
+            badge_text_color = self.q_info["text"]
+            badge_title = f"● {self.q_info['badge']}"
+
+        quad_badge = ctk.CTkFrame(
+            badges_row,
+            fg_color=badge_bg,
+            corner_radius=6,
+            height=20,
+            border_width=1,
+            border_color=badge_border,
+        )
+        quad_badge.pack(side="left", padx=(0, 6))
+
+        lbl_quad = ctk.CTkLabel(
+            quad_badge,
+            text=badge_title,
+            font=(theme.FONT_FAMILY, 10, "bold"),
+            text_color=badge_text_color,
+        )
+        lbl_quad.pack(padx=6, pady=1)
+
+        # 4b. Due Date Badge & Reminder Time Badge
         due_date_str = self.task.get("due_date")
         reminder_time_str = self.task.get("reminder_time")
 
@@ -189,47 +253,57 @@ class TaskCard(ctk.CTkFrame):
 
         has_reminder = bool(reminder_time_str and str(reminder_time_str).strip())
 
-        if has_due or has_reminder:
-            badges_row = ctk.CTkFrame(self.center_box, fg_color="transparent")
-            badges_row.pack(anchor="w", pady=(4, 0))
+        if has_due and due_info:
+            status_type = due_info.get("status")
+            if status_type == "OVERDUE":
+                due_bg = ("#FEE2E2", "#7F1D1D")
+                due_border = ("#FECACA", "#B91C1C")
+                due_text = ("#991B1B", "#F87171")
+            elif status_type == "TODAY":
+                due_bg = ("#FEF3C7", "#78350F")
+                due_border = ("#FDE68A", "#B45309")
+                due_text = ("#92400E", "#FBBF24")
+            else:
+                due_bg = theme.BG_INPUT
+                due_border = theme.BORDER_COLOR
+                due_text = theme.TEXT_SECONDARY
 
-            if has_due and due_info:
-                due_badge = ctk.CTkFrame(
-                    badges_row,
-                    fg_color=self.q_info["bg_header"],
-                    corner_radius=6,
-                    height=20,
-                    border_width=1,
-                    border_color=self.q_info["border"],
-                )
-                due_badge.pack(side="left", padx=(0, 6))
+            due_badge = ctk.CTkFrame(
+                badges_row,
+                fg_color=due_bg,
+                corner_radius=6,
+                height=20,
+                border_width=1,
+                border_color=due_border,
+            )
+            due_badge.pack(side="left", padx=(0, 6))
 
-                lbl_due = ctk.CTkLabel(
-                    due_badge,
-                    text=f"📅 {due_info['label']}",
-                    font=(theme.FONT_FAMILY, 10, "bold"),
-                    text_color=self.q_info["text"],
-                )
-                lbl_due.pack(padx=6, pady=1)
+            lbl_due = ctk.CTkLabel(
+                due_badge,
+                text=f"📅 {due_info['label']}",
+                font=(theme.FONT_FAMILY, 10, "bold"),
+                text_color=due_text,
+            )
+            lbl_due.pack(padx=6, pady=1)
 
-            if has_reminder:
-                time_badge = ctk.CTkFrame(
-                    badges_row,
-                    fg_color=self.q_info["bg_header"],
-                    corner_radius=6,
-                    height=20,
-                    border_width=1,
-                    border_color=self.q_info["border"],
-                )
-                time_badge.pack(side="left")
+        if has_reminder:
+            time_badge = ctk.CTkFrame(
+                badges_row,
+                fg_color=theme.BG_INPUT,
+                corner_radius=6,
+                height=20,
+                border_width=1,
+                border_color=theme.BORDER_COLOR,
+            )
+            time_badge.pack(side="left")
 
-                lbl_time = ctk.CTkLabel(
-                    time_badge,
-                    text=f"⏰ {str(reminder_time_str).strip()}",
-                    font=(theme.FONT_FAMILY, 10, "bold"),
-                    text_color=self.q_info["text"],
-                )
-                lbl_time.pack(padx=6, pady=1)
+            lbl_time = ctk.CTkLabel(
+                time_badge,
+                text=f"⏰ {str(reminder_time_str).strip()}",
+                font=(theme.FONT_FAMILY, 10, "bold"),
+                text_color=theme.TEXT_SECONDARY,
+            )
+            lbl_time.pack(padx=6, pady=1)
 
         # Responsive wraplength adjustment based on container width
         def _on_resize(event: Any) -> None:
@@ -249,6 +323,8 @@ class TaskCard(ctk.CTkFrame):
 
         # Bind drag events to card container, normal frame, and title
         drag_widgets = [self, self.normal_frame, self.lbl_title, self.center_box]
+        if hasattr(self, "stripe"):
+            drag_widgets.append(self.stripe)
         if hasattr(self, "lbl_desc"):
             drag_widgets.append(self.lbl_desc)
         if hasattr(self, "hover_frame"):
