@@ -173,26 +173,6 @@ class SettingsView(ctk.CTkScrollableFrame):
         )
         btn_replay_intro.pack(side="left")
 
-        # ====================================================================
-        # 5. About Prior Section
-        # ====================================================================
-        sec_about = self._create_section(container, "About Prior")
-
-        about_text = (
-            "Prior — Version 1.0.0\n"
-            "CS50P Final Project: Introduction to Programming with Python\n"
-            "Built with CustomTkinter & SQLite."
-        )
-        lbl_about = ctk.CTkLabel(
-            sec_about,
-            text=about_text,
-            font=(theme.FONT_FAMILY, 12),
-            text_color=theme.TEXT_SECONDARY,
-            anchor="w",
-            justify="left",
-        )
-        lbl_about.pack(fill="x")
-
     def _create_section(self, parent: Any, title: str) -> ctk.CTkFrame:
         card = ctk.CTkFrame(
             parent,
