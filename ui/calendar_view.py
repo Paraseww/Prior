@@ -342,7 +342,7 @@ class CalendarView(ctk.CTkFrame):
 
         # Top Section: Selected Date Heading & + Add Task button
         top_box = ctk.CTkFrame(self.schedule_container, fg_color="transparent")
-        top_box.pack(fill="x", padx=14, pady=12)
+        top_box.pack(fill="x", padx=16, pady=(16, 8))
 
         lbl_date_title = ctk.CTkLabel(
             top_box,
@@ -371,8 +371,9 @@ class CalendarView(ctk.CTkFrame):
         scroll_frame = ctk.CTkScrollableFrame(
             self.schedule_container,
             fg_color="transparent",
+            corner_radius=8,
         )
-        scroll_frame.pack(fill="both", expand=True, padx=6, pady=(0, 10))
+        scroll_frame.pack(fill="both", expand=True, padx=8, pady=(0, 14))
 
         # Filter tasks for selected date
         day_tasks = [t for t in self.all_tasks if t.get("due_date") == date_str]

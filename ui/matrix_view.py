@@ -79,7 +79,7 @@ class MatrixView(ctk.CTkFrame):
             corner_radius=10,
             height=46,
         )
-        header.pack(fill="x", padx=6, pady=(6, 4))
+        header.pack(fill="x", padx=8, pady=(8, 4))
         header.pack_propagate(False)
 
         # Left: Color Dot + Title + Count Badge
@@ -127,9 +127,9 @@ class MatrixView(ctk.CTkFrame):
         # Scrollable Task Container with matching dot-grid background
         scroll_frame = DottedScrollableFrame(
             container,
-            corner_radius=0,
+            corner_radius=8,
         )
-        scroll_frame.pack(fill="both", expand=True, padx=4, pady=4)
+        scroll_frame.pack(fill="both", expand=True, padx=6, pady=(0, 8))
 
         return {
             "container": container,

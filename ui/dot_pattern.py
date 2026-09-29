@@ -3,7 +3,7 @@ ui/dot_pattern.py
 Dynamic, high-performance dot-grid matrix texture generator for Prior.
 Provides DottedCardFrame and DottedScrollableFrame with seamless repeating dot paper
 patterns for quadrant cards and task panes in both Creamy Soft Paper (Light Mode)
-and OLED True Black (Dark Mode).
+and OLED True Black (Dark Mode), with perfect rounded-corner antialiasing.
 """
 
 from typing import Optional
@@ -22,33 +22,48 @@ class DotGridHelper:
         cls,
         width: int,
         height: int,
+        corner_radius: int,
         is_dark: bool,
         spacing: int = 22,
     ) -> ImageTk.PhotoImage:
         """
-        Returns a cached ImageTk.PhotoImage filled with the dot-grid matrix pattern
-        specifically designed for card and workspace surfaces.
+        Returns a cached ImageTk.PhotoImage with rounded corner transparency and dot grid.
         """
-        w_bucket = max(100, ((width + 99) // 100) * 100)
-        h_bucket = max(100, ((height + 99) // 100) * 100)
-        key = (w_bucket, h_bucket, is_dark, spacing)
-
+        key = (width, height, corner_radius, is_dark, spacing)
         if key in cls._cache:
             return cls._cache[key]
 
         if is_dark:
-            bg_color = (18, 18, 18, 255)       # Card background in Dark Mode (#121212)
+            card_bg = (18, 18, 18, 255)       # Card background in Dark Mode (#121212)
             dot_color = (68, 68, 68, 255)     # Subtle Silver Gray dots (#444444)
         else:
-            bg_color = (253, 251, 247, 255)   # Creamy Card background in Light Mode (#FDFBF7)
+            card_bg = (253, 251, 247, 255)   # Creamy Card background in Light Mode (#FDFBF7)
             dot_color = (214, 208, 194, 255)  # Subtle Warm Sand dots (#D6D0C2)
 
-        img = Image.new("RGB", (w_bucket, h_bucket), bg_color)
+        # Transparent RGBA canvas so corners outside the card radius are 100% transparent
+        img = Image.new("RGBA", (width, height), (0, 0, 0, 0))
         draw = ImageDraw.Draw(img)
-        dot_r = 1
 
-        for x in range(spacing // 2, w_bucket, spacing):
-            for y in range(spacing // 2, h_bucket, spacing):
+        # Draw rounded card background
+        if corner_radius > 0:
+            draw.rounded_rectangle(
+                [0, 0, width - 1, height - 1],
+                radius=corner_radius,
+                fill=card_bg,
+            )
+        else:
+            draw.rectangle([0, 0, width - 1, height - 1], fill=card_bg)
+
+        # Draw subtle grid dots
+        dot_r = 1
+        for x in range(spacing // 2, width, spacing):
+            for y in range(spacing // 2, height, spacing):
+                if corner_radius > 0:
+                    if (x < corner_radius and y < corner_radius) or \
+                       (x > width - corner_radius and y < corner_radius) or \
+                       (x < corner_radius and y > height - corner_radius) or \
+                       (x > width - corner_radius and y > height - corner_radius):
+                        continue
                 draw.ellipse(
                     [x - dot_r, y - dot_r, x + dot_r, y + dot_r],
                     fill=dot_color,
@@ -62,6 +77,7 @@ class DotGridHelper:
 class DottedCardFrame(ctk.CTkFrame):
     """
     A CustomTkinter Frame with an active dot-grid paper background on card surfaces.
+    Preserves rounded border outlines cleanly.
     """
 
     def __init__(self, master: any, spacing: int = 22, **kwargs) -> None:
@@ -81,7 +97,8 @@ class DottedCardFrame(ctk.CTkFrame):
             return
 
         is_dark = (ctk.get_appearance_mode() == "Dark")
-        self._bg_photo = DotGridHelper.get_pattern_image(w, h, is_dark, self.spacing)
+        cr = int(self._apply_widget_scaling(self._corner_radius)) if hasattr(self, "_corner_radius") else 0
+        self._bg_photo = DotGridHelper.get_pattern_image(w, h, cr, is_dark, self.spacing)
 
         self._canvas.delete("bg_dot_image")
         self._canvas.create_image(
@@ -98,7 +115,6 @@ class DottedCardFrame(ctk.CTkFrame):
         self._on_canvas_resize()
 
 
-# Alias for backward compatibility if needed
 DottedFrame = DottedCardFrame
 
 
@@ -125,7 +141,8 @@ class DottedScrollableFrame(ctk.CTkScrollableFrame):
             return
 
         is_dark = (ctk.get_appearance_mode() == "Dark")
-        self._bg_photo = DotGridHelper.get_pattern_image(w, h, is_dark, self.spacing)
+        cr = int(self._apply_widget_scaling(self._corner_radius)) if hasattr(self, "_corner_radius") else 0
+        self._bg_photo = DotGridHelper.get_pattern_image(w, h, cr, is_dark, self.spacing)
 
         self._parent_canvas.delete("bg_dot_image")
         self._parent_canvas.create_image(
