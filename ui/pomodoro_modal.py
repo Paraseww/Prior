@@ -217,7 +217,7 @@ class PomodoroModal(ctk.CTkToplevel):
             height=36,
             corner_radius=10,
             fg_color="transparent",
-            hover_color=("#FEF2F2", "#7F1D1D"),
+            hover_color=("#FEF2F2", "#2A0A0A"),
             text_color=("#EF4444", "#F87171"),
             border_width=1,
             border_color=("#EF4444", "#DC2626"),

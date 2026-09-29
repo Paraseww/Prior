@@ -97,7 +97,7 @@ class ListView(ctk.CTkFrame):
             height=32,
             corner_radius=6,
             fg_color=theme.BG_INPUT,
-            hover_color=("#FEE2E2", "#7F1D1D"),
+            hover_color=("#FEE2E2", "#2A0A0A"),
             text_color=("#EF4444", "#F87171"),
             command=self.on_clear_completed,
         )

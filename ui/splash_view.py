@@ -57,9 +57,9 @@ class SplashView(ctk.CTkFrame):
                 width=110,
                 height=110,
                 corner_radius=55,
-                fg_color=("#CBD5E1", "#334155"),
+                fg_color=("#CBD5E1", "#1E1E1E"),
                 border_width=2,
-                border_color=("#1E293B", "#64748B"),
+                border_color=("#1E293B", "#333333"),
             )
             circle_frame.pack(side="left", padx=(0, 20))
             circle_frame.pack_propagate(False)
@@ -95,10 +95,10 @@ class SplashView(ctk.CTkFrame):
             height=52,
             corner_radius=14,
             border_width=2,
-            border_color=("#1E293B", "#64748B"),
-            fg_color=("#D1D5DB", "#334155"),
-            hover_color=("#9CA3AF", "#475569"),
-            text_color=("#0F172A", "#F8FAFC"),
+            border_color=("#1E293B", "#333333"),
+            fg_color=("#D1D5DB", "#1E1E1E"),
+            hover_color=("#9CA3AF", "#2A2A2A"),
+            text_color=("#0F172A", "#FFFFFF"),
             command=self._show_name_setup_screen,
         )
         btn_start.pack()

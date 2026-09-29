@@ -329,10 +329,10 @@ class ScheduleModal(ctk.CTkToplevel):
         # 4. Schedule Live Summary Banner
         self.summary_card = ctk.CTkFrame(
             container,
-            fg_color=("#ECFDF5", "#064E3B"),
+            fg_color=("#ECFDF5", "#042218"),
             corner_radius=8,
             border_width=1,
-            border_color=("#A7F3D0", "#047857"),
+            border_color=("#A7F3D0", "#064E3B"),
         )
         self.summary_card.pack(fill="x", pady=(0, 16))
 
@@ -340,7 +340,7 @@ class ScheduleModal(ctk.CTkToplevel):
             self.summary_card,
             text="",
             font=(theme.FONT_FAMILY, 12, "bold"),
-            text_color=("#065F46", "#ECFDF5"),
+            text_color=("#065F46", "#34D399"),
         )
         self.lbl_summary.pack(padx=12, pady=8)
         self._update_summary_banner()
@@ -383,7 +383,7 @@ class ScheduleModal(ctk.CTkToplevel):
             height=36,
             corner_radius=8,
             fg_color="transparent",
-            hover_color=("#ECFDF5", "#064E3B"),
+            hover_color=("#ECFDF5", "#042218"),
             text_color=("#10B981", "#34D399"),
             border_width=1,
             border_color=("#10B981", "#059669"),
@@ -425,7 +425,7 @@ class ScheduleModal(ctk.CTkToplevel):
                     btn_fg = "#10B981"
                     text_color = "#FFFFFF"
                 elif is_today:
-                    btn_fg = ("#ECFDF5", "#064E3B")
+                    btn_fg = ("#ECFDF5", "#042218")
                     text_color = "#10B981"
                 elif is_curr_month:
                     btn_fg = theme.BG_CARD

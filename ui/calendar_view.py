@@ -213,7 +213,7 @@ class CalendarView(ctk.CTkFrame):
                     border_color = theme.ACCENT_PRIMARY
                     border_w = 2
                 elif is_today:
-                    cell_bg = ("#EEF2FF", "#1E1B4B")
+                    cell_bg = ("#EEF2FF", "#18181B")
                     border_color = theme.ACCENT_PRIMARY
                     border_w = 1
                 elif is_curr_month:
@@ -429,7 +429,7 @@ class CalendarView(ctk.CTkFrame):
 
             if p_today:
                 p_cell.configure(
-                    fg_color=("#EEF2FF", "#1E1B4B"),
+                    fg_color=("#EEF2FF", "#18181B"),
                     border_color=theme.ACCENT_PRIMARY,
                     border_width=1,
                 )

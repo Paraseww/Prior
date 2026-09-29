@@ -79,14 +79,14 @@ class TaskCard(ctk.CTkFrame):
         if self.q_key == "Q1_DO":
             self.hover_text = "Focus with Pomodoro"
             self.hover_icon = "🍅"
-            self.hover_bg = ("#FEE2E2", "#7F1D1D")
-            self.hover_text_color = ("#991B1B", "#FEF2F2")
+            self.hover_bg = ("#FEE2E2", "#2A0A0A")
+            self.hover_text_color = ("#991B1B", "#F87171")
             self.hover_action = self._on_pomodoro_click
         elif self.q_key == "Q2_SCHEDULE":
             self.hover_text = "Schedule Date & Reminder Time"
             self.hover_icon = "📅"
-            self.hover_bg = ("#ECFDF5", "#064E3B")
-            self.hover_text_color = ("#065F46", "#ECFDF5")
+            self.hover_bg = ("#ECFDF5", "#042218")
+            self.hover_text_color = ("#065F46", "#34D399")
             self.hover_action = self._on_schedule_click
 
     def _build_normal_ui(self) -> None:
@@ -123,7 +123,7 @@ class TaskCard(ctk.CTkFrame):
             height=22,
             corner_radius=5,
             fg_color="transparent",
-            hover_color=("#FEE2E2", "#7F1D1D"),
+            hover_color=("#FEE2E2", "#2A0A0A"),
             text_color=("#EF4444", "#F87171"),
             font=(theme.FONT_FAMILY, 11, "bold"),
             command=lambda: self.on_delete(self.task["id"]),
@@ -154,7 +154,7 @@ class TaskCard(ctk.CTkFrame):
 
         # Quadrant colored dot indicator (only in List View, matching calendar dotted circle style)
         if self.show_quadrant_indicator:
-            dot_color = ("#94A3B8", "#64748B") if self.is_completed else self.q_color
+            dot_color = ("#94A3B8", "#737373") if self.is_completed else self.q_color
             self.dot = ctk.CTkFrame(
                 self.title_row,
                 width=8,
