@@ -148,12 +148,28 @@ class TaskCard(ctk.CTkFrame):
         self.center_box = ctk.CTkFrame(self.normal_frame, fg_color="transparent")
         self.center_box.pack(side="left", fill="both", expand=True)
 
+        # Title Row
+        self.title_row = ctk.CTkFrame(self.center_box, fg_color="transparent")
+        self.title_row.pack(fill="x", anchor="w")
+
+        # Quadrant colored dot indicator (only in List View, matching calendar dotted circle style)
+        if self.show_quadrant_indicator:
+            dot_color = ("#94A3B8", "#64748B") if self.is_completed else self.q_color
+            self.dot = ctk.CTkFrame(
+                self.title_row,
+                width=8,
+                height=8,
+                corner_radius=4,
+                fg_color=dot_color,
+            )
+            self.dot.pack(side="left", padx=(0, 6), pady=(4, 0))
+
         # Title
         title_text = self.task.get("title", "Untitled Task")
         title_color = theme.TEXT_MUTED if self.is_completed else theme.TEXT_PRIMARY
 
         self.lbl_title = ctk.CTkLabel(
-            self.center_box,
+            self.title_row,
             text=title_text,
             font=(theme.FONT_FAMILY, 13, "bold"),
             text_color=title_color,
@@ -162,7 +178,7 @@ class TaskCard(ctk.CTkFrame):
             wraplength=220,
             cursor="fleur" if not self.is_completed else "arrow",
         )
-        self.lbl_title.pack(fill="x", anchor="w")
+        self.lbl_title.pack(side="left", fill="x", expand=True)
 
         # Description (if present)
         description = self.task.get("description", "").strip()
@@ -178,7 +194,7 @@ class TaskCard(ctk.CTkFrame):
             )
             self.lbl_desc.pack(fill="x", anchor="w", pady=(3, 2))
 
-        # Badges Row: Quadrant Indicator (for List View) + Due Date Badge + Reminder Time Badge
+        # Badges Row: Due Date Badge & Reminder Time Badge
         due_date_str = self.task.get("due_date")
         reminder_time_str = self.task.get("reminder_time")
 
@@ -191,40 +207,9 @@ class TaskCard(ctk.CTkFrame):
 
         has_reminder = bool(reminder_time_str and str(reminder_time_str).strip())
 
-        if self.show_quadrant_indicator or has_due or has_reminder:
+        if has_due or has_reminder:
             badges_row = ctk.CTkFrame(self.center_box, fg_color="transparent")
             badges_row.pack(anchor="w", pady=(4, 0))
-
-            # Quadrant Indicator (for List View)
-            if self.show_quadrant_indicator:
-                if self.is_completed:
-                    badge_bg = ("#E2E8F0", "#334155")
-                    badge_border = ("#CBD5E1", "#475569")
-                    badge_text = ("#64748B", "#94A3B8")
-                    badge_title = f"✓ {self.q_info['badge']}"
-                else:
-                    badge_bg = self.q_info["bg_header"]
-                    badge_border = self.q_info["border"]
-                    badge_text = self.q_info["text"]
-                    badge_title = f"● {self.q_info['badge']}"
-
-                quad_badge = ctk.CTkFrame(
-                    badges_row,
-                    fg_color=badge_bg,
-                    corner_radius=6,
-                    height=20,
-                    border_width=1,
-                    border_color=badge_border,
-                )
-                quad_badge.pack(side="left", padx=(0, 6))
-
-                lbl_quad = ctk.CTkLabel(
-                    quad_badge,
-                    text=badge_title,
-                    font=(theme.FONT_FAMILY, 10, "bold"),
-                    text_color=badge_text,
-                )
-                lbl_quad.pack(padx=6, pady=1)
 
             if has_due and due_info:
                 due_badge = ctk.CTkFrame(
@@ -282,6 +267,10 @@ class TaskCard(ctk.CTkFrame):
 
         # Bind drag events to card container, normal frame, and title
         drag_widgets = [self, self.normal_frame, self.lbl_title, self.center_box]
+        if hasattr(self, "title_row"):
+            drag_widgets.append(self.title_row)
+        if hasattr(self, "dot"):
+            drag_widgets.append(self.dot)
         if hasattr(self, "lbl_desc"):
             drag_widgets.append(self.lbl_desc)
         if hasattr(self, "hover_frame"):
