@@ -6,6 +6,7 @@ Allows users to visualize, schedule, and manage tasks across days of the month w
 
 import calendar
 from datetime import date, datetime, timedelta
+from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
 import customtkinter as ctk
 
@@ -99,15 +100,34 @@ class CalendarView(ctk.CTkFrame):
         inner = ctk.CTkFrame(header_bar, fg_color="transparent")
         inner.pack(fill="both", expand=True, padx=14, pady=8)
 
-        # Left: Month & Year Title
+        # Left: Month & Year Title + Eisenhower Guide Button
+        left_box = ctk.CTkFrame(inner, fg_color="transparent")
+        left_box.pack(side="left")
+
         month_name = calendar.month_name[self.current_month]
         self.lbl_month_year = ctk.CTkLabel(
-            inner,
+            left_box,
             text=f"📅 {month_name} {self.current_year}",
             font=(theme.FONT_DISPLAY, 16, "bold"),
             text_color=theme.TEXT_PRIMARY,
         )
-        self.lbl_month_year.pack(side="left")
+        self.lbl_month_year.pack(side="left", padx=(0, 10))
+
+        btn_guide = ctk.CTkButton(
+            left_box,
+            text="📖 Guide",
+            width=76,
+            height=30,
+            corner_radius=6,
+            fg_color=theme.BG_INPUT,
+            hover_color=theme.BG_CARD_HOVER,
+            text_color=theme.TEXT_PRIMARY,
+            font=(theme.FONT_FAMILY, 11, "bold"),
+            border_width=1,
+            border_color=theme.BORDER_COLOR,
+            command=self._show_scheduling_guide,
+        )
+        btn_guide.pack(side="left")
 
         # Right: Navigation Controls
         nav_box = ctk.CTkFrame(inner, fg_color="transparent")
@@ -504,3 +524,136 @@ class CalendarView(ctk.CTkFrame):
         self.all_tasks = tasks
         self._render_calendar_grid()
         self._render_day_schedule()
+
+    def _show_scheduling_guide(self) -> None:
+        """Displays an interactive guide explaining Eisenhower Q2 default scheduling."""
+        modal = ctk.CTkToplevel(self)
+        modal.title("Prior — Eisenhower Scheduling Guide")
+        modal.geometry("490x440")
+        modal.resizable(False, False)
+        modal.transient(self.winfo_toplevel())
+        modal.grab_set()
+
+        # Window Icon
+        ico_path = Path(__file__).resolve().parent.parent / "assets" / "icon.ico"
+        if ico_path.exists():
+            try:
+                modal.after(200, lambda: modal.iconbitmap(str(ico_path)))
+            except Exception:
+                pass
+
+        # Center modal relative to master window
+        modal.update_idletasks()
+        try:
+            root = self.winfo_toplevel()
+            x = root.winfo_x() + (root.winfo_width() - 490) // 2
+            y = root.winfo_y() + (root.winfo_height() - 440) // 2
+            modal.geometry(f"+{max(0, x)}+{max(0, y)}")
+        except Exception:
+            pass
+
+        modal.configure(fg_color=theme.BG_CARD)
+
+        container = ctk.CTkFrame(modal, fg_color="transparent")
+        container.pack(fill="both", expand=True, padx=24, pady=20)
+
+        # Header Title
+        lbl_head = ctk.CTkLabel(
+            container,
+            text="📖 Eisenhower Scheduling Guide",
+            font=(theme.FONT_DISPLAY, 18, "bold"),
+            text_color=theme.TEXT_PRIMARY,
+            anchor="w",
+        )
+        lbl_head.pack(fill="x", pady=(0, 2))
+
+        lbl_sub = ctk.CTkLabel(
+            container,
+            text="Understanding default quadrant scheduling in Prior",
+            font=(theme.FONT_FAMILY, 12),
+            text_color=theme.TEXT_SECONDARY,
+            anchor="w",
+        )
+        lbl_sub.pack(fill="x", pady=(0, 14))
+
+        # 1. Default Scheduling Card (Q2 Schedule)
+        q2_card = ctk.CTkFrame(
+            container,
+            fg_color=("#ECFDF5", "#042218"),
+            corner_radius=10,
+            border_width=1,
+            border_color=("#A7F3D0", "#064E3B"),
+        )
+        q2_card.pack(fill="x", pady=(0, 10))
+
+        lbl_q2_badge = ctk.CTkLabel(
+            q2_card,
+            text="🟢 DEFAULT: QUADRANT 2 (SCHEDULE)",
+            font=(theme.FONT_FAMILY, 11, "bold"),
+            text_color=("#065F46", "#34D399"),
+            anchor="w",
+        )
+        lbl_q2_badge.pack(fill="x", padx=12, pady=(10, 4))
+
+        lbl_q2_desc = ctk.CTkLabel(
+            q2_card,
+            text=(
+                "In the Eisenhower Matrix, calendar scheduling is primarily designed for "
+                "Not Urgent & Important tasks (deep work, learning, proactive planning).\n\n"
+                "When adding tasks from this Calendar, Prior defaults them to Q2 (Schedule) "
+                "so your days stay focused on high-value priorities."
+            ),
+            font=(theme.FONT_FAMILY, 12),
+            text_color=("#065F46", "#ECFDF5"),
+            anchor="w",
+            justify="left",
+            wraplength=420,
+        )
+        lbl_q2_desc.pack(fill="x", padx=12, pady=(0, 10))
+
+        # 2. Quadrant Customization Note
+        custom_box = ctk.CTkFrame(
+            container,
+            fg_color=theme.BG_INPUT,
+            corner_radius=10,
+            border_width=1,
+            border_color=theme.BORDER_COLOR,
+        )
+        custom_box.pack(fill="x", pady=(0, 16))
+
+        lbl_custom_title = ctk.CTkLabel(
+            custom_box,
+            text="✨ Full Customization Available",
+            font=(theme.FONT_FAMILY, 11, "bold"),
+            text_color=theme.TEXT_PRIMARY,
+            anchor="w",
+        )
+        lbl_custom_title.pack(fill="x", padx=12, pady=(10, 2))
+
+        lbl_custom_desc = ctk.CTkLabel(
+            custom_box,
+            text=(
+                "Need to schedule a crisis (Q1), quick delegation (Q3), or routine item (Q4)? "
+                "You can customize and pick any quadrant in the task creation dialog anytime."
+            ),
+            font=(theme.FONT_FAMILY, 11),
+            text_color=theme.TEXT_SECONDARY,
+            anchor="w",
+            justify="left",
+            wraplength=420,
+        )
+        lbl_custom_desc.pack(fill="x", padx=12, pady=(0, 10))
+
+        # 3. Dismiss Button
+        btn_close = ctk.CTkButton(
+            container,
+            text="Got It",
+            font=(theme.FONT_FAMILY, 13, "bold"),
+            height=38,
+            corner_radius=8,
+            fg_color="#10B981",
+            hover_color="#059669",
+            text_color="#FFFFFF",
+            command=modal.destroy,
+        )
+        btn_close.pack(fill="x")
