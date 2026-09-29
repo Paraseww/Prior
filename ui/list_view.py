@@ -8,12 +8,13 @@ import customtkinter as ctk
 
 from project import filter_tasks
 from ui import theme
+from ui.dot_pattern import DottedFrame
 from ui.task_card import TaskCard
 
 
-class ListView(ctk.CTkFrame):
+class ListView(DottedFrame):
     """
-    List View displaying all tasks in a single scrollable container with filtering tools.
+    List View displaying all tasks in a single scrollable container with dot-matrix canvas.
     """
 
     def __init__(
@@ -29,7 +30,7 @@ class ListView(ctk.CTkFrame):
         on_schedule: Optional[Callable[[Dict[str, Any]], None]] = None,
         **kwargs,
     ) -> None:
-        super().__init__(master, fg_color="transparent", **kwargs)
+        super().__init__(master, **kwargs)
         self.all_tasks = tasks
         self.on_toggle = on_toggle
         self.on_edit = on_edit

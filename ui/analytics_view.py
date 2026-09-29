@@ -8,15 +8,16 @@ import customtkinter as ctk
 
 from project import calculate_matrix_stats
 from ui import theme
+from ui.dot_pattern import DottedScrollableFrame
 
 
-class AnalyticsView(ctk.CTkScrollableFrame):
+class AnalyticsView(DottedScrollableFrame):
     """
-    Productivity Analytics & Eisenhower Distribution Dashboard.
+    Productivity Analytics & Eisenhower Distribution Dashboard with dot-matrix canvas.
     """
 
     def __init__(self, master: Any, tasks: List[Dict[str, Any]], **kwargs) -> None:
-        super().__init__(master, fg_color="transparent", **kwargs)
+        super().__init__(master, **kwargs)
         self.tasks = tasks
 
         self._build_ui()

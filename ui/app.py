@@ -10,6 +10,7 @@ from project import filter_tasks
 from ui import theme
 from ui.analytics_view import AnalyticsView
 from ui.calendar_view import CalendarView
+from ui.dot_pattern import DottedFrame
 from ui.list_view import ListView
 from ui.matrix_view import MatrixView
 from ui.pomodoro_modal import PomodoroModal
@@ -119,7 +120,7 @@ class PriorApp(ctk.CTk):
         self._build_sidebar()
 
         # Content Area
-        self.content_frame = ctk.CTkFrame(self.body_frame, fg_color="transparent")
+        self.content_frame = DottedFrame(self.body_frame)
         self.content_frame.pack(side="right", fill="both", expand=True, padx=8, pady=8)
 
         # Load tasks from database & show initial tab
@@ -385,9 +386,12 @@ class PriorApp(ctk.CTk):
         current_mode = ctk.get_appearance_mode().lower()
         new_mode = "light" if current_mode == "dark" else "dark"
         ctk.set_appearance_mode(new_mode)
+        self.configure(fg_color=theme.BG_MAIN)
         database.update_profile(theme=new_mode)
         self.profile["theme"] = new_mode
         self.btn_theme.configure(text="🌙" if new_mode == "dark" else "☀️")
+        if hasattr(self, "content_frame") and hasattr(self.content_frame, "redraw_pattern"):
+            self.content_frame.redraw_pattern()
         self._load_and_refresh()
 
     def _on_profile_updated(self) -> None:

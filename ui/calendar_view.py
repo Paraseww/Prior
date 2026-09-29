@@ -10,12 +10,13 @@ from typing import Any, Callable, Dict, List, Optional
 import customtkinter as ctk
 
 from ui import theme
+from ui.dot_pattern import DottedFrame
 from ui.task_card import TaskCard
 
 
-class CalendarView(ctk.CTkFrame):
+class CalendarView(DottedFrame):
     """
-    Interactive Calendar View with month navigation, day grid, and selected day schedule.
+    Interactive Calendar View with month navigation, day grid, and dot-matrix canvas.
     """
 
     def __init__(
@@ -31,7 +32,7 @@ class CalendarView(ctk.CTkFrame):
         on_schedule: Optional[Callable[[Dict[str, Any]], None]] = None,
         **kwargs,
     ) -> None:
-        super().__init__(master, fg_color="transparent", **kwargs)
+        super().__init__(master, **kwargs)
         self.all_tasks = tasks
         self.on_toggle = on_toggle
         self.on_edit = on_edit

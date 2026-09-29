@@ -12,15 +12,16 @@ from PIL import Image
 
 import database
 from ui import theme
+from ui.dot_pattern import DottedFrame
 
 
-class SplashView(ctk.CTkFrame):
+class SplashView(DottedFrame):
     """
-    Two-step onboarding splash controller.
+    Two-step onboarding splash controller with dot-grid canvas.
     """
 
-    def __init__(self, master: ctk.CTk, on_complete: Callable[[], None], **kwargs) -> None:
-        super().__init__(master, fg_color=theme.BG_MAIN, **kwargs)
+    def __init__(self, master: Any, on_complete: Callable[[], None], **kwargs) -> None:
+        super().__init__(master, **kwargs)
         self.on_complete = on_complete
 
         # Container for screens

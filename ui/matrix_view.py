@@ -8,12 +8,13 @@ from typing import Any, Callable, Dict, List, Optional
 import customtkinter as ctk
 
 from ui import theme
+from ui.dot_pattern import DottedFrame
 from ui.task_card import TaskCard
 
 
-class MatrixView(ctk.CTkFrame):
+class MatrixView(DottedFrame):
     """
-    4-Quadrant Eisenhower Grid View.
+    4-Quadrant Eisenhower Grid View with dot-matrix sketchbook canvas.
     """
 
     def __init__(
@@ -29,7 +30,7 @@ class MatrixView(ctk.CTkFrame):
         on_schedule: Optional[Callable[[Dict[str, Any]], None]] = None,
         **kwargs,
     ) -> None:
-        super().__init__(master, fg_color="transparent", **kwargs)
+        super().__init__(master, **kwargs)
         self.tasks = tasks
         self.on_toggle = on_toggle
         self.on_edit = on_edit

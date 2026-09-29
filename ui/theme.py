@@ -11,17 +11,17 @@ from typing import Any, Dict, Tuple
 # ============================================================================
 
 # Application background & surfaces
-BG_MAIN: Tuple[str, str] = ("#F8FAFC", "#000000")       # Slate 50 / Pure Black
-BG_SIDEBAR: Tuple[str, str] = ("#FFFFFF", "#0A0A0A")    # White / Rich Black
-BG_CARD: Tuple[str, str] = ("#FFFFFF", "#121212")       # White / Elevate Dark Card
-BG_CARD_HOVER: Tuple[str, str] = ("#F1F5F9", "#1E1E1E") # Slate 100 / Subtle Hover Black
-BG_INPUT: Tuple[str, str] = ("#F1F5F9", "#0A0A0A")      # Slate 100 / Recessed Input Black
-BORDER_COLOR: Tuple[str, str] = ("#E2E8F0", "#262626")  # Slate 200 / Sleek Dark Border
+BG_MAIN: Tuple[str, str] = ("#F7F5F0", "#000000")       # Creamy Soft Paper / Pure Black
+BG_SIDEBAR: Tuple[str, str] = ("#EFEAE1", "#0A0A0A")    # Warm Soft Cream / Rich Black
+BG_CARD: Tuple[str, str] = ("#FDFBF7", "#121212")       # Warm Soft Cream Card / Elevate Dark Card
+BG_CARD_HOVER: Tuple[str, str] = ("#F4EFE6", "#1E1E1E") # Soft Cream Hover / Subtle Hover Black
+BG_INPUT: Tuple[str, str] = ("#EFEAE1", "#0A0A0A")      # Recessed Cream Input / Recessed Black
+BORDER_COLOR: Tuple[str, str] = ("#E2DDD5", "#262626")  # Warm Soft Border / Sleek Dark Border
 
 # Text colors
-TEXT_PRIMARY: Tuple[str, str] = ("#0F172A", "#FFFFFF")    # Slate 900 / Crisp White
-TEXT_SECONDARY: Tuple[str, str] = ("#64748B", "#A3A3A3")  # Slate 500 / Neutral Gray
-TEXT_MUTED: Tuple[str, str] = ("#94A3B8", "#737373")      # Slate 400 / Dim Gray
+TEXT_PRIMARY: Tuple[str, str] = ("#1C1917", "#FFFFFF")    # Deep Warm Stone / Crisp White
+TEXT_SECONDARY: Tuple[str, str] = ("#6B6661", "#A3A3A3")  # Warm Charcoal Slate / Neutral Gray
+TEXT_MUTED: Tuple[str, str] = ("#9E9891", "#737373")      # Warm Muted Gray / Dim Gray
 
 # Brand accent
 ACCENT_PRIMARY: Tuple[str, str] = ("#6366F1", "#818CF8")  # Indigo 500 / Indigo 400
@@ -79,7 +79,7 @@ DUE_BADGE_COLORS = {
     "red": ("#FEE2E2", "#2A0A0A", "#B91C1C", "#F87171"),      # Overdue (bg_l, bg_d, text_l, text_d)
     "amber": ("#FEF3C7", "#261603", "#B45309", "#FBBF24"),    # Due Today
     "blue": ("#DBEAFE", "#0A192F", "#1D4ED8", "#60A5FA"),     # Upcoming
-    "gray": ("#F1F5F9", "#1E1E1E", "#64748B", "#A3A3A3"),     # No Date
+    "gray": ("#EFEAE1", "#1E1E1E", "#6B6661", "#A3A3A3"),     # No Date
 }
 
 # ============================================================================

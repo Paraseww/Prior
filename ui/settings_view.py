@@ -9,11 +9,12 @@ import customtkinter as ctk
 
 import database
 from ui import theme
+from ui.dot_pattern import DottedScrollableFrame
 
 
-class SettingsView(ctk.CTkScrollableFrame):
+class SettingsView(DottedScrollableFrame):
     """
-    Settings & User Preferences panel.
+    Settings & User Preferences panel with dot-matrix canvas.
     """
 
     def __init__(
@@ -24,7 +25,7 @@ class SettingsView(ctk.CTkScrollableFrame):
         on_data_cleared: Callable[[], None],
         **kwargs,
     ) -> None:
-        super().__init__(master, fg_color="transparent", **kwargs)
+        super().__init__(master, **kwargs)
         self.profile = profile
         self.on_profile_updated = on_profile_updated
         self.on_data_cleared = on_data_cleared
