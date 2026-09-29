@@ -1,18 +1,19 @@
 """
 ui/dot_pattern.py
 Dynamic, high-performance dot-grid matrix texture generator for Prior.
-Provides DottedFrame and DottedScrollableFrame with seamless repeating dot paper
-patterns for both Creamy Soft Paper (Light Mode) and OLED True Black (Dark Mode).
+Provides DottedCardFrame and DottedScrollableFrame with seamless repeating dot paper
+patterns for quadrant cards and task panes in both Creamy Soft Paper (Light Mode)
+and OLED True Black (Dark Mode).
 """
 
-from typing import Optional, Tuple
+from typing import Optional
 import customtkinter as ctk
 from PIL import Image, ImageDraw, ImageTk
 
 
 class DotGridHelper:
     """
-    Cached texture generator for dot-matrix paper backgrounds.
+    Cached texture generator for dot-matrix paper backgrounds on card surfaces.
     """
     _cache: dict = {}
 
@@ -25,8 +26,8 @@ class DotGridHelper:
         spacing: int = 22,
     ) -> ImageTk.PhotoImage:
         """
-        Returns a cached ImageTk.PhotoImage filled with the dot-grid matrix pattern.
-        Buckets dimensions by 100px increments to maximize cache hit rate during window resize.
+        Returns a cached ImageTk.PhotoImage filled with the dot-grid matrix pattern
+        specifically designed for card and workspace surfaces.
         """
         w_bucket = max(100, ((width + 99) // 100) * 100)
         h_bucket = max(100, ((height + 99) // 100) * 100)
@@ -36,11 +37,11 @@ class DotGridHelper:
             return cls._cache[key]
 
         if is_dark:
-            bg_color = (0, 0, 0, 255)         # OLED True Black
-            dot_color = (68, 68, 68, 255)     # Subtle Silver Gray dots
+            bg_color = (18, 18, 18, 255)       # Card background in Dark Mode (#121212)
+            dot_color = (68, 68, 68, 255)     # Subtle Silver Gray dots (#444444)
         else:
-            bg_color = (247, 245, 240, 255)   # Creamy Soft Paper
-            dot_color = (212, 206, 190, 255)  # Subtle Warm Sand dots
+            bg_color = (253, 251, 247, 255)   # Creamy Card background in Light Mode (#FDFBF7)
+            dot_color = (214, 208, 194, 255)  # Subtle Warm Sand dots (#D6D0C2)
 
         img = Image.new("RGB", (w_bucket, h_bucket), bg_color)
         draw = ImageDraw.Draw(img)
@@ -58,14 +59,12 @@ class DotGridHelper:
         return photo
 
 
-class DottedFrame(ctk.CTkFrame):
+class DottedCardFrame(ctk.CTkFrame):
     """
-    A CustomTkinter Frame with an active dot-grid paper background.
-    Automatically responds to window resize and theme changes.
+    A CustomTkinter Frame with an active dot-grid paper background on card surfaces.
     """
 
     def __init__(self, master: any, spacing: int = 22, **kwargs) -> None:
-        kwargs.setdefault("fg_color", "transparent")
         super().__init__(master, **kwargs)
         self.spacing = spacing
         self._bg_photo: Optional[ImageTk.PhotoImage] = None
@@ -97,6 +96,10 @@ class DottedFrame(ctk.CTkFrame):
     def redraw_pattern(self) -> None:
         """Forces immediate recalculation and redraw of the dot matrix pattern."""
         self._on_canvas_resize()
+
+
+# Alias for backward compatibility if needed
+DottedFrame = DottedCardFrame
 
 
 class DottedScrollableFrame(ctk.CTkScrollableFrame):

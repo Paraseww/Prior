@@ -120,7 +120,7 @@ class PriorApp(ctk.CTk):
         self._build_sidebar()
 
         # Content Area
-        self.content_frame = DottedFrame(self.body_frame)
+        self.content_frame = ctk.CTkFrame(self.body_frame, fg_color="transparent")
         self.content_frame.pack(side="right", fill="both", expand=True, padx=8, pady=8)
 
         # Load tasks from database & show initial tab

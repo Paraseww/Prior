@@ -8,13 +8,13 @@ from typing import Any, Callable, Dict, List, Optional
 import customtkinter as ctk
 
 from ui import theme
-from ui.dot_pattern import DottedFrame
+from ui.dot_pattern import DottedCardFrame, DottedScrollableFrame
 from ui.task_card import TaskCard
 
 
-class MatrixView(DottedFrame):
+class MatrixView(ctk.CTkFrame):
     """
-    4-Quadrant Eisenhower Grid View with dot-matrix sketchbook canvas.
+    4-Quadrant Eisenhower Grid View with dot-matrix sketchbook canvas inside each quadrant.
     """
 
     def __init__(
@@ -30,7 +30,7 @@ class MatrixView(DottedFrame):
         on_schedule: Optional[Callable[[Dict[str, Any]], None]] = None,
         **kwargs,
     ) -> None:
-        super().__init__(master, **kwargs)
+        super().__init__(master, fg_color="transparent", **kwargs)
         self.tasks = tasks
         self.on_toggle = on_toggle
         self.on_edit = on_edit
@@ -62,8 +62,8 @@ class MatrixView(DottedFrame):
     def _create_quadrant_pane(self, q_key: str, row: int, col: int) -> Dict[str, Any]:
         info = theme.QUADRANTS[q_key]
 
-        # Container Frame with border
-        container = ctk.CTkFrame(
+        # Container Frame with border and dot-grid canvas
+        container = DottedCardFrame(
             self,
             fg_color=theme.BG_CARD,
             corner_radius=12,
@@ -124,10 +124,9 @@ class MatrixView(DottedFrame):
         )
         btn_add.pack(side="right", padx=10, pady=10)
 
-        # Scrollable Task Container
-        scroll_frame = ctk.CTkScrollableFrame(
+        # Scrollable Task Container with matching dot-grid background
+        scroll_frame = DottedScrollableFrame(
             container,
-            fg_color="transparent",
             corner_radius=0,
         )
         scroll_frame.pack(fill="both", expand=True, padx=4, pady=4)

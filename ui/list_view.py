@@ -8,11 +8,11 @@ import customtkinter as ctk
 
 from project import filter_tasks
 from ui import theme
-from ui.dot_pattern import DottedFrame
+from ui.dot_pattern import DottedScrollableFrame
 from ui.task_card import TaskCard
 
 
-class ListView(DottedFrame):
+class ListView(ctk.CTkFrame):
     """
     List View displaying all tasks in a single scrollable container with dot-matrix canvas.
     """
@@ -30,7 +30,7 @@ class ListView(DottedFrame):
         on_schedule: Optional[Callable[[Dict[str, Any]], None]] = None,
         **kwargs,
     ) -> None:
-        super().__init__(master, **kwargs)
+        super().__init__(master, fg_color="transparent", **kwargs)
         self.all_tasks = tasks
         self.on_toggle = on_toggle
         self.on_edit = on_edit
@@ -104,10 +104,10 @@ class ListView(DottedFrame):
         )
         btn_clear.pack(side="right")
 
-        # Scrollable Task Container
-        self.scroll_frame = ctk.CTkScrollableFrame(
+        # Scrollable Task Container with dot-grid canvas
+        self.scroll_frame = DottedScrollableFrame(
             self,
-            fg_color="transparent",
+            corner_radius=10,
         )
         self.scroll_frame.pack(fill="both", expand=True, padx=8, pady=(0, 8))
 

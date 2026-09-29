@@ -10,13 +10,13 @@ from typing import Any, Callable, Dict, List, Optional
 import customtkinter as ctk
 
 from ui import theme
-from ui.dot_pattern import DottedFrame
+from ui.dot_pattern import DottedCardFrame
 from ui.task_card import TaskCard
 
 
-class CalendarView(DottedFrame):
+class CalendarView(ctk.CTkFrame):
     """
-    Interactive Calendar View with month navigation, day grid, and dot-matrix canvas.
+    Interactive Calendar View with month navigation, day grid, and selected day schedule.
     """
 
     def __init__(
@@ -32,7 +32,7 @@ class CalendarView(DottedFrame):
         on_schedule: Optional[Callable[[Dict[str, Any]], None]] = None,
         **kwargs,
     ) -> None:
-        super().__init__(master, **kwargs)
+        super().__init__(master, fg_color="transparent", **kwargs)
         self.all_tasks = tasks
         self.on_toggle = on_toggle
         self.on_edit = on_edit
@@ -59,8 +59,8 @@ class CalendarView(DottedFrame):
         body = ctk.CTkFrame(self, fg_color="transparent")
         body.pack(fill="both", expand=True, padx=8, pady=(0, 8))
 
-        # 1. Left: Calendar Grid Frame
-        self.grid_container = ctk.CTkFrame(
+        # 1. Left: Calendar Grid Frame with dot-grid canvas
+        self.grid_container = DottedCardFrame(
             body,
             fg_color=theme.BG_CARD,
             corner_radius=12,
@@ -69,8 +69,8 @@ class CalendarView(DottedFrame):
         )
         self.grid_container.pack(side="left", fill="both", expand=True, padx=(0, 8))
 
-        # 2. Right: Selected Day Schedule Panel
-        self.schedule_container = ctk.CTkFrame(
+        # 2. Right: Selected Day Schedule Panel with dot-grid canvas
+        self.schedule_container = DottedCardFrame(
             body,
             fg_color=theme.BG_CARD,
             corner_radius=12,
