@@ -59,7 +59,7 @@ class ListView(ctk.CTkFrame):
 
         self.opt_quadrant = ctk.CTkOptionMenu(
             inner_controls,
-            values=["All Quadrants", "🔴 Q1: Do First", "🟢 Q2: Schedule", "🟡 Q3: Delegate", "🔵 Q4: Eliminate"],
+            values=["All Quadrants", "Q1: Do First", "Q2: Schedule", "Q3: Delegate", "Q4: Eliminate"],
             command=self._on_filter_changed,
             font=(theme.FONT_FAMILY, 12),
             height=32,
@@ -116,10 +116,6 @@ class ListView(ctk.CTkFrame):
         q_val = self.opt_quadrant.get()
         mapping = {
             "All Quadrants": "ALL",
-            "🔴 Q1: Do First": "Q1_DO",
-            "🟢 Q2: Schedule": "Q2_SCHEDULE",
-            "🟡 Q3: Delegate": "Q3_DELEGATE",
-            "🔵 Q4: Eliminate": "Q4_ELIMINATE",
             "Q1: Do First": "Q1_DO",
             "Q2: Schedule": "Q2_SCHEDULE",
             "Q3: Delegate": "Q3_DELEGATE",
@@ -167,6 +163,7 @@ class ListView(ctk.CTkFrame):
                 on_delete=self.on_delete,
                 on_pomodoro=self.on_pomodoro,
                 on_schedule=self.on_schedule,
+                show_quadrant_indicator=True,
             )
             card.pack(fill="x", pady=4, padx=4)
 
