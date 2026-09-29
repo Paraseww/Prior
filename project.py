@@ -17,6 +17,13 @@ def main() -> None:
     Main entrypoint for Prior desktop application.
     Initializes local SQLite database and launches the GUI.
     """
+    if sys.platform == "win32":
+        try:
+            import ctypes
+            ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("parami.prior.taskmanager.1.0")
+        except Exception:
+            pass
+
     database.init_db()
     
     # Import and launch GUI application (Phase 3 & 4)
