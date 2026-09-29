@@ -132,16 +132,16 @@ class TrayService:
             return is_windows_startup_enabled()
 
         menu = Menu(
-            MenuItem("📌 Open Prior", lambda: self.on_show_app(), default=True),
-            MenuItem("➕ Quick Add Task", lambda: self.on_quick_add()),
+            MenuItem("Open Prior", lambda: self.on_show_app(), default=True),
+            MenuItem("Quick Add Task", lambda: self.on_quick_add()),
             Menu.SEPARATOR,
             MenuItem(
-                "🚀 Launch on Startup",
+                "Launch on Startup",
                 _toggle_startup,
                 checked=_is_startup_checked,
             ),
             Menu.SEPARATOR,
-            MenuItem("✕ Exit Prior", lambda: self.stop_and_exit()),
+            MenuItem("Exit Prior", lambda: self.stop_and_exit()),
         )
 
         self.tray_icon = pystray.Icon("Prior", image, "Prior — Time Management", menu)
