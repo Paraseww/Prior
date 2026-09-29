@@ -22,9 +22,15 @@ ICON_ICO = BASE_DIR / "assets" / "icon.ico"
 def get_tray_image() -> Image.Image:
     """Loads the application icon for system tray, with dynamic fallback."""
     if ICON_PNG.exists():
-        return Image.open(ICON_PNG)
+        img = Image.open(ICON_PNG)
+        if img.mode != "RGBA":
+            img = img.convert("RGBA")
+        return img
     elif ICON_ICO.exists():
-        return Image.open(ICON_ICO)
+        img = Image.open(ICON_ICO)
+        if img.mode != "RGBA":
+            img = img.convert("RGBA")
+        return img
     else:
         # 32x32 Fallback icon
         img = Image.new("RGBA", (32, 32), (99, 102, 241, 255))

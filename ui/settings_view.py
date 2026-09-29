@@ -215,6 +215,8 @@ class SettingsView(DottedScrollableFrame):
         is_on = bool(self.switch_startup.get())
         database.update_profile(startup_enabled=1 if is_on else 0)
         self.profile["startup_enabled"] = 1 if is_on else 0
+        from ui.tray import set_windows_startup
+        set_windows_startup(is_on)
 
     def _clear_completed(self) -> None:
         database.clear_completed_tasks()

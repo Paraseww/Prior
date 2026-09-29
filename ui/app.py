@@ -52,8 +52,9 @@ class PriorApp(ctk.CTk):
         self.search_query = ""
         self.all_tasks: List[Dict[str, Any]] = []
 
-        # System Tray instance (created when minimized to tray)
+        # System Tray instance (active throughout app lifecycle)
         self.tray: Optional[TrayService] = None
+        self._init_tray()
 
         # Intercept window close (X) to minimize to tray
         self.protocol("WM_DELETE_WINDOW", self._on_window_close)
@@ -71,7 +72,16 @@ class PriorApp(ctk.CTk):
         self.focus_force()
 
     def _set_app_icon(self) -> None:
-        """Configures the window titlebar and taskbar icon."""
+        """Configures the window titlebar, taskbar, and Alt-Tab switcher icon."""
+        # Set Explicit AppUserModelID on Windows so taskbar uses custom app icon instead of python.exe
+        if sys.platform == "win32":
+            try:
+                import ctypes
+                myappid = "parami.prior.taskmanager.1.0"
+                ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(myappid)
+            except Exception:
+                pass
+
         assets_dir = Path(__file__).resolve().parent.parent / "assets"
         ico_path = assets_dir / "icon.ico"
         png_path = assets_dir / "icon.png"
@@ -79,7 +89,7 @@ class PriorApp(ctk.CTk):
         try:
             if ico_path.exists() and sys.platform == "win32":
                 self.iconbitmap(str(ico_path))
-            elif png_path.exists():
+            if png_path.exists():
                 from PIL import ImageTk
                 img = Image.open(png_path)
                 photo = ImageTk.PhotoImage(img)
@@ -582,6 +592,11 @@ class PriorApp(ctk.CTk):
 
     def quit_completely(self) -> None:
         """Terminates the application and cleans up tray icon."""
+        if self.tray and self.tray.tray_icon:
+            try:
+                self.tray.tray_icon.stop()
+            except Exception:
+                pass
         try:
             self.after(0, self.destroy)
         except Exception:
