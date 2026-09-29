@@ -263,25 +263,6 @@ class CalendarView(ctk.CTkFrame):
                     "is_today": is_today,
                 }
 
-                if is_curr_month:
-                    def _make_add_handler(ds: str):
-                        return lambda: self.on_quick_add("Q2_SCHEDULE", ds)
-
-                    btn_add_cell = ctk.CTkButton(
-                        cell_top,
-                        text="+",
-                        width=22,
-                        height=22,
-                        corner_radius=11,
-                        font=(theme.FONT_FAMILY, 14, "bold"),
-                        fg_color=theme.ACCENT_PRIMARY,
-                        hover_color=theme.ACCENT_HOVER,
-                        text_color="#FFFFFF",
-                        cursor="hand2",
-                        command=_make_add_handler(date_str),
-                    )
-                    btn_add_cell.pack(side="right")
-
                 # Render Colored Task Indicator Dots inside the cell
                 if day_tasks and is_curr_month:
                     dots_frame = ctk.CTkFrame(cell, fg_color="transparent")
