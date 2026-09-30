@@ -60,7 +60,9 @@ def init_db(db_path: Optional[str] = None) -> None:
             description TEXT DEFAULT '',
             quadrant TEXT NOT NULL DEFAULT 'Q1_DO',
             due_date TEXT,
+            reminder_time TEXT,
             is_completed INTEGER NOT NULL DEFAULT 0,
+            position INTEGER NOT NULL DEFAULT 0,
             created_at TEXT NOT NULL,
             completed_at TEXT
         )
@@ -75,9 +77,14 @@ def init_db(db_path: Optional[str] = None) -> None:
         "CREATE INDEX IF NOT EXISTS idx_tasks_completed ON tasks(is_completed)"
     )
 
-    # Optional column migration: reminder_time
+    # Optional column migrations
     try:
         cursor.execute("ALTER TABLE tasks ADD COLUMN reminder_time TEXT")
+    except sqlite3.OperationalError:
+        pass
+
+    try:
+        cursor.execute("ALTER TABLE tasks ADD COLUMN position INTEGER NOT NULL DEFAULT 0")
     except sqlite3.OperationalError:
         pass
 
@@ -181,8 +188,8 @@ def add_task(
     cursor = conn.cursor()
     cursor.execute(
         """
-        INSERT INTO tasks (title, description, quadrant, due_date, reminder_time, is_completed, created_at, completed_at)
-        VALUES (?, ?, ?, ?, ?, 0, ?, NULL)
+        INSERT INTO tasks (title, description, quadrant, due_date, reminder_time, is_completed, position, created_at, completed_at)
+        VALUES (?, ?, ?, ?, ?, 0, 0, ?, NULL)
         """,
         (clean_title, description.strip(), normalized_quadrant, due_date, reminder_time, created_at),
     )
@@ -193,10 +200,10 @@ def add_task(
 
 
 def get_all_tasks(db_path: Optional[str] = None) -> List[Dict[str, Any]]:
-    """Retrieves all tasks sorted by creation date (newest first)."""
+    """Retrieves all tasks sorted by position order and creation date (newest first)."""
     conn = get_connection(db_path)
     cursor = conn.cursor()
-    cursor.execute("SELECT * FROM tasks ORDER BY id DESC")
+    cursor.execute("SELECT * FROM tasks ORDER BY position ASC, id DESC")
     rows = cursor.fetchall()
     conn.close()
     return [dict(row) for row in rows]
@@ -223,6 +230,7 @@ def update_task(
     due_date: Any = _UNSET,
     reminder_time: Any = _UNSET,
     is_completed: Any = _UNSET,
+    position: Any = _UNSET,
     db_path: Optional[str] = None,
 ) -> bool:
     """Updates specific fields of an existing task."""
@@ -266,6 +274,10 @@ def update_task(
             fields.append("completed_at = ?")
             values.append(None)
 
+    if position is not _UNSET:
+        fields.append("position = ?")
+        values.append(int(position) if position is not None else 0)
+
     if not fields:
         return False
 
@@ -275,6 +287,23 @@ def update_task(
     conn = get_connection(db_path)
     cursor = conn.cursor()
     cursor.execute(query, tuple(values))
+    conn.commit()
+    affected = cursor.rowcount > 0
+    conn.close()
+    return affected
+
+
+def reorder_tasks(ordered_task_ids: List[int], db_path: Optional[str] = None) -> bool:
+    """
+    Updates the position order for a list of task IDs.
+    The first task in ordered_task_ids gets position 0, the next gets 1, etc.
+    """
+    if not ordered_task_ids:
+        return False
+    conn = get_connection(db_path)
+    cursor = conn.cursor()
+    for index, task_id in enumerate(ordered_task_ids):
+        cursor.execute("UPDATE tasks SET position = ? WHERE id = ?", (index, task_id))
     conn.commit()
     affected = cursor.rowcount > 0
     conn.close()

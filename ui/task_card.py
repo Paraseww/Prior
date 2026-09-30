@@ -28,9 +28,11 @@ class TaskCard(ctk.CTkFrame):
         on_edit: Callable[[Dict[str, Any]], None],
         on_move: Callable[[int, str], None],
         on_delete: Callable[[int], None],
+        on_reorder: Optional[Callable[[int, str, int], None]] = None,
         on_pomodoro: Optional[Callable[[Dict[str, Any]], None]] = None,
         on_schedule: Optional[Callable[[Dict[str, Any]], None]] = None,
         find_target_quadrant: Optional[Callable[[int, int], Optional[str]]] = None,
+        find_drop_target: Optional[Callable[[int, int], tuple[Optional[str], int]]] = None,
         highlight_target_quadrant: Optional[Callable[[Optional[str]], None]] = None,
         show_quadrant_indicator: bool = False,
         **kwargs,
@@ -48,9 +50,11 @@ class TaskCard(ctk.CTkFrame):
         self.on_edit = on_edit
         self.on_move = on_move
         self.on_delete = on_delete
+        self.on_reorder = on_reorder
         self.on_pomodoro = on_pomodoro
         self.on_schedule = on_schedule
         self.find_target_quadrant = find_target_quadrant
+        self.find_drop_target = find_drop_target
         self.highlight_target_quadrant = highlight_target_quadrant
         self.show_quadrant_indicator = show_quadrant_indicator
 
@@ -267,11 +271,12 @@ class TaskCard(ctk.CTkFrame):
         self.center_box.bind("<Configure>", _on_resize)
 
     def _setup_drag_and_drop(self) -> None:
-        """Binds mouse dragging to move tasks across quadrants seamlessly."""
+        """Binds mouse dragging to move tasks across quadrants and reorder within the same section."""
         self._drag_start_x = 0
         self._drag_start_y = 0
         self._is_dragging = False
         self._drag_ghost: Optional[ctk.CTkToplevel] = None
+        self._drag_ghost_label: Optional[ctk.CTkLabel] = None
 
         # Bind drag events to card container, normal frame, and title
         drag_widgets = [self, self.normal_frame, self.lbl_title, self.center_box]
@@ -315,15 +320,16 @@ class TaskCard(ctk.CTkFrame):
                 if len(short_title) > 22:
                     short_title = short_title[:20] + "..."
 
-                lbl = ctk.CTkLabel(
+                self._drag_ghost_label = ctk.CTkLabel(
                     ghost_inner,
-                    text=f"✋ Move: {short_title}",
+                    text=f"↕ Move: {short_title}",
                     font=(theme.FONT_FAMILY, 11, "bold"),
                     text_color="#FFFFFF",
                 )
-                lbl.pack()
+                self._drag_ghost_label.pack()
             except Exception:
                 self._drag_ghost = None
+                self._drag_ghost_label = None
 
         if self._is_dragging and self._drag_ghost:
             try:
@@ -331,9 +337,25 @@ class TaskCard(ctk.CTkFrame):
             except Exception:
                 pass
 
-            if self.find_target_quadrant and self.highlight_target_quadrant:
+            target_q: Optional[str] = None
+            if self.find_drop_target:
+                target_q, _ = self.find_drop_target(event.x_root, event.y_root)
+            elif self.find_target_quadrant:
                 target_q = self.find_target_quadrant(event.x_root, event.y_root)
+
+            if self.highlight_target_quadrant:
                 self.highlight_target_quadrant(target_q)
+
+            # Update drag ghost label with clear contextual action
+            if self._drag_ghost_label and target_q:
+                short_title = self.task.get("title", "Task")
+                if len(short_title) > 18:
+                    short_title = short_title[:16] + "..."
+                if target_q == self.q_key:
+                    self._drag_ghost_label.configure(text=f"↕ Reorder: {short_title}")
+                else:
+                    t_info = theme.QUADRANTS.get(target_q, theme.QUADRANTS["Q1_DO"])
+                    self._drag_ghost_label.configure(text=f"✋ Move to {t_info['badge']}: {short_title}")
 
     def _on_drag_release(self, event: Any) -> None:
         if self._is_dragging:
@@ -345,11 +367,19 @@ class TaskCard(ctk.CTkFrame):
                 except Exception:
                     pass
                 self._drag_ghost = None
+                self._drag_ghost_label = None
 
             if self.highlight_target_quadrant:
                 self.highlight_target_quadrant(None)
 
-            if self.find_target_quadrant and self.on_move:
+            if self.find_drop_target and (self.on_reorder or self.on_move):
+                target_q, target_idx = self.find_drop_target(event.x_root, event.y_root)
+                if target_q:
+                    if self.on_reorder:
+                        self.on_reorder(self.task["id"], target_q, target_idx)
+                    elif self.on_move and target_q != self.q_key:
+                        self.on_move(self.task["id"], target_q)
+            elif self.find_target_quadrant and self.on_move:
                 target_q = self.find_target_quadrant(event.x_root, event.y_root)
                 if target_q and target_q != self.q_key:
                     self.on_move(self.task["id"], target_q)

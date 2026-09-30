@@ -26,6 +26,7 @@ class MatrixView(ctk.CTkFrame):
         on_move: Callable[[int, str], None],
         on_delete: Callable[[int], None],
         on_quick_add: Callable[[str], None],
+        on_reorder: Optional[Callable[[int, str, int], None]] = None,
         on_pomodoro: Optional[Callable[[Dict[str, Any]], None]] = None,
         on_schedule: Optional[Callable[[Dict[str, Any]], None]] = None,
         **kwargs,
@@ -37,6 +38,7 @@ class MatrixView(ctk.CTkFrame):
         self.on_move = on_move
         self.on_delete = on_delete
         self.on_quick_add = on_quick_add
+        self.on_reorder = on_reorder
         self.on_pomodoro = on_pomodoro
         self.on_schedule = on_schedule
 
@@ -181,16 +183,21 @@ class MatrixView(ctk.CTkFrame):
                         on_toggle=self.on_toggle,
                         on_edit=self.on_edit,
                         on_move=self.on_move,
+                        on_reorder=self.on_reorder,
                         on_delete=self.on_delete,
                         on_pomodoro=self.on_pomodoro,
                         on_schedule=self.on_schedule,
                         find_target_quadrant=self.get_quadrant_at_pointer,
+                        find_drop_target=self.get_drop_target,
                         highlight_target_quadrant=self.highlight_quadrant,
                     )
                     card.pack(fill="x", pady=4, padx=2)
 
-    def get_quadrant_at_pointer(self, root_x: int, root_y: int) -> Optional[str]:
-        """Identifies which quadrant container is under the screen coordinates."""
+    def get_drop_target(self, root_x: int, root_y: int) -> tuple[Optional[str], int]:
+        """
+        Identifies which quadrant container and position index is under the screen coordinates.
+        Returns (quadrant_key, insert_index).
+        """
         for q_key, pane in self.panes.items():
             container = pane["container"]
             try:
@@ -199,10 +206,29 @@ class MatrixView(ctk.CTkFrame):
                 rw = container.winfo_width()
                 rh = container.winfo_height()
                 if rx <= root_x <= rx + rw and ry <= root_y <= ry + rh:
-                    return q_key
+                    scroll_frame = pane["scroll_frame"]
+                    cards = [w for w in scroll_frame.winfo_children() if isinstance(w, TaskCard)]
+                    if not cards:
+                        return q_key, 0
+
+                    for idx, card in enumerate(cards):
+                        try:
+                            cy = card.winfo_rooty()
+                            ch = card.winfo_height()
+                            mid_y = cy + ch / 2
+                            if root_y < mid_y:
+                                return q_key, idx
+                        except Exception:
+                            continue
+                    return q_key, len(cards)
             except Exception:
                 continue
-        return None
+        return None, 0
+
+    def get_quadrant_at_pointer(self, root_x: int, root_y: int) -> Optional[str]:
+        """Identifies which quadrant container is under the screen coordinates."""
+        q_key, _ = self.get_drop_target(root_x, root_y)
+        return q_key
 
     def highlight_quadrant(self, target_q: Optional[str]) -> None:
         """Visual highlight on quadrant container during mouse dragging."""

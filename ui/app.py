@@ -384,6 +384,7 @@ class PriorApp(ctk.CTk):
                 on_toggle=self.toggle_task,
                 on_edit=self.open_task_modal,
                 on_move=self.move_task_quadrant,
+                on_reorder=self.move_or_reorder_task,
                 on_delete=self.delete_task,
                 on_quick_add=self.open_quick_add,
                 on_pomodoro=self.open_pomodoro_modal,
@@ -550,10 +551,47 @@ class PriorApp(ctk.CTk):
         database.toggle_task_completion(task_id)
         self._load_and_refresh()
 
+    def move_or_reorder_task(
+        self,
+        task_id: int,
+        target_quadrant: str,
+        target_index: int = 0,
+    ) -> None:
+        """
+        Handles moving a task between quadrants or reordering within the same quadrant.
+        """
+        all_tasks = database.get_all_tasks()
+        dragged_task = next((t for t in all_tasks if t.get("id") == task_id), None)
+        if not dragged_task:
+            return
+
+        source_quadrant = dragged_task.get("quadrant", "Q1_DO")
+
+        if source_quadrant == target_quadrant:
+            # Reordering within the SAME quadrant
+            quad_tasks = [t for t in all_tasks if t.get("quadrant") == source_quadrant]
+            task_ids = [t["id"] for t in quad_tasks]
+            if task_id in task_ids:
+                old_idx = task_ids.index(task_id)
+                task_ids.remove(task_id)
+                insert_pos = max(0, min(len(task_ids), target_index))
+                task_ids.insert(insert_pos, task_id)
+                database.reorder_tasks(task_ids)
+                self._load_and_refresh()
+        else:
+            # Moving to a DIFFERENT quadrant with target position
+            target_quad_tasks = [t for t in all_tasks if t.get("quadrant") == target_quadrant]
+            target_task_ids = [t["id"] for t in target_quad_tasks]
+            insert_pos = max(0, min(len(target_task_ids), target_index))
+            target_task_ids.insert(insert_pos, task_id)
+
+            database.update_task(task_id=task_id, quadrant=target_quadrant)
+            database.reorder_tasks(target_task_ids)
+            self._load_and_refresh()
+
     def move_task_quadrant(self, task_id: int, new_quadrant: str) -> None:
         """Moves task to another Eisenhower quadrant."""
-        database.update_task(task_id=task_id, quadrant=new_quadrant)
-        self._load_and_refresh()
+        self.move_or_reorder_task(task_id, new_quadrant, target_index=0)
 
     def delete_task(self, task_id: int) -> None:
         """Deletes a task."""
