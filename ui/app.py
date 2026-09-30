@@ -270,6 +270,7 @@ class PriorApp(ctk.CTk):
         self.btn_notifications = ctk.CTkButton(
             actions_frame,
             text="🔔",
+            width=36,
             height=36,
             corner_radius=8,
             fg_color=theme.BG_INPUT,
@@ -278,7 +279,7 @@ class PriorApp(ctk.CTk):
             font=(theme.FONT_FAMILY, 13, "bold"),
             command=self._open_notifications,
         )
-        self.btn_notifications.pack(side="left", padx=(0, 10))
+        self.btn_notifications.pack(side="left", padx=(0, 8))
 
         # Theme Toggle Button
         is_dark = self.profile.get("theme", "dark") == "dark"
@@ -294,14 +295,15 @@ class PriorApp(ctk.CTk):
             font=(theme.FONT_FAMILY, 14),
             command=self._toggle_quick_theme,
         )
-        self.btn_theme.pack(side="left", padx=(0, 10))
+        self.btn_theme.pack(side="left", padx=(0, 8))
 
         # Profile Badge
         user_name = self.profile.get("name", "User")
         self.btn_profile = ctk.CTkButton(
             actions_frame,
-            text=f"👤 {user_name}",
+            text=f"  👤 {user_name}  ",
             font=(theme.FONT_FAMILY, 13, "bold"),
+            width=0,
             height=36,
             corner_radius=8,
             fg_color=theme.BG_INPUT,
@@ -471,13 +473,15 @@ class PriorApp(ctk.CTk):
         total = notifs["total_count"]
         if total > 0:
             self.btn_notifications.configure(
-                text=f"🔔 {total}",
+                text=f"  🔔 {total}  ",
+                width=0,
                 fg_color=("#FEE2E2", "#2A0A0A") if notifs["overdue_count"] > 0 else theme.BG_INPUT,
                 text_color=("#B91C1C", "#F87171") if notifs["overdue_count"] > 0 else theme.TEXT_PRIMARY,
             )
         else:
             self.btn_notifications.configure(
                 text="🔔",
+                width=36,
                 fg_color=theme.BG_INPUT,
                 text_color=theme.TEXT_PRIMARY,
             )
@@ -520,7 +524,7 @@ class PriorApp(ctk.CTk):
 
     def _on_profile_updated(self) -> None:
         self.profile = database.get_profile()
-        self.btn_profile.configure(text=f"👤 {self.profile.get('name', 'User')}")
+        self.btn_profile.configure(text=f"  👤 {self.profile.get('name', 'User')}  ")
         if not bool(self.profile.get("onboarding_completed", 0)):
             self._check_onboarding_and_render()
         else:
