@@ -26,12 +26,14 @@ class ScheduleModal(ctk.CTkToplevel):
         on_save_schedule: Callable[[int, Optional[str], Optional[str]], None],
         on_complete_task: Optional[Callable[[int], None]] = None,
         on_edit_task: Optional[Callable[[Dict[str, Any]], None]] = None,
+        on_delete_task: Optional[Callable[[int], None]] = None,
     ) -> None:
         super().__init__(master)
         self.task = task
         self.on_save_schedule = on_save_schedule
         self.on_complete_task = on_complete_task
         self.on_edit_task = on_edit_task
+        self.on_delete_task = on_delete_task
 
         # Parse initial task schedule state
         today = date.today()
@@ -109,20 +111,37 @@ class ScheduleModal(ctk.CTkToplevel):
         )
         lbl_sched_tag.pack(side="left")
 
+        if self.on_delete_task:
+            btn_del = ctk.CTkButton(
+                header_row,
+                text="🗑 Delete Task",
+                font=(theme.FONT_FAMILY, 11, "bold"),
+                height=24,
+                corner_radius=6,
+                fg_color="transparent",
+                hover_color=("#FEE2E2", "#2A0A0A"),
+                text_color=("#EF4444", "#F87171"),
+                border_width=1,
+                border_color=("#FCA5A5", "#7F1D1D"),
+                command=self._on_delete_clicked,
+            )
+            btn_del.pack(side="right")
+
         if self.on_edit_task:
             btn_edit = ctk.CTkButton(
                 header_row,
                 text="✎ Edit Task",
                 font=(theme.FONT_FAMILY, 11, "bold"),
-                width=76,
                 height=24,
                 corner_radius=6,
                 fg_color=theme.BG_CARD,
                 hover_color=theme.BG_CARD_HOVER,
                 text_color=theme.TEXT_PRIMARY,
+                border_width=1,
+                border_color=theme.BORDER_COLOR,
                 command=self._on_edit_clicked,
             )
-            btn_edit.pack(side="right")
+            btn_edit.pack(side="right", padx=(0, 6) if self.on_delete_task else 0)
 
         # Task Title
         lbl_task_title = ctk.CTkLabel(
@@ -680,3 +699,12 @@ class ScheduleModal(ctk.CTkToplevel):
         if self.on_complete_task and "id" in self.task:
             self.on_complete_task(self.task["id"])
         self.destroy()
+
+    def _on_delete_clicked(self) -> None:
+        if self.on_delete_task and "id" in self.task:
+            task_id = self.task["id"]
+            self.destroy()
+            self.on_delete_task(task_id)
+        else:
+            self.destroy()
+

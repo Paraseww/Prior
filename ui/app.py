@@ -567,6 +567,7 @@ class PriorApp(ctk.CTk):
             task=task,
             on_complete_task=self.toggle_task,
             on_edit_task=self.open_task_modal,
+            on_delete_task=self.delete_task,
         )
 
     def open_schedule_modal(self, task: Dict[str, Any]) -> None:
@@ -581,6 +582,7 @@ class PriorApp(ctk.CTk):
             on_save_schedule=handle_save_schedule,
             on_complete_task=self.toggle_task,
             on_edit_task=self.open_task_modal,
+            on_delete_task=self.delete_task,
         )
 
     def clear_completed(self) -> None:

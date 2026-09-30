@@ -27,11 +27,13 @@ class PomodoroModal(ctk.CTkToplevel):
         task: Dict[str, Any],
         on_complete_task: Optional[Callable[[int], None]] = None,
         on_edit_task: Optional[Callable[[Dict[str, Any]], None]] = None,
+        on_delete_task: Optional[Callable[[int], None]] = None,
     ) -> None:
         super().__init__(master)
         self.task = task
         self.on_complete_task = on_complete_task
         self.on_edit_task = on_edit_task
+        self.on_delete_task = on_delete_task
 
         self.title("Prior — Pomodoro Focus Session")
         self.geometry("480x520")
@@ -80,7 +82,7 @@ class PomodoroModal(ctk.CTkToplevel):
         inner_task = ctk.CTkFrame(task_box, fg_color="transparent")
         inner_task.pack(fill="x", padx=14, pady=10)
 
-        # Header row in task card: Target Tag + Edit Button
+        # Header row in task card: Target Tag + Action Buttons
         header_row = ctk.CTkFrame(inner_task, fg_color="transparent")
         header_row.pack(fill="x")
 
@@ -93,20 +95,37 @@ class PomodoroModal(ctk.CTkToplevel):
         )
         lbl_target.pack(side="left")
 
-        btn_edit = ctk.CTkButton(
-            header_row,
-            text="✎ Edit Task",
-            font=(theme.FONT_FAMILY, 11, "bold"),
-            height=24,
-            corner_radius=6,
-            fg_color=theme.BG_CARD,
-            hover_color=theme.BG_CARD_HOVER,
-            text_color=theme.TEXT_PRIMARY,
-            border_width=1,
-            border_color=theme.BORDER_COLOR,
-            command=self._on_edit_click,
-        )
-        btn_edit.pack(side="right")
+        if self.on_delete_task:
+            btn_del = ctk.CTkButton(
+                header_row,
+                text="🗑 Delete Task",
+                font=(theme.FONT_FAMILY, 11, "bold"),
+                height=24,
+                corner_radius=6,
+                fg_color="transparent",
+                hover_color=("#FEE2E2", "#2A0A0A"),
+                text_color=("#EF4444", "#F87171"),
+                border_width=1,
+                border_color=("#FCA5A5", "#7F1D1D"),
+                command=self._on_delete_click,
+            )
+            btn_del.pack(side="right")
+
+        if self.on_edit_task:
+            btn_edit = ctk.CTkButton(
+                header_row,
+                text="✎ Edit Task",
+                font=(theme.FONT_FAMILY, 11, "bold"),
+                height=24,
+                corner_radius=6,
+                fg_color=theme.BG_CARD,
+                hover_color=theme.BG_CARD_HOVER,
+                text_color=theme.TEXT_PRIMARY,
+                border_width=1,
+                border_color=theme.BORDER_COLOR,
+                command=self._on_edit_click,
+            )
+            btn_edit.pack(side="right", padx=(0, 6) if self.on_delete_task else 0)
 
         task_title = self.task.get("title", "Prior Focus Task")
         lbl_title = ctk.CTkLabel(
@@ -324,6 +343,15 @@ class PomodoroModal(ctk.CTkToplevel):
             self.on_complete_task(self.task["id"])
         self.destroy()
 
+    def _on_delete_click(self) -> None:
+        self._stop_timer_loop()
+        task_id = self.task.get("id")
+        delete_callback = self.on_delete_task
+        self.destroy()
+        if delete_callback and task_id:
+            delete_callback(task_id)
+
     def destroy(self) -> None:
         self._stop_timer_loop()
         super().destroy()
+
