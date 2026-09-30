@@ -306,6 +306,7 @@ class TaskCard(ctk.CTkFrame):
         # Start drag after passing movement threshold
         if not self._is_dragging and (dx > 6 or dy > 6):
             self._is_dragging = True
+            self._hide_hover()
             try:
                 self._drag_ghost = ctk.CTkToplevel(self)
                 self._drag_ghost.overrideredirect(True)
@@ -360,6 +361,7 @@ class TaskCard(ctk.CTkFrame):
     def _on_drag_release(self, event: Any) -> None:
         if self._is_dragging:
             self._is_dragging = False
+            self._hide_hover()
 
             if self._drag_ghost:
                 try:
@@ -419,20 +421,52 @@ class TaskCard(ctk.CTkFrame):
         self.lbl_icon.pack(side="right", padx=(4, 0))
 
     def _on_pomodoro_click(self) -> None:
+        self._hide_hover()
         if self.on_pomodoro:
             self.on_pomodoro(self.task)
         else:
             self.on_edit(self.task)
 
     def _on_schedule_click(self) -> None:
+        self._hide_hover()
         if self.on_schedule:
             self.on_schedule(self.task)
         else:
             self.on_edit(self.task)
 
     def _on_hover_click(self) -> None:
+        self._hide_hover()
         if self.hover_action:
             self.hover_action()
+
+    def _show_hover(self) -> None:
+        """Shows the full-card hover transformation overlay."""
+        if self.q_key not in ("Q1_DO", "Q2_SCHEDULE") or self.is_completed or self._is_dragging:
+            return
+
+        if not hasattr(self, "hover_frame") or not self.hover_frame.winfo_exists():
+            return
+
+        self.is_hovered = True
+        self.hover_frame.place(relx=0, rely=0, relwidth=1, relheight=1)
+        self.hover_frame.lift()
+        self.configure(
+            border_color=self.q_color,
+            border_width=2,
+        )
+
+    def _hide_hover(self) -> None:
+        """Hides the hover overlay and resets card border."""
+        self.is_hovered = False
+        if hasattr(self, "hover_frame") and self.hover_frame.winfo_exists():
+            self.hover_frame.place_forget()
+        try:
+            self.configure(
+                border_color=theme.BORDER_COLOR,
+                border_width=1,
+            )
+        except Exception:
+            pass
 
     def _bind_hover_events(self) -> None:
         """Recursively binds hover triggers for seamless, flicker-free shuffle for Q1 and Q2."""
@@ -451,27 +485,21 @@ class TaskCard(ctk.CTkFrame):
                 self._bind_to_widget(child)
 
     def _on_mouse_enter(self, event: Any = None) -> None:
-        # Only active Q1 and Q2 tasks perform the hover shuffle
-        if self.q_key not in ("Q1_DO", "Q2_SCHEDULE") or self.is_completed:
-            return
-
-        if self.is_hovered or not hasattr(self, "hover_frame"):
-            return
-        self.is_hovered = True
-
-        # Use place() overlay to maintain exact dimensions without shifting adjacent cards
-        self.hover_frame.place(relx=0, rely=0, relwidth=1, relheight=1)
-        self.hover_frame.lift()
-        self.configure(
-            border_color=self.q_color,
-            border_width=2,
-        )
+        self._show_hover()
 
     def _on_mouse_leave(self, event: Any = None) -> None:
         if self.q_key not in ("Q1_DO", "Q2_SCHEDULE"):
             return
+        # Schedule verified check to guarantee overlay hides even on fast mouse movements
+        try:
+            self.after(35, self._verify_mouse_outside)
+        except Exception:
+            self._hide_hover()
 
-        # Check if cursor is still within the bounding box of TaskCard
+    def _verify_mouse_outside(self) -> None:
+        """Verifies whether mouse pointer has genuinely left the card boundaries."""
+        if not self.winfo_exists():
+            return
         try:
             x, y = self.winfo_pointerx(), self.winfo_pointery()
             rx, ry = self.winfo_rootx(), self.winfo_rooty()
@@ -481,13 +509,4 @@ class TaskCard(ctk.CTkFrame):
         except Exception:
             pass
 
-        if not self.is_hovered or not hasattr(self, "hover_frame"):
-            return
-        self.is_hovered = False
-
-        # Hide overlay without altering parent container dimensions
-        self.hover_frame.place_forget()
-        self.configure(
-            border_color=theme.BORDER_COLOR,
-            border_width=1,
-        )
+        self._hide_hover()
