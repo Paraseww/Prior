@@ -113,6 +113,7 @@ class PriorApp(ctk.CTk):
         self.current_tab = "matrix"
         self.search_query = ""
         self.all_tasks: List[Dict[str, Any]] = []
+        self.views: Dict[str, Any] = {}
 
         # System Tray instance (active throughout app lifecycle)
         self.tray: Optional[TrayService] = None
@@ -370,77 +371,97 @@ class PriorApp(ctk.CTk):
         self.current_tab = tab_id
         self._highlight_nav_button(tab_id)
 
-        # Clear content area
-        for child in self.content_frame.winfo_children():
-            child.destroy()
+        # Hide all other cached views instantly
+        for vid, vwidget in self.views.items():
+            if vid != tab_id:
+                vwidget.pack_forget()
 
-        # Get filtered tasks based on search
         filtered_tasks = filter_tasks(self.all_tasks, search_query=self.search_query)
 
-        if tab_id == "matrix":
-            self.current_view = MatrixView(
-                self.content_frame,
-                tasks=filtered_tasks,
-                on_toggle=self.toggle_task,
-                on_edit=self.open_task_modal,
-                on_move=self.move_task_quadrant,
-                on_reorder=self.move_or_reorder_task,
-                on_delete=self.delete_task,
-                on_quick_add=self.open_quick_add,
-                on_pomodoro=self.open_pomodoro_modal,
-                on_schedule=self.open_schedule_modal,
-            )
-            self.current_view.pack(fill="both", expand=True)
+        # Lazy initialize and cache view if not already created
+        if tab_id not in self.views:
+            if tab_id == "matrix":
+                view = MatrixView(
+                    self.content_frame,
+                    tasks=filtered_tasks,
+                    on_toggle=self.toggle_task,
+                    on_edit=self.open_task_modal,
+                    on_move=self.move_task_quadrant,
+                    on_reorder=self.move_or_reorder_task,
+                    on_delete=self.delete_task,
+                    on_quick_add=self.open_quick_add,
+                    on_pomodoro=self.open_pomodoro_modal,
+                    on_schedule=self.open_schedule_modal,
+                )
+            elif tab_id == "list":
+                view = ListView(
+                    self.content_frame,
+                    tasks=filtered_tasks,
+                    on_toggle=self.toggle_task,
+                    on_edit=self.open_task_modal,
+                    on_move=self.move_task_quadrant,
+                    on_delete=self.delete_task,
+                    on_clear_completed=self.clear_completed,
+                    on_pomodoro=self.open_pomodoro_modal,
+                    on_schedule=self.open_schedule_modal,
+                )
+            elif tab_id == "calendar":
+                view = CalendarView(
+                    self.content_frame,
+                    tasks=filtered_tasks,
+                    on_toggle=self.toggle_task,
+                    on_edit=self.open_task_modal,
+                    on_move=self.move_task_quadrant,
+                    on_delete=self.delete_task,
+                    on_quick_add=self.open_quick_add_with_date,
+                    on_pomodoro=self.open_pomodoro_modal,
+                    on_schedule=self.open_schedule_modal,
+                )
+            elif tab_id == "analytics":
+                view = AnalyticsView(
+                    self.content_frame,
+                    tasks=self.all_tasks,
+                )
+            elif tab_id == "settings":
+                view = SettingsView(
+                    self.content_frame,
+                    profile=self.profile,
+                    on_profile_updated=self._on_profile_updated,
+                    on_data_cleared=self._load_and_refresh,
+                )
+            else:
+                return
 
-        elif tab_id == "list":
-            self.current_view = ListView(
-                self.content_frame,
-                tasks=filtered_tasks,
-                on_toggle=self.toggle_task,
-                on_edit=self.open_task_modal,
-                on_move=self.move_task_quadrant,
-                on_delete=self.delete_task,
-                on_clear_completed=self.clear_completed,
-                on_pomodoro=self.open_pomodoro_modal,
-                on_schedule=self.open_schedule_modal,
-            )
-            self.current_view.pack(fill="both", expand=True)
+            self.views[tab_id] = view
 
-        elif tab_id == "calendar":
-            self.current_view = CalendarView(
-                self.content_frame,
-                tasks=filtered_tasks,
-                on_toggle=self.toggle_task,
-                on_edit=self.open_task_modal,
-                on_move=self.move_task_quadrant,
-                on_delete=self.delete_task,
-                on_quick_add=self.open_quick_add_with_date,
-                on_pomodoro=self.open_pomodoro_modal,
-                on_schedule=self.open_schedule_modal,
-            )
-            self.current_view.pack(fill="both", expand=True)
+        # Show target view smoothly
+        target_view = self.views[tab_id]
+        target_view.pack(fill="both", expand=True)
+        self.current_view = target_view
 
-        elif tab_id == "analytics":
-            self.current_view = AnalyticsView(
-                self.content_frame,
-                tasks=self.all_tasks,
-            )
-            self.current_view.pack(fill="both", expand=True)
-
-        elif tab_id == "settings":
-            self.current_view = SettingsView(
-                self.content_frame,
-                profile=self.profile,
-                on_profile_updated=self._on_profile_updated,
-                on_data_cleared=self._load_and_refresh,
-            )
-            self.current_view.pack(fill="both", expand=True)
+        # Update view data without rebuilding widgets
+        if hasattr(target_view, "refresh_tasks"):
+            if tab_id == "analytics":
+                target_view.refresh_tasks(self.all_tasks)
+            else:
+                target_view.refresh_tasks(filtered_tasks)
 
     def _load_and_refresh(self) -> None:
-        """Reloads all tasks from SQLite, updates notification badges, and refreshes current active tab."""
+        """Reloads all tasks from SQLite, updates notification badges, and refreshes views."""
         self.all_tasks = database.get_all_tasks()
         self._update_notification_badge()
-        self._switch_tab(self.current_tab)
+
+        # Update current active view without rebuilding
+        filtered_tasks = filter_tasks(self.all_tasks, search_query=self.search_query)
+        if self.current_tab in self.views:
+            active_view = self.views[self.current_tab]
+            if hasattr(active_view, "refresh_tasks"):
+                if self.current_tab == "analytics":
+                    active_view.refresh_tasks(self.all_tasks)
+                else:
+                    active_view.refresh_tasks(filtered_tasks)
+        else:
+            self._switch_tab(self.current_tab)
 
     def _update_notification_badge(self) -> None:
         """Updates the notification bell button badge and highlight state."""
@@ -489,6 +510,12 @@ class PriorApp(ctk.CTk):
         self.btn_theme.configure(text="🌙" if new_mode == "dark" else "☀️")
         if hasattr(self, "content_frame") and hasattr(self.content_frame, "redraw_pattern"):
             self.content_frame.redraw_pattern()
+
+        # Destroy and clear cached views so they are rebuilt with the new theme colors
+        for child in self.content_frame.winfo_children():
+            child.destroy()
+        self.views.clear()
+
         self._load_and_refresh()
 
     def _on_profile_updated(self) -> None:
@@ -497,6 +524,12 @@ class PriorApp(ctk.CTk):
         if not bool(self.profile.get("onboarding_completed", 0)):
             self._check_onboarding_and_render()
         else:
+            if "settings" in self.views:
+                try:
+                    self.views["settings"].destroy()
+                except Exception:
+                    pass
+                del self.views["settings"]
             self._load_and_refresh()
 
     # ========================================================================
