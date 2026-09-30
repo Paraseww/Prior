@@ -139,9 +139,17 @@ class PriorApp(ctk.CTk):
         apply_prior_icon(self)
 
     def _check_onboarding_and_render(self) -> None:
+        # Clear cached view references before resetting container
+        self.views.clear()
+        self.current_view = None
+        self.current_tab = "matrix"
+
         # Clear existing container children
         for child in self.root_container.winfo_children():
-            child.destroy()
+            try:
+                child.destroy()
+            except Exception:
+                pass
 
         # Reload profile
         self.profile = database.get_profile()
@@ -161,6 +169,12 @@ class PriorApp(ctk.CTk):
         self._check_onboarding_and_render()
 
     def _render_main_workspace(self) -> None:
+        # Ensure fresh state for all cached views
+        self.views.clear()
+        self.current_view = None
+        self.current_tab = "matrix"
+        self.search_query = ""
+
         # Top App Bar
         self._build_top_bar()
 
@@ -176,6 +190,8 @@ class PriorApp(ctk.CTk):
         self.content_frame.pack(side="right", fill="both", expand=True, padx=8, pady=8)
 
         # Load tasks from database & show initial tab
+        self.all_tasks = database.get_all_tasks()
+        self._switch_tab("matrix")
         self._load_and_refresh()
 
     def _build_top_bar(self) -> None:
@@ -373,12 +389,26 @@ class PriorApp(ctk.CTk):
         self.current_tab = tab_id
         self._highlight_nav_button(tab_id)
 
-        # Hide all other cached views instantly
-        for vid, vwidget in self.views.items():
+        # Hide all other cached views safely
+        for vid, vwidget in list(self.views.items()):
             if vid != tab_id:
-                vwidget.pack_forget()
+                try:
+                    if vwidget.winfo_exists():
+                        vwidget.pack_forget()
+                    else:
+                        del self.views[vid]
+                except Exception:
+                    self.views.pop(vid, None)
 
         filtered_tasks = filter_tasks(self.all_tasks, search_query=self.search_query)
+
+        # Ensure target view exists and is valid
+        if tab_id in self.views:
+            try:
+                if not self.views[tab_id].winfo_exists():
+                    del self.views[tab_id]
+            except Exception:
+                del self.views[tab_id]
 
         # Lazy initialize and cache view if not already created
         if tab_id not in self.views:
@@ -437,16 +467,20 @@ class PriorApp(ctk.CTk):
             self.views[tab_id] = view
 
         # Show target view smoothly
-        target_view = self.views[tab_id]
-        target_view.pack(fill="both", expand=True)
-        self.current_view = target_view
+        target_view = self.views.get(tab_id)
+        if target_view is not None:
+            try:
+                target_view.pack(fill="both", expand=True)
+                self.current_view = target_view
+            except Exception:
+                pass
 
-        # Update view data without rebuilding widgets
-        if hasattr(target_view, "refresh_tasks"):
-            if tab_id == "analytics":
-                target_view.refresh_tasks(self.all_tasks)
-            else:
-                target_view.refresh_tasks(filtered_tasks)
+            # Update view data without rebuilding widgets
+            if hasattr(target_view, "refresh_tasks"):
+                if tab_id == "analytics":
+                    target_view.refresh_tasks(self.all_tasks)
+                else:
+                    target_view.refresh_tasks(filtered_tasks)
 
     def _load_and_refresh(self) -> None:
         """Reloads all tasks from SQLite, updates notification badges, and refreshes views."""
@@ -457,6 +491,16 @@ class PriorApp(ctk.CTk):
         filtered_tasks = filter_tasks(self.all_tasks, search_query=self.search_query)
         if self.current_tab in self.views:
             active_view = self.views[self.current_tab]
+            try:
+                if not active_view.winfo_exists():
+                    del self.views[self.current_tab]
+                    self._switch_tab(self.current_tab)
+                    return
+            except Exception:
+                del self.views[self.current_tab]
+                self._switch_tab(self.current_tab)
+                return
+
             if hasattr(active_view, "refresh_tasks"):
                 if self.current_tab == "analytics":
                     active_view.refresh_tasks(self.all_tasks)
@@ -524,7 +568,12 @@ class PriorApp(ctk.CTk):
 
     def _on_profile_updated(self) -> None:
         self.profile = database.get_profile()
-        self.btn_profile.configure(text=f"  👤 {self.profile.get('name', 'User')}  ")
+        if hasattr(self, "btn_profile") and hasattr(self.btn_profile, "winfo_exists"):
+            try:
+                if self.btn_profile.winfo_exists():
+                    self.btn_profile.configure(text=f"  👤 {self.profile.get('name', 'User')}  ")
+            except Exception:
+                pass
         if not bool(self.profile.get("onboarding_completed", 0)):
             self._check_onboarding_and_render()
         else:
