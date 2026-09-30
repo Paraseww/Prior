@@ -212,47 +212,50 @@ def get_task_by_id(task_id: int, db_path: Optional[str] = None) -> Optional[Dict
     return dict(row) if row else None
 
 
+_UNSET: Any = object()
+
+
 def update_task(
     task_id: int,
-    title: Optional[str] = None,
-    description: Optional[str] = None,
-    quadrant: Optional[str] = None,
-    due_date: Optional[str] = None,
-    reminder_time: Optional[str] = None,
-    is_completed: Optional[int] = None,
+    title: Any = _UNSET,
+    description: Any = _UNSET,
+    quadrant: Any = _UNSET,
+    due_date: Any = _UNSET,
+    reminder_time: Any = _UNSET,
+    is_completed: Any = _UNSET,
     db_path: Optional[str] = None,
 ) -> bool:
     """Updates specific fields of an existing task."""
     fields = []
     values = []
 
-    if title is not None:
-        clean_title = title.strip()
+    if title is not _UNSET:
+        clean_title = title.strip() if title else ""
         if not clean_title:
             raise ValueError("Task title cannot be empty.")
         fields.append("title = ?")
         values.append(clean_title)
 
-    if description is not None:
+    if description is not _UNSET:
         fields.append("description = ?")
-        values.append(description.strip())
+        values.append(description.strip() if description else "")
 
-    if quadrant is not None:
+    if quadrant is not _UNSET:
         valid_quadrants = {"Q1_DO", "Q2_SCHEDULE", "Q3_DELEGATE", "Q4_ELIMINATE"}
-        norm_quadrant = quadrant.upper()
+        norm_quadrant = quadrant.upper() if quadrant else "Q1_DO"
         if norm_quadrant in valid_quadrants:
             fields.append("quadrant = ?")
             values.append(norm_quadrant)
 
-    if due_date is not None:
+    if due_date is not _UNSET:
         fields.append("due_date = ?")
-        values.append(due_date.strip() if due_date else None)
+        values.append(due_date.strip() if due_date and str(due_date).strip() else None)
 
-    if reminder_time is not None:
+    if reminder_time is not _UNSET:
         fields.append("reminder_time = ?")
-        values.append(reminder_time.strip() if reminder_time else None)
+        values.append(reminder_time.strip() if reminder_time and str(reminder_time).strip() else None)
 
-    if is_completed is not None:
+    if is_completed is not _UNSET:
         val = 1 if is_completed else 0
         fields.append("is_completed = ?")
         values.append(val)
