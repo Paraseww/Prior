@@ -11,6 +11,7 @@ from typing import Any, Callable, Dict, List, Optional
 import customtkinter as ctk
 
 from ui import theme
+from ui.scrollable_dropdown import ScrollableOptionMenu
 
 
 class ScheduleModal(ctk.CTkToplevel):
@@ -129,6 +130,20 @@ class ScheduleModal(ctk.CTkToplevel):
             justify="left",
         )
         lbl_task_title.pack(fill="x", pady=(4, 0))
+
+        # Description / Notes (if present)
+        task_notes = (self.task.get("description") or self.task.get("notes") or "").strip()
+        if task_notes:
+            lbl_notes = ctk.CTkLabel(
+                inner_task,
+                text=task_notes,
+                font=(theme.FONT_FAMILY, 11),
+                text_color=theme.TEXT_SECONDARY,
+                anchor="w",
+                wraplength=440,
+                justify="left",
+            )
+            lbl_notes.pack(fill="x", pady=(3, 0))
 
         # 2. Section: Date Selection & Quick Presets
         lbl_section_date = ctk.CTkLabel(
@@ -274,15 +289,14 @@ class ScheduleModal(ctk.CTkToplevel):
         init_hour, init_min, init_ampm = self._parse_time_parts(self.selected_time)
 
         hours = [f"{i:02d}" for i in range(1, 13)]
-        self.opt_hour = ctk.CTkOptionMenu(
+        self.opt_hour = ScrollableOptionMenu(
             custom_time_box,
             values=hours,
-            width=64,
+            width=68,
             height=30,
             fg_color="#10B981",
-            button_color="#059669",
-            button_hover_color="#047857",
-            dropdown_hover_color="#059669",
+            button_hover_color="#059669",
+            dropdown_height=180,
             command=self._on_custom_time_changed,
         )
         self.opt_hour.set(init_hour)
@@ -291,31 +305,29 @@ class ScheduleModal(ctk.CTkToplevel):
         lbl_colon = ctk.CTkLabel(custom_time_box, text=":", font=(theme.FONT_FAMILY, 14, "bold"))
         lbl_colon.pack(side="left")
 
-        minutes = ["00", "15", "30", "45"]
-        self.opt_minute = ctk.CTkOptionMenu(
+        minutes = [f"{i:02d}" for i in range(0, 60)]
+        self.opt_minute = ScrollableOptionMenu(
             custom_time_box,
             values=minutes,
-            width=64,
+            width=68,
             height=30,
             fg_color="#10B981",
-            button_color="#059669",
-            button_hover_color="#047857",
-            dropdown_hover_color="#059669",
+            button_hover_color="#059669",
+            dropdown_height=180,
             command=self._on_custom_time_changed,
         )
         self.opt_minute.set(init_min)
         self.opt_minute.pack(side="left", padx=2)
 
         ampm_list = ["AM", "PM"]
-        self.opt_ampm = ctk.CTkOptionMenu(
+        self.opt_ampm = ScrollableOptionMenu(
             custom_time_box,
             values=ampm_list,
-            width=64,
+            width=68,
             height=30,
             fg_color="#10B981",
-            button_color="#059669",
-            button_hover_color="#047857",
-            dropdown_hover_color="#059669",
+            button_hover_color="#059669",
+            dropdown_height=90,
             command=self._on_custom_time_changed,
         )
         self.opt_ampm.set(init_ampm)
