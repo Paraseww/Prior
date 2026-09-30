@@ -96,7 +96,7 @@ class PriorApp(ctk.CTk):
         self.profile: Dict[str, Any] = database.get_profile()
 
         # Configure Window Properties
-        self.title("Prior — Eisenhower Matrix Task Manager")
+        self.title("Prior - Eisenhower Matrix Task Manager")
         self.geometry("1120x740")
         self.minsize(980, 640)
 
