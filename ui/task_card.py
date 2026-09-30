@@ -58,9 +58,11 @@ class TaskCard(ctk.CTkFrame):
         self.highlight_target_quadrant = highlight_target_quadrant
         self.show_quadrant_indicator = show_quadrant_indicator
 
-        # Hover state flag
+        # Hover state flag and timers
         self.is_hovered = False
         self.is_completed = bool(self.task.get("is_completed", 0))
+        self._hover_timer: Optional[str] = None
+        self._hover_suppressed: bool = False
 
         # Quadrant Theme Details
         self.q_key = self.task.get("quadrant", "Q1_DO")
@@ -421,6 +423,7 @@ class TaskCard(ctk.CTkFrame):
         self.lbl_icon.pack(side="right", padx=(4, 0))
 
     def _on_pomodoro_click(self) -> None:
+        self._hover_suppressed = True
         self._hide_hover()
         if self.on_pomodoro:
             self.on_pomodoro(self.task)
@@ -428,6 +431,7 @@ class TaskCard(ctk.CTkFrame):
             self.on_edit(self.task)
 
     def _on_schedule_click(self) -> None:
+        self._hover_suppressed = True
         self._hide_hover()
         if self.on_schedule:
             self.on_schedule(self.task)
@@ -435,13 +439,14 @@ class TaskCard(ctk.CTkFrame):
             self.on_edit(self.task)
 
     def _on_hover_click(self) -> None:
+        self._hover_suppressed = True
         self._hide_hover()
         if self.hover_action:
             self.hover_action()
 
     def _show_hover(self) -> None:
         """Shows the full-card hover transformation overlay."""
-        if self.q_key not in ("Q1_DO", "Q2_SCHEDULE") or self.is_completed or self._is_dragging:
+        if self.q_key not in ("Q1_DO", "Q2_SCHEDULE") or self.is_completed or self._is_dragging or self._hover_suppressed:
             return
 
         if not hasattr(self, "hover_frame") or not self.hover_frame.winfo_exists():
@@ -485,14 +490,53 @@ class TaskCard(ctk.CTkFrame):
                 self._bind_to_widget(child)
 
     def _on_mouse_enter(self, event: Any = None) -> None:
+        if self.q_key not in ("Q1_DO", "Q2_SCHEDULE") or self.is_completed or self._is_dragging or self._hover_suppressed:
+            return
+
+        if self._hover_timer:
+            try:
+                self.after_cancel(self._hover_timer)
+            except Exception:
+                pass
+            self._hover_timer = None
+
+        try:
+            self._hover_timer = self.after(70, self._check_and_show_hover)
+        except Exception:
+            pass
+
+    def _check_and_show_hover(self) -> None:
+        self._hover_timer = None
+        if not self.winfo_exists():
+            return
+        if self.q_key not in ("Q1_DO", "Q2_SCHEDULE") or self.is_completed or self._is_dragging or self._hover_suppressed:
+            return
+
+        try:
+            x, y = self.winfo_pointerx(), self.winfo_pointery()
+            rx, ry = self.winfo_rootx(), self.winfo_rooty()
+            rw, rh = self.winfo_width(), self.winfo_height()
+            if not (rx <= x < rx + rw and ry <= y < ry + rh):
+                return
+        except Exception:
+            return
+
         self._show_hover()
 
     def _on_mouse_leave(self, event: Any = None) -> None:
+        if self._hover_timer:
+            try:
+                self.after_cancel(self._hover_timer)
+            except Exception:
+                pass
+            self._hover_timer = None
+
         if self.q_key not in ("Q1_DO", "Q2_SCHEDULE"):
             return
+
         # Schedule verified check to guarantee overlay hides even on fast mouse movements
         try:
-            self.after(35, self._verify_mouse_outside)
+            self.after(30, self._verify_mouse_outside)
         except Exception:
             self._hide_hover()
 
@@ -509,4 +553,15 @@ class TaskCard(ctk.CTkFrame):
         except Exception:
             pass
 
+        # Mouse is genuinely outside card -> reset suppression and hide overlay
+        self._hover_suppressed = False
         self._hide_hover()
+
+    def destroy(self) -> None:
+        if self._hover_timer:
+            try:
+                self.after_cancel(self._hover_timer)
+            except Exception:
+                pass
+            self._hover_timer = None
+        super().destroy()
