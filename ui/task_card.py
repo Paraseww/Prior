@@ -112,37 +112,38 @@ class TaskCard(ctk.CTkFrame):
         )
         self.cb.pack(side="top", pady=(2, 0))
 
-        # 2. Right Section: Action buttons anchored to top-right
-        right_box = ctk.CTkFrame(self.normal_frame, fg_color="transparent")
-        right_box.pack(side="right", fill="y", anchor="n", padx=(4, 0))
+        # 2. Right Section: Action buttons anchored to top-right (only for non-Q1/Q2 tasks)
+        if self.q_key not in ("Q1_DO", "Q2_SCHEDULE"):
+            right_box = ctk.CTkFrame(self.normal_frame, fg_color="transparent")
+            right_box.pack(side="right", fill="y", anchor="n", padx=(4, 0))
 
-        btn_del = ctk.CTkButton(
-            right_box,
-            text="✕",
-            width=22,
-            height=22,
-            corner_radius=5,
-            fg_color="transparent",
-            hover_color=("#FEE2E2", "#2A0A0A"),
-            text_color=("#EF4444", "#F87171"),
-            font=(theme.FONT_FAMILY, 11, "bold"),
-            command=lambda: self.on_delete(self.task["id"]),
-        )
-        btn_del.pack(side="right", padx=(2, 0))
+            btn_del = ctk.CTkButton(
+                right_box,
+                text="✕",
+                width=22,
+                height=22,
+                corner_radius=5,
+                fg_color="transparent",
+                hover_color=("#FEE2E2", "#2A0A0A"),
+                text_color=("#EF4444", "#F87171"),
+                font=(theme.FONT_FAMILY, 11, "bold"),
+                command=lambda: self.on_delete(self.task["id"]),
+            )
+            btn_del.pack(side="right", padx=(2, 0))
 
-        btn_edit = ctk.CTkButton(
-            right_box,
-            text="✎",
-            width=22,
-            height=22,
-            corner_radius=5,
-            fg_color="transparent",
-            hover_color=theme.BG_CARD_HOVER,
-            text_color=theme.TEXT_SECONDARY,
-            font=(theme.FONT_FAMILY, 11),
-            command=lambda: self.on_edit(self.task),
-        )
-        btn_edit.pack(side="right", padx=(2, 0))
+            btn_edit = ctk.CTkButton(
+                right_box,
+                text="✎",
+                width=22,
+                height=22,
+                corner_radius=5,
+                fg_color="transparent",
+                hover_color=theme.BG_CARD_HOVER,
+                text_color=theme.TEXT_SECONDARY,
+                font=(theme.FONT_FAMILY, 11),
+                command=lambda: self.on_edit(self.task),
+            )
+            btn_edit.pack(side="right", padx=(2, 0))
 
         # 3. Center Section: Left-aligned Title, Description, and Due Date
         self.center_box = ctk.CTkFrame(self.normal_frame, fg_color="transparent")
