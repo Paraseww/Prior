@@ -36,8 +36,9 @@ class PomodoroModal(ctk.CTkToplevel):
         self.on_delete_task = on_delete_task
 
         self.title("Prior — Pomodoro Focus Session")
-        self.geometry("480x520")
-        self.resizable(False, False)
+        self.geometry("520x550")
+        self.minsize(500, 520)
+        self.resizable(True, True)
         self.transient(master)
         self.grab_set()
 
@@ -57,9 +58,11 @@ class PomodoroModal(ctk.CTkToplevel):
     def _center_modal(self, master: Any) -> None:
         self.update_idletasks()
         try:
-            x = master.winfo_x() + (master.winfo_width() - 480) // 2
-            y = master.winfo_y() + (master.winfo_height() - 520) // 2
-            self.geometry(f"+{max(0, x)}+{max(0, y)}")
+            w = 520
+            h = 550
+            x = master.winfo_x() + (master.winfo_width() - w) // 2
+            y = master.winfo_y() + (master.winfo_height() - h) // 2
+            self.geometry(f"{w}x{h}+{max(0, x)}+{max(0, y)}")
         except Exception:
             pass
 
@@ -67,7 +70,7 @@ class PomodoroModal(ctk.CTkToplevel):
         self.configure(fg_color=theme.BG_CARD)
 
         container = ctk.CTkFrame(self, fg_color="transparent")
-        container.pack(fill="both", expand=True, padx=30, pady=25)
+        container.pack(fill="both", expand=True, padx=24, pady=20)
 
         # 1. Target Task Header Card
         task_box = ctk.CTkFrame(
@@ -88,8 +91,8 @@ class PomodoroModal(ctk.CTkToplevel):
 
         lbl_target = ctk.CTkLabel(
             header_row,
-            text="🎯 CURRENT FOCUS TARGET",
-            font=(theme.FONT_FAMILY, 11, "bold"),
+            text="🎯 FOCUS TARGET",
+            font=(theme.FONT_FAMILY, 10, "bold"),
             text_color="#EF4444",
             anchor="w",
         )
@@ -134,7 +137,7 @@ class PomodoroModal(ctk.CTkToplevel):
             font=(theme.FONT_FAMILY, 16, "bold"),
             text_color=theme.TEXT_PRIMARY,
             anchor="w",
-            wraplength=380,
+            wraplength=440,
             justify="left",
         )
         lbl_title.pack(fill="x", pady=(4, 0))
@@ -148,7 +151,7 @@ class PomodoroModal(ctk.CTkToplevel):
                 font=(theme.FONT_FAMILY, 12),
                 text_color=theme.TEXT_SECONDARY,
                 anchor="w",
-                wraplength=380,
+                wraplength=440,
                 justify="left",
             )
             lbl_notes.pack(fill="x", pady=(3, 0))
