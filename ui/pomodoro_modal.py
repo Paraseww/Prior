@@ -120,6 +120,20 @@ class PomodoroModal(ctk.CTkToplevel):
         )
         lbl_title.pack(fill="x", pady=(4, 0))
 
+        # Description / Notes (if present)
+        task_notes = (self.task.get("description") or self.task.get("notes") or "").strip()
+        if task_notes:
+            lbl_notes = ctk.CTkLabel(
+                inner_task,
+                text=task_notes,
+                font=(theme.FONT_FAMILY, 12),
+                text_color=theme.TEXT_SECONDARY,
+                anchor="w",
+                wraplength=380,
+                justify="left",
+            )
+            lbl_notes.pack(fill="x", pady=(3, 0))
+
         # 2. Mode Selector: Focus (25m) / Short Break (5m) / Long Break (15m)
         self.mode_segment = ctk.CTkSegmentedButton(
             container,
