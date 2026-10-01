@@ -121,55 +121,7 @@ def get_font(size: int = 14, weight: str = "normal") -> tuple:
     return (FONT_FAMILY, size, weight)
 
 
-_CACHED_ICON_PHOTO = None
-_CACHED_HICON_BIG = None
-_CACHED_HICON_SMALL = None
-
-
-def apply_prior_icon(window: Any) -> None:
-    """
-    Applies the custom Prior application logo to any Tk/CTk/CTkToplevel window
-    and prevents CustomTkinter from overriding it with its default blue 'C' icon.
-    """
-    global _CACHED_ICON_PHOTO, _CACHED_HICON_BIG, _CACHED_HICON_SMALL
-    assets_dir = Path(__file__).resolve().parent.parent / "assets"
-    png_path = assets_dir / "icon.png"
-    ico_path = assets_dir / "icon.ico"
-
-    window._iconbitmap_method_called = True
-
-    try:
-        from PIL import Image, ImageTk
-        if _CACHED_ICON_PHOTO is None and png_path.exists():
-            base_img = Image.open(png_path).convert("RGBA")
-            _CACHED_ICON_PHOTO = ImageTk.PhotoImage(base_img.resize((128, 128), Image.Resampling.LANCZOS))
-
-        if _CACHED_ICON_PHOTO is not None:
-            window.iconphoto(True, _CACHED_ICON_PHOTO)
-            window._icon_photo = _CACHED_ICON_PHOTO
-
-        if sys.platform == "win32" and ico_path.exists():
-            try:
-                window.iconbitmap(str(ico_path))
-            except Exception:
-                pass
-
-            try:
-                wid = window.winfo_id()
-                if wid:
-                    parent = ctypes.windll.user32.GetParent(wid) or wid
-                    if _CACHED_HICON_BIG is None:
-                        _CACHED_HICON_BIG = ctypes.windll.user32.LoadImageW(None, str(ico_path), 1, 48, 48, 0x00000010)
-                        _CACHED_HICON_SMALL = ctypes.windll.user32.LoadImageW(None, str(ico_path), 1, 16, 16, 0x00000010)
-                    for h in (wid, parent):
-                        if _CACHED_HICON_BIG:
-                            ctypes.windll.user32.SendMessageW(h, 0x0080, 1, _CACHED_HICON_BIG)
-                        if _CACHED_HICON_SMALL:
-                            ctypes.windll.user32.SendMessageW(h, 0x0080, 0, _CACHED_HICON_SMALL)
-            except Exception:
-                pass
-    except Exception:
-        pass
+from ui.windows_integration import apply_prior_icon
 
 
 # Global hook for CustomTkinter Windows titlebar icon and smooth color switching

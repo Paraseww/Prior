@@ -23,66 +23,18 @@ from ui.task_modal import TaskModal
 from ui.tray import TrayService
 
 
+from ui.windows_integration import (
+    apply_prior_icon,
+    init_windows_integration,
+    set_process_app_id,
+)
+
 # Set Windows AppUserModelID before Tkinter initializes
-if sys.platform == "win32":
-    try:
-        import ctypes
-        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("parami.prior.taskmanager.1.0")
-    except Exception:
-        pass
-
-
-def apply_prior_icon(window: Any) -> None:
-    """
-    Applies the custom Prior application logo to any Tk/CTk/CTkToplevel window
-    and prevents CustomTkinter from overriding it with its default blue 'C' icon.
-    """
-    assets_dir = Path(__file__).resolve().parent.parent / "assets"
-    png_path = assets_dir / "icon.png"
-    ico_path = assets_dir / "icon.ico"
-
-    window._iconbitmap_method_called = True
-
-    try:
-        if png_path.exists():
-            from PIL import ImageTk
-            base_img = Image.open(png_path).convert("RGBA")
-            photo = ImageTk.PhotoImage(base_img.resize((128, 128), Image.Resampling.LANCZOS))
-            window.iconphoto(True, photo)
-            window._icon_photo = photo
-
-        if sys.platform == "win32" and ico_path.exists():
-            try:
-                window.iconbitmap(str(ico_path))
-            except Exception:
-                pass
-
-            try:
-                import ctypes
-                window.update_idletasks()
-                wid = window.winfo_id()
-                parent = ctypes.windll.user32.GetParent(wid) or wid
-                hicon_big = ctypes.windll.user32.LoadImageW(None, str(ico_path), 1, 48, 48, 0x00000010)
-                hicon_small = ctypes.windll.user32.LoadImageW(None, str(ico_path), 1, 16, 16, 0x00000010)
-                for h in (wid, parent):
-                    if hicon_big:
-                        ctypes.windll.user32.SendMessageW(h, 0x0080, 1, hicon_big)
-                    if hicon_small:
-                        ctypes.windll.user32.SendMessageW(h, 0x0080, 0, hicon_small)
-            except Exception:
-                pass
-    except Exception:
-        pass
-
-
-def _custom_windows_set_titlebar_icon(self: Any) -> None:
-    """Global hook replacing CustomTkinter's default blue 'C' icon on Windows."""
-    apply_prior_icon(self)
-
+set_process_app_id()
 
 # Hook CustomTkinter window classes globally so all windows & modals always show Prior's logo
-ctk.CTk._windows_set_titlebar_icon = _custom_windows_set_titlebar_icon
-ctk.CTkToplevel._windows_set_titlebar_icon = _custom_windows_set_titlebar_icon
+ctk.CTk._windows_set_titlebar_icon = lambda self: apply_prior_icon(self)
+ctk.CTkToplevel._windows_set_titlebar_icon = lambda self: apply_prior_icon(self)
 
 
 class PriorApp(ctk.CTk):
@@ -101,8 +53,9 @@ class PriorApp(ctk.CTk):
         self.geometry("1120x740")
         self.minsize(980, 640)
 
-        # Set Window Icon
+        # Set Window Icon and Taskbar Identity
         self._set_app_icon()
+        init_windows_integration(self)
 
         # Set appearance theme
         app_mode = self.profile.get("theme", "dark")
