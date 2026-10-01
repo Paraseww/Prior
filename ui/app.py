@@ -128,11 +128,15 @@ class PriorApp(ctk.CTk):
 
         self._check_onboarding_and_render()
 
-        # Bring window to front
-        self.lift()
-        self.attributes("-topmost", True)
-        self.after(100, lambda: self.attributes("-topmost", False))
-        self.focus_force()
+        # Check if started with --minimized flag (e.g. Windows startup)
+        if "--minimized" in sys.argv:
+            self.withdraw()
+        else:
+            # Bring window to front
+            self.lift()
+            self.attributes("-topmost", True)
+            self.after(100, lambda: self.attributes("-topmost", False))
+            self.focus_force()
 
     def _set_app_icon(self) -> None:
         """Configures the window titlebar, taskbar, and Alt-Tab switcher icon."""
@@ -771,6 +775,15 @@ class PriorApp(ctk.CTk):
 
 def launch_app() -> None:
     """Entrypoint function to launch the Prior desktop GUI application."""
+    if sys.platform == "win32":
+        try:
+            import ctypes
+            hwnd = ctypes.windll.kernel32.GetConsoleWindow()
+            if hwnd:
+                ctypes.windll.user32.ShowWindow(hwnd, 0)
+        except Exception:
+            pass
+
     app = PriorApp()
     app.mainloop()
 

@@ -76,10 +76,15 @@ def set_windows_startup(enable: bool) -> bool:
             exe_path = sys.executable
             # If running as python script or compiled exe
             if getattr(sys, "frozen", False):
-                cmd = f'"{exe_path}"'
+                cmd = f'"{exe_path}" --minimized'
             else:
+                py_path = Path(exe_path)
+                if py_path.name.lower() == "python.exe":
+                    pyw_path = py_path.with_name("pythonw.exe")
+                    if pyw_path.exists():
+                        exe_path = str(pyw_path)
                 script_path = str(BASE_DIR / "project.py")
-                cmd = f'"{exe_path}" "{script_path}"'
+                cmd = f'"{exe_path}" "{script_path}" --minimized'
             winreg.SetValueEx(key, "Prior", 0, winreg.REG_SZ, cmd)
         else:
             try:
