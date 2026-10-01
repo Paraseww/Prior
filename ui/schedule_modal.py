@@ -7,11 +7,161 @@ Allows users to assign due dates, choose quick presets, select calendar days, an
 import calendar
 from datetime import date, datetime, timedelta
 from pathlib import Path
+import tkinter as tk
 from typing import Any, Callable, Dict, List, Optional
 import customtkinter as ctk
 
 from ui import theme
 from ui.scrollable_dropdown import ScrollableOptionMenu
+
+
+class MiniCalendarCanvas(tk.Canvas):
+    """
+    High-performance, zero-latency canvas-based monthly calendar grid.
+    Renders date cells, selection pills, and today highlights with sub-millisecond redraws.
+    """
+
+    def __init__(self, master: Any, on_date_selected: Callable[[date], None], **kwargs) -> None:
+        super().__init__(master, highlightthickness=0, **kwargs)
+        self.on_date_selected = on_date_selected
+        self.cal_year = date.today().year
+        self.cal_month = date.today().month
+        self.selected_date: Optional[date] = date.today()
+        self.today = date.today()
+        self.hover_idx: Optional[int] = None
+        self.cells: List[tuple[int, int, date, bool]] = []
+        self.num_rows = 5
+
+        self.bind("<Configure>", lambda e: self.redraw())
+        self.bind("<Motion>", self._on_motion)
+        self.bind("<Leave>", self._on_leave)
+        self.bind("<Button-1>", self._on_click)
+
+    def set_month(self, year: int, month: int, selected_date: Optional[date]) -> None:
+        self.cal_year = year
+        self.cal_month = month
+        self.selected_date = selected_date
+        self.redraw()
+
+    def set_selected_date(self, selected_date: Optional[date]) -> None:
+        self.selected_date = selected_date
+        if selected_date:
+            self.cal_year = selected_date.year
+            self.cal_month = selected_date.month
+        self.redraw()
+
+    def _on_leave(self, event: Any) -> None:
+        if self.hover_idx is not None:
+            self.hover_idx = None
+            self.config(cursor="")
+            self.redraw()
+
+    def _on_motion(self, event: Any) -> None:
+        w = self.winfo_width()
+        h = self.winfo_height()
+        if w <= 10 or h <= 10 or not self.cells:
+            return
+
+        header_h = 22
+        if event.y < header_h:
+            new_hover = None
+        else:
+            col_w = w / 7
+            row_h = (h - header_h) / max(1, self.num_rows)
+            c = int(event.x // col_w)
+            r = int((event.y - header_h) // row_h)
+            idx = r * 7 + c
+            new_hover = idx if 0 <= idx < len(self.cells) and 0 <= c < 7 and 0 <= r < self.num_rows else None
+
+        if new_hover != self.hover_idx:
+            self.hover_idx = new_hover
+            self.config(cursor="hand2" if new_hover is not None else "")
+            self.redraw()
+
+    def _on_click(self, event: Any) -> None:
+        if self.hover_idx is not None and 0 <= self.hover_idx < len(self.cells):
+            d = self.cells[self.hover_idx][2]
+            self.selected_date = d
+            self.on_date_selected(d)
+
+    def redraw(self) -> None:
+        self.delete("all")
+        w = self.winfo_width()
+        h = self.winfo_height()
+        if w <= 10 or h <= 10:
+            return
+
+        is_dark = ctk.get_appearance_mode().lower() == "dark"
+        bg = theme.BG_CARD[1] if is_dark else theme.BG_CARD[0]
+        self.config(bg=bg)
+
+        col_w = w / 7
+        header_h = 22
+        day_names = ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"]
+        muted_col = theme.TEXT_MUTED[1] if is_dark else theme.TEXT_MUTED[0]
+        prim_col = theme.TEXT_PRIMARY[1] if is_dark else theme.TEXT_PRIMARY[0]
+        sec_col = theme.TEXT_SECONDARY[1] if is_dark else theme.TEXT_SECONDARY[0]
+
+        # Draw Day Names Header
+        for c, name in enumerate(day_names):
+            cx = (c + 0.5) * col_w
+            self.create_text(cx, header_h / 2, text=name, fill=sec_col, font=(theme.FONT_FAMILY, 9, "bold"))
+
+        # Prepare calendar cells
+        cal = calendar.Calendar(firstweekday=0)
+        weeks = cal.monthdatescalendar(self.cal_year, self.cal_month)
+        self.num_rows = len(weeks)
+        self.cells = []
+        for r, week in enumerate(weeks):
+            for c, cell_date in enumerate(week):
+                self.cells.append((r, c, cell_date, cell_date.month == self.cal_month))
+
+        rem_h = h - header_h
+        row_h = rem_h / max(1, self.num_rows)
+
+        for idx, (r, c, cell_date, is_curr_month) in enumerate(self.cells):
+            x1 = c * col_w + 3
+            y1 = header_h + r * row_h + 2
+            x2 = (c + 1) * col_w - 3
+            y2 = header_h + (r + 1) * row_h - 2
+
+            is_selected = (self.selected_date is not None and cell_date == self.selected_date)
+            is_today = (cell_date == self.today)
+            is_hover = (idx == self.hover_idx)
+
+            rad = 5
+            pts = [
+                x1 + rad, y1, x2 - rad, y1, x2, y1, x2, y1 + rad,
+                x2, y2 - rad, x2, y2, x2 - rad, y2, x1 + rad, y2,
+                x1, y2, x1, y2 - rad, x1, y1 + rad, x1, y1,
+            ]
+
+            if is_selected:
+                fill_col = "#059669" if is_hover else "#10B981"
+                text_col = "#FFFFFF"
+                font_weight = "bold"
+                self.create_polygon(pts, smooth=True, fill=fill_col, outline="")
+            elif is_today:
+                fill_col = ("#083324" if is_dark else "#D1FAE5") if is_hover else ("#042218" if is_dark else "#ECFDF5")
+                text_col = "#10B981"
+                font_weight = "bold"
+                self.create_polygon(pts, smooth=True, fill=fill_col, outline="#10B981", width=1)
+            elif is_curr_month:
+                fill_col = (theme.BG_CARD_HOVER[1] if is_dark else theme.BG_CARD_HOVER[0]) if is_hover else ""
+                text_col = prim_col
+                font_weight = "normal"
+                if fill_col:
+                    self.create_polygon(pts, smooth=True, fill=fill_col, outline="")
+            else:
+                fill_col = (theme.BG_CARD_HOVER[1] if is_dark else theme.BG_CARD_HOVER[0]) if is_hover else ""
+                text_col = muted_col
+                font_weight = "normal"
+                if fill_col:
+                    self.create_polygon(pts, smooth=True, fill=fill_col, outline="")
+
+            cx = (x1 + x2) / 2
+            cy = (y1 + y2) / 2
+            self.create_text(cx, cy, text=str(cell_date.day), fill=text_col, font=(theme.FONT_FAMILY, 10, font_weight))
 
 
 class ScheduleModal(ctk.CTkToplevel):
@@ -57,7 +207,13 @@ class ScheduleModal(ctk.CTkToplevel):
         self.current_time_str = self.selected_reminder or "12:00 PM"
 
         self.title("Prior - Schedule Task & Reminder")
-        self.geometry("540x680")
+        w, h = 540, 680
+        try:
+            x = master.winfo_x() + (master.winfo_width() - w) // 2
+            y = master.winfo_y() + (master.winfo_height() - h) // 2
+            self.geometry(f"{w}x{h}+{max(0, x)}+{max(0, y)}")
+        except Exception:
+            self.geometry(f"{w}x{h}")
         self.minsize(500, 600)
         self.resizable(True, True)
         self.transient(master)
@@ -66,20 +222,7 @@ class ScheduleModal(ctk.CTkToplevel):
         # Apply Prior application icon
         theme.apply_prior_icon(self)
 
-        # Center modal
-        self._center_modal(master)
         self._build_ui()
-
-    def _center_modal(self, master: Any) -> None:
-        self.update_idletasks()
-        try:
-            w = 540
-            h = 680
-            x = master.winfo_x() + (master.winfo_width() - w) // 2
-            y = master.winfo_y() + (master.winfo_height() - h) // 2
-            self.geometry(f"{w}x{h}+{max(0, x)}+{max(0, y)}")
-        except Exception:
-            pass
 
     def _build_ui(self) -> None:
         self.configure(fg_color=theme.BG_CARD)
@@ -275,10 +418,14 @@ class ScheduleModal(ctk.CTkToplevel):
         )
         btn_next.pack(side="right")
 
-        # Calendar Days Grid Frame
-        self.grid_frame = ctk.CTkFrame(cal_box, fg_color="transparent")
-        self.grid_frame.pack(fill="x", padx=6, pady=(0, 6))
-        self._render_mini_calendar()
+        # Fast, responsive Canvas-based Mini Calendar
+        self.cal_canvas = MiniCalendarCanvas(
+            cal_box,
+            on_date_selected=self._on_date_tile_clicked,
+            height=172,
+        )
+        self.cal_canvas.pack(fill="x", padx=6, pady=(0, 6))
+        self.cal_canvas.set_month(self.cal_year, self.cal_month, self.selected_date)
 
         # ====================================================================
         # Reminder Time Section: 1-12h, 00-59m, AM/PM
@@ -486,64 +633,9 @@ class ScheduleModal(ctk.CTkToplevel):
         btn_complete.pack(fill="x")
 
     def _render_mini_calendar(self) -> None:
-        """Renders compact 7-column calendar grid inside the modal."""
-        for child in self.grid_frame.winfo_children():
-            child.destroy()
-
-        for col in range(7):
-            self.grid_frame.grid_columnconfigure(col, weight=1, uniform="sched_modal_cal_col")
-
-        day_names = ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"]
-        for col, d_name in enumerate(day_names):
-            lbl = ctk.CTkLabel(
-                self.grid_frame,
-                text=d_name,
-                font=(theme.FONT_FAMILY, 10, "bold"),
-                text_color=theme.TEXT_SECONDARY,
-                height=18,
-            )
-            lbl.grid(row=0, column=col, sticky="nsew", padx=1, pady=(0, 2))
-
-        cal = calendar.Calendar(firstweekday=0)
-        weeks = cal.monthdatescalendar(self.cal_year, self.cal_month)
-        today = date.today()
-
-        for row_idx, week in enumerate(weeks):
-            self.grid_frame.grid_rowconfigure(row_idx + 1, weight=1)
-            for col_idx, cell_date in enumerate(week):
-                is_curr_month = (cell_date.month == self.cal_month)
-                is_selected = (self.selected_date and cell_date == self.selected_date)
-                is_today = (cell_date == today)
-
-                if is_selected:
-                    btn_fg = "#10B981"
-                    text_color = "#FFFFFF"
-                elif is_today:
-                    btn_fg = ("#ECFDF5", "#042218")
-                    text_color = "#10B981"
-                elif is_curr_month:
-                    btn_fg = theme.BG_CARD
-                    text_color = theme.TEXT_PRIMARY
-                else:
-                    btn_fg = "transparent"
-                    text_color = theme.TEXT_MUTED
-
-                def _make_handler(d: date):
-                    return lambda: self._on_date_tile_clicked(d)
-
-                btn_cell = ctk.CTkButton(
-                    self.grid_frame,
-                    text=str(cell_date.day),
-                    font=(theme.FONT_FAMILY, 10, "bold" if is_selected or is_today else "normal"),
-                    width=28,
-                    height=24,
-                    corner_radius=5,
-                    fg_color=btn_fg,
-                    hover_color="#059669" if is_selected else theme.BG_CARD_HOVER,
-                    text_color=text_color,
-                    command=_make_handler(cell_date),
-                )
-                btn_cell.grid(row=row_idx + 1, column=col_idx, sticky="nsew", padx=1, pady=1)
+        """Renders compact calendar view inside the modal with zero latency."""
+        if hasattr(self, "cal_canvas"):
+            self.cal_canvas.set_month(self.cal_year, self.cal_month, self.selected_date)
 
     def _on_date_tile_clicked(self, selected: date) -> None:
         self.selected_date = selected
