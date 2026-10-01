@@ -33,8 +33,9 @@ class SplashView(DottedFrame):
 
         # Theme & profile persistence
         profile = database.get_profile()
-        saved_theme = profile.get("theme", "dark")
+        saved_theme = profile.get("theme", "light")
         self.selected_theme: str = saved_theme
+        ctk.set_appearance_mode(self.selected_theme)
         saved_name = profile.get("name", "")
         self.entered_name: str = saved_name if saved_name != "User" else ""
 
@@ -773,7 +774,7 @@ class SplashView(DottedFrame):
 
         self.theme_segment = ctk.CTkSegmentedButton(
             inner,
-            values=["Dark Mode", "Light Mode"],
+            values=["Light Mode", "Dark Mode"],
             font=(theme.FONT_FAMILY, 13),
             height=38,
             corner_radius=12,
@@ -782,8 +783,7 @@ class SplashView(DottedFrame):
             command=self._on_theme_toggle,
         )
         self.theme_segment.pack(fill="x", pady=(0, 20))
-        current_mode = ctk.get_appearance_mode().lower()
-        active_val = "Light Mode" if current_mode == "light" or self.selected_theme == "light" else "Dark Mode"
+        active_val = "Light Mode" if self.selected_theme == "light" else "Dark Mode"
         self.theme_segment.set(active_val)
 
         # Action Buttons: Back + Continue

@@ -43,7 +43,7 @@ def init_db(db_path: Optional[str] = None) -> None:
         CREATE TABLE IF NOT EXISTS profile (
             id INTEGER PRIMARY KEY,
             name TEXT NOT NULL DEFAULT 'User',
-            theme TEXT NOT NULL DEFAULT 'dark',
+            theme TEXT NOT NULL DEFAULT 'light',
             startup_enabled INTEGER NOT NULL DEFAULT 0,
             onboarding_completed INTEGER NOT NULL DEFAULT 0,
             created_at TEXT NOT NULL
@@ -100,7 +100,7 @@ def init_db(db_path: Optional[str] = None) -> None:
         cursor.execute(
             """
             INSERT INTO profile (id, name, theme, startup_enabled, onboarding_completed, created_at)
-            VALUES (1, 'User', 'dark', 0, 0, ?)
+            VALUES (1, 'User', 'light', 0, 0, ?)
             """,
             (datetime.now().isoformat(),),
         )
@@ -124,7 +124,7 @@ def get_profile(db_path: Optional[str] = None) -> Dict[str, Any]:
     return {
         "id": 1,
         "name": "User",
-        "theme": "dark",
+        "theme": "light",
         "startup_enabled": 0,
         "onboarding_completed": 0,
         "zoom_scale": 1.0,

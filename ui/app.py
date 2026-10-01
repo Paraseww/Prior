@@ -58,7 +58,7 @@ class PriorApp(ctk.CTk):
         init_windows_integration(self)
 
         # Set appearance theme
-        app_mode = self.profile.get("theme", "dark")
+        app_mode = self.profile.get("theme", "light")
         ctk.set_appearance_mode(app_mode)
         ctk.set_default_color_theme("blue")
         self.configure(fg_color=theme.BG_MAIN)
@@ -270,7 +270,7 @@ class PriorApp(ctk.CTk):
         self.btn_notifications.pack(side="left", padx=(0, 8))
 
         # Theme Toggle Button
-        is_dark = self.profile.get("theme", "dark") == "dark"
+        is_dark = self.profile.get("theme", "light") == "dark"
         self.btn_theme = ctk.CTkButton(
             actions_frame,
             text="🌙" if is_dark else "☀️",

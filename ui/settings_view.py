@@ -100,10 +100,10 @@ class SettingsView(DottedScrollableFrame):
         lbl_theme = ctk.CTkLabel(sec_theme, text="Color Mode", font=(theme.FONT_FAMILY, 13, "bold"), text_color=theme.TEXT_PRIMARY, anchor="w")
         lbl_theme.pack(fill="x", pady=(0, 4))
 
-        current_theme = self.profile.get("theme", "dark")
+        current_theme = self.profile.get("theme", "light")
         self.seg_theme = ctk.CTkSegmentedButton(
             sec_theme,
-            values=["Dark Mode", "Light Mode"],
+            values=["Light Mode", "Dark Mode"],
             font=(theme.FONT_FAMILY, 12),
             height=34,
             corner_radius=8,
@@ -112,7 +112,7 @@ class SettingsView(DottedScrollableFrame):
             command=self._on_theme_changed,
         )
         self.seg_theme.pack(fill="x", pady=(0, 12))
-        self.seg_theme.set("Dark Mode" if current_theme == "dark" else "Light Mode")
+        self.seg_theme.set("Light Mode" if current_theme == "light" else "Dark Mode")
 
         # Interface Zoom & Display Scaling
         lbl_zoom = ctk.CTkLabel(sec_theme, text="Interface Zoom", font=(theme.FONT_FAMILY, 13, "bold"), text_color=theme.TEXT_PRIMARY, anchor="w")

@@ -528,7 +528,7 @@ class CalendarView(ctk.CTkFrame):
     def _show_scheduling_guide(self) -> None:
         """Displays an interactive guide explaining Eisenhower Q2 default scheduling."""
         modal = ctk.CTkToplevel(self)
-        modal.title("Prior — Eisenhower Scheduling Guide")
+        modal.title("Prior - Eisenhower Scheduling Guide")
         modal.geometry("490x440")
         modal.resizable(False, False)
         modal.transient(self.winfo_toplevel())
