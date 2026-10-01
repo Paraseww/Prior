@@ -143,7 +143,7 @@ class TrayService:
             MenuItem("Exit Prior", lambda: self.stop_and_exit()),
         )
 
-        self.tray_icon = pystray.Icon("Prior", image, "Prior — Time Management", menu)
+        self.tray_icon = pystray.Icon("Prior", image, "Prior", menu)
         self._thread = threading.Thread(target=self.tray_icon.run, daemon=True)
         self._thread.start()
 
