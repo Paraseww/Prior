@@ -28,7 +28,19 @@ class NotificationModal(ctk.CTkToplevel):
         on_schedule: Callable[[Dict[str, Any]], None],
         on_refresh: Optional[Callable[[], None]] = None,
     ) -> None:
-        super().__init__(master)
+        super().__init__(master, fg_color=theme.BG_CARD)
+
+        # Immediately withdraw to prevent any white flash / blink during construction
+        self.withdraw()
+
+        # Set native Tk window background to theme color (kills OS white flash)
+        is_dark = ctk.get_appearance_mode().lower() == "dark"
+        bg_hex = theme.BG_CARD[1] if is_dark else theme.BG_CARD[0]
+        try:
+            self.config(background=bg_hex)
+        except Exception:
+            pass
+
         self.tasks = tasks
         self.on_toggle = on_toggle
         self.on_edit = on_edit
@@ -40,24 +52,39 @@ class NotificationModal(ctk.CTkToplevel):
             self.dismissed_task_ids: Set[int] = set()
 
         self.title("Prior - Task Reminders & Notifications")
-        self.geometry("540x660")
-        self.minsize(480, 500)
-        self.transient(master)
-        self.grab_set()
 
         # Apply Prior application icon
         theme.apply_prior_icon(self)
 
-        # Center modal relative to master window
-        self._center_modal(master)
+        # Position and size modal centered relative to master without premature painting
+        self._position_modal(master)
+
+        # Build full UI content while window is hidden
         self._build_ui()
 
-    def _center_modal(self, master: Any) -> None:
-        self.update_idletasks()
+        # Reveal smoothly once completely painted and dark-themed
+        self.after(20, self._reveal_modal)
+
+    def _position_modal(self, master: Any) -> None:
+        """Positions and sizes the modal relative to parent window without painting prematurely."""
         try:
-            x = master.winfo_x() + (master.winfo_width() - 540) // 2
-            y = master.winfo_y() + (master.winfo_height() - 660) // 2
-            self.geometry(f"+{max(0, x)}+{max(0, y)}")
+            w, h = 540, 660
+            x = master.winfo_x() + (master.winfo_width() - w) // 2
+            y = master.winfo_y() + (master.winfo_height() - h) // 2
+            self.geometry(f"{w}x{h}+{max(0, x)}+{max(0, y)}")
+            self.minsize(480, 500)
+        except Exception:
+            self.geometry("540x660")
+
+    def _reveal_modal(self) -> None:
+        """Reveals the fully constructed modal smoothly and takes focus."""
+        try:
+            if not self.winfo_exists():
+                return
+            self.deiconify()
+            self.transient(self.master)
+            self.grab_set()
+            self.focus_force()
         except Exception:
             pass
 
@@ -105,17 +132,26 @@ class NotificationModal(ctk.CTkToplevel):
         # Status badge
         if total_count > 0:
             badge_text = f"{total_count} Need Attention"
-            badge_fg = ("#FEE2E2", "#2A0A0A") if notifications["overdue_count"] > 0 else ("#FEF3C7", "#261603")
-            badge_text_col = ("#B91C1C", "#F87171") if notifications["overdue_count"] > 0 else ("#B45309", "#FBBF24")
+            if notifications["overdue_count"] > 0:
+                badge_fg = ("#FEE2E2", "#260A0C")
+                badge_border = ("#FECACA", "#5C1518")
+                badge_text_col = ("#B91C1C", "#F87171")
+            else:
+                badge_fg = ("#FEF3C7", "#241704")
+                badge_border = ("#FDE68A", "#52360B")
+                badge_text_col = ("#B45309", "#FBBF24")
         else:
             badge_text = "All Clear"
             badge_fg = ("#ECFDF5", "#042218")
+            badge_border = ("#A7F3D0", "#0D523C")
             badge_text_col = ("#065F46", "#34D399")
 
         badge_frame = ctk.CTkFrame(
             title_row,
             fg_color=badge_fg,
             corner_radius=12,
+            border_width=1,
+            border_color=badge_border,
             height=24,
         )
         badge_frame.pack(side="left")
@@ -169,14 +205,14 @@ class NotificationModal(ctk.CTkToplevel):
                     category_type="overdue",
                 )
 
-            # 🟠 Section 2: Due Today
+            # 💠 Section 2: Due Today (Distinct Cyan / Aqua Theme)
             if notifications["today_count"] > 0:
                 self._render_section(
                     parent=scroll_frame,
                     title="⏰ Due Today",
                     count=notifications["today_count"],
-                    header_bg=("#FEF3C7", "#261603"),
-                    header_text_color=("#92400E", "#FBBF24"),
+                    header_bg=("#ECFEFF", "#042026"),
+                    header_text_color=("#0E7490", "#22D3EE"),
                     tasks=notifications["today"],
                     category_type="today",
                 )
@@ -350,39 +386,36 @@ class NotificationModal(ctk.CTkToplevel):
         )
         lbl_q_badge.pack(padx=6, pady=1)
 
-        # Relative Status Badge
+        # Relative Status Badge (only needed for overdue and upcoming, not redundant today/tomorrow)
         days_diff = task.get("days_diff", 0)
         due_str = task.get("due_date", "")
         if category_type == "overdue":
             status_text = f"⚠️ Overdue by {abs(days_diff)} day{'s' if abs(days_diff) != 1 else ''}"
             status_fg = ("#FEE2E2", "#2A0A0A")
             status_text_col = ("#B91C1C", "#F87171")
-        elif category_type == "today":
-            status_text = "⚡ Due Today"
-            status_fg = ("#FEF3C7", "#261603")
-            status_text_col = ("#B45309", "#FBBF24")
-        elif category_type == "tomorrow":
-            status_text = "⏳ Due Tomorrow"
-            status_fg = ("#FFFBEB", "#1C1917")
-            status_text_col = ("#B45309", "#FDE68A")
-        else:
+        elif category_type == "upcoming":
             status_text = f"📌 {days_diff} days left"
             status_fg = ("#F5F3FF", "#181226")
             status_text_col = ("#6D28D9", "#C4B5FD")
+        else:
+            status_text = ""
+            status_fg = None
+            status_text_col = None
 
-        status_badge_frame = ctk.CTkFrame(
-            row_badges,
-            fg_color=status_fg,
-            corner_radius=6,
-        )
-        status_badge_frame.pack(side="left")
-        lbl_status_badge = ctk.CTkLabel(
-            status_badge_frame,
-            text=status_text,
-            font=(theme.FONT_FAMILY, 10, "bold"),
-            text_color=status_text_col,
-        )
-        lbl_status_badge.pack(padx=6, pady=1)
+        if status_text and status_fg and status_text_col:
+            status_badge_frame = ctk.CTkFrame(
+                row_badges,
+                fg_color=status_fg,
+                corner_radius=6,
+            )
+            status_badge_frame.pack(side="left")
+            lbl_status_badge = ctk.CTkLabel(
+                status_badge_frame,
+                text=status_text,
+                font=(theme.FONT_FAMILY, 10, "bold"),
+                text_color=status_text_col,
+            )
+            lbl_status_badge.pack(padx=6, pady=1)
 
         # Cross mark to remove/dismiss this task from notification panel
         btn_dismiss = ctk.CTkButton(

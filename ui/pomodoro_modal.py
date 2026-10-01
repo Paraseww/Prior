@@ -35,7 +35,7 @@ class PomodoroModal(ctk.CTkToplevel):
         self.on_edit_task = on_edit_task
         self.on_delete_task = on_delete_task
 
-        self.title("Prior — Pomodoro Focus Session")
+        self.title("Prior - Pomodoro Focus Session")
         self.geometry("520x550")
         self.minsize(500, 520)
         self.resizable(True, True)

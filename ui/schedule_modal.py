@@ -56,7 +56,7 @@ class ScheduleModal(ctk.CTkToplevel):
         self.selected_reminder: Optional[str] = str(raw_reminder).strip() if self.reminder_enabled else None
         self.current_time_str = self.selected_reminder or "12:00 PM"
 
-        self.title("Prior — Schedule Task & Reminder")
+        self.title("Prior - Schedule Task & Reminder")
         self.geometry("540x680")
         self.minsize(500, 600)
         self.resizable(True, True)
