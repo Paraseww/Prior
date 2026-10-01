@@ -7,7 +7,7 @@ tasks due tomorrow, and upcoming deadlines within the next 2-3 days.
 
 from datetime import date, datetime
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional, Set
 import customtkinter as ctk
 
 from project import get_task_notifications
@@ -34,8 +34,12 @@ class NotificationModal(ctk.CTkToplevel):
         self.on_edit = on_edit
         self.on_schedule = on_schedule
         self.on_refresh = on_refresh
+        if hasattr(master, "dismissed_notification_ids"):
+            self.dismissed_task_ids: Set[int] = master.dismissed_notification_ids
+        else:
+            self.dismissed_task_ids: Set[int] = set()
 
-        self.title("Prior — Task Reminders & Notifications")
+        self.title("Prior - Task Reminders & Notifications")
         self.geometry("540x660")
         self.minsize(480, 500)
         self.transient(master)
@@ -67,8 +71,11 @@ class NotificationModal(ctk.CTkToplevel):
         container = ctk.CTkFrame(self, fg_color="transparent")
         container.pack(fill="both", expand=True, padx=22, pady=18)
 
+        # Filter out dismissed tasks
+        visible_tasks = [t for t in self.tasks if t.get("id") not in self.dismissed_task_ids]
+
         # Calculate notification buckets
-        notifications = get_task_notifications(self.tasks)
+        notifications = get_task_notifications(visible_tasks)
         total_count = notifications["total_count"]
 
         # ====================================================================
@@ -120,20 +127,22 @@ class NotificationModal(ctk.CTkToplevel):
         )
         lbl_badge.pack(padx=8, pady=2)
 
-        # Close button (✕)
-        btn_close = ctk.CTkButton(
-            header,
-            text="✕",
-            width=28,
-            height=28,
-            corner_radius=14,
-            fg_color=theme.BG_INPUT,
-            hover_color=theme.BG_CARD_HOVER,
-            text_color=theme.TEXT_MUTED,
-            font=(theme.FONT_FAMILY, 12, "bold"),
-            command=self.destroy,
-        )
-        btn_close.pack(side="right")
+        # Action button at header right: "Clear all notifications"
+        if total_count > 0:
+            btn_clear_all = ctk.CTkButton(
+                header,
+                text="Clear all notifications",
+                font=(theme.FONT_FAMILY, 11, "bold"),
+                height=28,
+                corner_radius=8,
+                fg_color=theme.BG_INPUT,
+                hover_color=theme.BG_CARD_HOVER,
+                text_color=theme.TEXT_SECONDARY,
+                border_width=1,
+                border_color=theme.BORDER_COLOR,
+                command=self._clear_all_notifications,
+            )
+            btn_clear_all.pack(side="right")
 
         # ====================================================================
         # 2. Main Scrollable Content Area
@@ -188,10 +197,10 @@ class NotificationModal(ctk.CTkToplevel):
             if notifications["upcoming_count"] > 0:
                 self._render_section(
                     parent=scroll_frame,
-                    title="🗓️ Upcoming Deadlines (2–3 Days Left)",
+                    title="🗓️ Upcoming Deadlines",
                     count=notifications["upcoming_count"],
-                    header_bg=("#EFF6FF", "#0A192F"),
-                    header_text_color=("#1E40AF", "#60A5FA"),
+                    header_bg=("#F5F3FF", "#181226"),
+                    header_text_color=("#6D28D9", "#C4B5FD"),
                     tasks=notifications["upcoming"],
                     category_type="upcoming",
                 )
@@ -353,13 +362,13 @@ class NotificationModal(ctk.CTkToplevel):
             status_fg = ("#FEF3C7", "#261603")
             status_text_col = ("#B45309", "#FBBF24")
         elif category_type == "tomorrow":
-            status_text = "⏳ Due Tomorrow (1 day left)"
+            status_text = "⏳ Due Tomorrow"
             status_fg = ("#FFFBEB", "#1C1917")
             status_text_col = ("#B45309", "#FDE68A")
         else:
             status_text = f"📌 {days_diff} days left"
-            status_fg = ("#EFF6FF", "#0A192F")
-            status_text_col = ("#1E40AF", "#60A5FA")
+            status_fg = ("#F5F3FF", "#181226")
+            status_text_col = ("#6D28D9", "#C4B5FD")
 
         status_badge_frame = ctk.CTkFrame(
             row_badges,
@@ -374,6 +383,21 @@ class NotificationModal(ctk.CTkToplevel):
             text_color=status_text_col,
         )
         lbl_status_badge.pack(padx=6, pady=1)
+
+        # Cross mark to remove/dismiss this task from notification panel
+        btn_dismiss = ctk.CTkButton(
+            row_badges,
+            text="✕",
+            width=22,
+            height=22,
+            corner_radius=11,
+            fg_color="transparent",
+            hover_color=theme.BG_CARD_HOVER,
+            text_color=theme.TEXT_MUTED,
+            font=(theme.FONT_FAMILY, 11, "bold"),
+            command=lambda t_id=task.get("id"): self._on_dismiss_task(t_id),
+        )
+        btn_dismiss.pack(side="right")
 
         # Row 2: Task Title
         title_text = task.get("title", "Untitled Task")
@@ -479,6 +503,41 @@ class NotificationModal(ctk.CTkToplevel):
         self.on_toggle(task_id)
         # Update internal tasks list and re-render modal
         self.tasks = [t for t in self.tasks if t.get("id") != task_id]
+        self._build_ui()
+        if self.on_refresh:
+            self.on_refresh()
+
+    def _on_dismiss_task(self, task_id: Optional[int]) -> None:
+        """Hides/dismisses a single task from the notification panel."""
+        if task_id is not None:
+            self.dismissed_task_ids.add(task_id)
+            if hasattr(self.master, "dismissed_notification_ids"):
+                self.master.dismissed_notification_ids.add(task_id)
+        if hasattr(self.master, "all_tasks"):
+            self.tasks = list(self.master.all_tasks)
+        self._build_ui()
+        if self.on_refresh:
+            self.on_refresh()
+
+    def _clear_all_notifications(self) -> None:
+        """Clears all currently active notifications from the notification panel."""
+        visible_tasks = [t for t in self.tasks if t.get("id") not in self.dismissed_task_ids]
+        notifications = get_task_notifications(visible_tasks)
+        all_notif_tasks = (
+            notifications.get("overdue", [])
+            + notifications.get("today", [])
+            + notifications.get("tomorrow", [])
+            + notifications.get("upcoming", [])
+        )
+        for t in all_notif_tasks:
+            t_id = t.get("id")
+            if t_id is not None:
+                self.dismissed_task_ids.add(t_id)
+                if hasattr(self.master, "dismissed_notification_ids"):
+                    self.master.dismissed_notification_ids.add(t_id)
+
+        if hasattr(self.master, "all_tasks"):
+            self.tasks = list(self.master.all_tasks)
         self._build_ui()
         if self.on_refresh:
             self.on_refresh()

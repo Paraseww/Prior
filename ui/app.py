@@ -1,7 +1,8 @@
+from datetime import date, datetime
 import os
 from pathlib import Path
 import sys
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Set
 import customtkinter as ctk
 from PIL import Image
 
@@ -114,6 +115,9 @@ class PriorApp(ctk.CTk):
         self.search_query = ""
         self.all_tasks: List[Dict[str, Any]] = []
         self.views: Dict[str, Any] = {}
+        self.dismissed_notification_ids: Set[int] = set()
+        self.notified_reminder_keys: Set[str] = set()
+        self.active_notification_modal: Optional[Any] = None
 
         # System Tray instance (active throughout app lifecycle)
         self.tray: Optional[TrayService] = None
@@ -127,6 +131,9 @@ class PriorApp(ctk.CTk):
         self.root_container.pack(fill="both", expand=True)
 
         self._check_onboarding_and_render()
+
+        # Start periodic reminder checker for scheduled tasks
+        self.after(3000, self._check_reminders)
 
         # Check if started with --minimized flag (e.g. Windows startup)
         if "--minimized" in sys.argv:
@@ -491,6 +498,15 @@ class PriorApp(ctk.CTk):
         self.all_tasks = database.get_all_tasks()
         self._update_notification_badge()
 
+        # Refresh active notification modal if currently open
+        if hasattr(self, "active_notification_modal") and self.active_notification_modal:
+            try:
+                if self.active_notification_modal.winfo_exists():
+                    self.active_notification_modal.tasks = list(self.all_tasks)
+                    self.active_notification_modal._build_ui()
+            except Exception:
+                self.active_notification_modal = None
+
         # Update current active view without rebuilding
         filtered_tasks = filter_tasks(self.all_tasks, search_query=self.search_query)
         if self.current_tab in self.views:
@@ -517,7 +533,8 @@ class PriorApp(ctk.CTk):
         """Updates the notification bell button badge and highlight state."""
         if not hasattr(self, "btn_notifications"):
             return
-        notifs = get_task_notifications(self.all_tasks)
+        active_tasks = [t for t in self.all_tasks if t.get("id") not in getattr(self, "dismissed_notification_ids", set())]
+        notifs = get_task_notifications(active_tasks)
         total = notifs["total_count"]
         if total > 0:
             self.btn_notifications.configure(
@@ -536,7 +553,7 @@ class PriorApp(ctk.CTk):
 
     def _open_notifications(self) -> None:
         """Opens the notification & reminders modal dialog."""
-        NotificationModal(
+        self.active_notification_modal = NotificationModal(
             self,
             tasks=self.all_tasks,
             on_toggle=self.toggle_task,
@@ -544,6 +561,58 @@ class PriorApp(ctk.CTk):
             on_schedule=self.open_schedule_modal,
             on_refresh=self._load_and_refresh,
         )
+
+    def _check_reminders(self) -> None:
+        """Periodic background check for tasks reaching their scheduled reminder time."""
+        try:
+            now = datetime.now()
+            today_str = now.strftime("%Y-%m-%d")
+            now_time = now.time()
+
+            for task in self.all_tasks:
+                if bool(task.get("is_completed", 0)):
+                    continue
+                due_date = task.get("due_date")
+                reminder_time = task.get("reminder_time")
+                if not due_date or not reminder_time:
+                    continue
+
+                if str(due_date).strip() == today_str:
+                    rem_str = str(reminder_time).strip()
+                    try:
+                        rem_dt = datetime.strptime(rem_str, "%I:%M %p").time()
+                    except ValueError:
+                        try:
+                            rem_dt = datetime.strptime(rem_str, "%H:%M").time()
+                        except ValueError:
+                            continue
+
+                    task_id = task.get("id")
+                    if task_id is None:
+                        continue
+
+                    # If current time is at or past the reminder time today
+                    if now_time >= rem_dt:
+                        reminder_key = f"{task_id}_{today_str}_{rem_str}"
+                        if reminder_key not in self.notified_reminder_keys:
+                            self.notified_reminder_keys.add(reminder_key)
+                            # Un-dismiss task so it triggers notification in the panel and bell
+                            self.dismissed_notification_ids.discard(task_id)
+                            self._update_notification_badge()
+                            # Trigger desktop balloon notification via system tray if available
+                            if hasattr(self, "tray") and self.tray:
+                                title = task.get("title", "Task Reminder")
+                                self.tray.notify(
+                                    title=f"⏰ Task Reminder: {title}",
+                                    message=f"Scheduled for today at {rem_str}",
+                                )
+        except Exception:
+            pass
+        finally:
+            try:
+                self.after(15000, self._check_reminders)
+            except Exception:
+                pass
 
     def _on_search_key(self, _: Any) -> None:
         self.search_query = self.search_entry.get().strip()
@@ -602,22 +671,28 @@ class PriorApp(ctk.CTk):
         """Opens Add/Edit Task Modal."""
         def handle_save(data: Dict[str, Any]) -> None:
             if task and "id" in task:
+                task_id = task["id"]
                 database.update_task(
-                    task_id=task["id"],
+                    task_id=task_id,
                     title=data["title"],
                     description=data["description"],
                     quadrant=data["quadrant"],
                     due_date=data["due_date"],
                     reminder_time=data.get("reminder_time"),
                 )
+                self.dismissed_notification_ids.discard(task_id)
+                self.notified_reminder_keys = {k for k in self.notified_reminder_keys if not k.startswith(f"{task_id}_")}
             else:
-                database.add_task(
+                new_id = database.add_task(
                     title=data["title"],
                     description=data["description"],
                     quadrant=data["quadrant"],
                     due_date=data["due_date"],
                     reminder_time=data.get("reminder_time"),
                 )
+                if new_id:
+                    self.dismissed_notification_ids.discard(new_id)
+                    self.notified_reminder_keys = {k for k in self.notified_reminder_keys if not k.startswith(f"{new_id}_")}
             self._load_and_refresh()
 
         TaskModal(
@@ -639,6 +714,8 @@ class PriorApp(ctk.CTk):
     def toggle_task(self, task_id: int) -> None:
         """Toggles task completion status."""
         database.toggle_task_completion(task_id)
+        self.dismissed_notification_ids.discard(task_id)
+        self.notified_reminder_keys = {k for k in self.notified_reminder_keys if not k.startswith(f"{task_id}_")}
         self._load_and_refresh()
 
     def move_or_reorder_task(
@@ -686,6 +763,8 @@ class PriorApp(ctk.CTk):
     def delete_task(self, task_id: int) -> None:
         """Deletes a task."""
         database.delete_task(task_id)
+        self.dismissed_notification_ids.discard(task_id)
+        self.notified_reminder_keys = {k for k in self.notified_reminder_keys if not k.startswith(f"{task_id}_")}
         self._load_and_refresh()
 
     def open_pomodoro_modal(self, task: Dict[str, Any]) -> None:
@@ -702,6 +781,8 @@ class PriorApp(ctk.CTk):
         """Opens the dedicated Schedule & Reminder modal for the selected task."""
         def handle_save_schedule(task_id: int, due_date: Optional[str], reminder_time: Optional[str]) -> None:
             database.update_task(task_id=task_id, due_date=due_date, reminder_time=reminder_time)
+            self.dismissed_notification_ids.discard(task_id)
+            self.notified_reminder_keys = {k for k in self.notified_reminder_keys if not k.startswith(f"{task_id}_")}
             self._load_and_refresh()
 
         ScheduleModal(
