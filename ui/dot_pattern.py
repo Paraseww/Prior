@@ -110,9 +110,22 @@ class DottedCardFrame(ctk.CTkFrame):
         self._canvas.tag_lower("bg_dot_image")
         self._canvas.itemconfig("inner_parts", fill="", outline="")
 
+    def _draw(self, no_color_updates: bool = False) -> None:
+        super()._draw(no_color_updates)
+        if hasattr(self, "_canvas") and self._canvas.winfo_exists():
+            self._canvas.itemconfig("inner_parts", fill="", outline="")
+            self._canvas.tag_lower("bg_dot_image")
+
     def redraw_pattern(self) -> None:
         """Forces immediate recalculation and redraw of the dot matrix pattern."""
         self._on_canvas_resize()
+
+    def _set_appearance_mode(self, mode_string: str) -> None:
+        super()._set_appearance_mode(mode_string)
+        if hasattr(self, "_canvas") and self._canvas.winfo_exists():
+            self._canvas.itemconfig("inner_parts", fill="", outline="")
+            self._canvas.tag_lower("bg_dot_image")
+        self.redraw_pattern()
 
 
 DottedFrame = DottedCardFrame
@@ -156,3 +169,7 @@ class DottedScrollableFrame(ctk.CTkScrollableFrame):
     def redraw_pattern(self) -> None:
         """Forces immediate recalculation and redraw of the dot matrix pattern."""
         self._on_parent_canvas_resize()
+
+    def _set_appearance_mode(self, mode_string: str) -> None:
+        super()._set_appearance_mode(mode_string)
+        self.redraw_pattern()

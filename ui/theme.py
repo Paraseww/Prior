@@ -39,7 +39,7 @@ QUADRANTS: Dict[str, Dict[str, Any]] = {
         "color": "#EF4444",          # Red 500 (Signals urgency / act now)
         "color_dark": "#DC2626",     # Red 600
         "bg_header": ("#FEF2F2", "#2A0A0A"),  # Red 50 / Deep Black-Red tint
-        "border": ("#FECACA", "#7F1D1D"),     # Red 200 / Subtle Red Border
+        "border": ("#F87171", "#7F1D1D"),     # Red 400 / Red 900
         "text": ("#991B1B", "#F87171"),       # Red 800 / Red 400
     },
     "Q2_SCHEDULE": {
@@ -49,7 +49,7 @@ QUADRANTS: Dict[str, Dict[str, Any]] = {
         "color": "#10B981",          # Emerald 500 / Green (Growth & long-term value)
         "color_dark": "#059669",     # Emerald 600
         "bg_header": ("#ECFDF5", "#042218"),  # Emerald 50 / Deep Black-Green tint
-        "border": ("#A7F3D0", "#064E3B"),     # Emerald 200 / Subtle Green Border
+        "border": ("#34D399", "#064E3B"),     # Emerald 400 / Emerald 900
         "text": ("#065F46", "#34D399"),       # Emerald 800 / Emerald 400
     },
     "Q3_DELEGATE": {
@@ -59,7 +59,7 @@ QUADRANTS: Dict[str, Dict[str, Any]] = {
         "color": "#F59E0B",          # Amber 500 / Yellow (Caution - needs attention)
         "color_dark": "#D97706",     # Amber 600
         "bg_header": ("#FFFBEB", "#261603"),  # Amber 50 / Deep Black-Amber tint
-        "border": ("#FDE68A", "#78350F"),     # Amber 200 / Subtle Amber Border
+        "border": ("#FBBF24", "#78350F"),     # Amber 400 / Amber 900
         "text": ("#92400E", "#FBBF24"),       # Amber 800 / Amber 400
     },
     "Q4_ELIMINATE": {
@@ -69,7 +69,7 @@ QUADRANTS: Dict[str, Dict[str, Any]] = {
         "color": "#3B82F6",          # Blue 500 (Calm, low energy - safe to drop)
         "color_dark": "#2563EB",     # Blue 600
         "bg_header": ("#EFF6FF", "#0A192F"),  # Blue 50 / Deep Black-Blue tint
-        "border": ("#BFDBFE", "#1E3A8A"),     # Blue 200 / Subtle Blue Border
+        "border": ("#60A5FA", "#1E3A8A"),     # Blue 400 / Blue 900
         "text": ("#1E40AF", "#60A5FA"),       # Blue 800 / Blue 400
     },
 }
@@ -121,11 +121,17 @@ def get_font(size: int = 14, weight: str = "normal") -> tuple:
     return (FONT_FAMILY, size, weight)
 
 
+_CACHED_ICON_PHOTO = None
+_CACHED_HICON_BIG = None
+_CACHED_HICON_SMALL = None
+
+
 def apply_prior_icon(window: Any) -> None:
     """
     Applies the custom Prior application logo to any Tk/CTk/CTkToplevel window
     and prevents CustomTkinter from overriding it with its default blue 'C' icon.
     """
+    global _CACHED_ICON_PHOTO, _CACHED_HICON_BIG, _CACHED_HICON_SMALL
     assets_dir = Path(__file__).resolve().parent.parent / "assets"
     png_path = assets_dir / "icon.png"
     ico_path = assets_dir / "icon.ico"
@@ -134,11 +140,13 @@ def apply_prior_icon(window: Any) -> None:
 
     try:
         from PIL import Image, ImageTk
-        if png_path.exists():
+        if _CACHED_ICON_PHOTO is None and png_path.exists():
             base_img = Image.open(png_path).convert("RGBA")
-            photo = ImageTk.PhotoImage(base_img.resize((128, 128), Image.Resampling.LANCZOS))
-            window.iconphoto(True, photo)
-            window._icon_photo = photo
+            _CACHED_ICON_PHOTO = ImageTk.PhotoImage(base_img.resize((128, 128), Image.Resampling.LANCZOS))
+
+        if _CACHED_ICON_PHOTO is not None:
+            window.iconphoto(True, _CACHED_ICON_PHOTO)
+            window._icon_photo = _CACHED_ICON_PHOTO
 
         if sys.platform == "win32" and ico_path.exists():
             try:
@@ -147,30 +155,46 @@ def apply_prior_icon(window: Any) -> None:
                 pass
 
             try:
-                window.update_idletasks()
                 wid = window.winfo_id()
-                parent = ctypes.windll.user32.GetParent(wid) or wid
-                hicon_big = ctypes.windll.user32.LoadImageW(None, str(ico_path), 1, 48, 48, 0x00000010)
-                hicon_small = ctypes.windll.user32.LoadImageW(None, str(ico_path), 1, 16, 16, 0x00000010)
-                for h in (wid, parent):
-                    if hicon_big:
-                        ctypes.windll.user32.SendMessageW(h, 0x0080, 1, hicon_big)
-                    if hicon_small:
-                        ctypes.windll.user32.SendMessageW(h, 0x0080, 0, hicon_small)
+                if wid:
+                    parent = ctypes.windll.user32.GetParent(wid) or wid
+                    if _CACHED_HICON_BIG is None:
+                        _CACHED_HICON_BIG = ctypes.windll.user32.LoadImageW(None, str(ico_path), 1, 48, 48, 0x00000010)
+                        _CACHED_HICON_SMALL = ctypes.windll.user32.LoadImageW(None, str(ico_path), 1, 16, 16, 0x00000010)
+                    for h in (wid, parent):
+                        if _CACHED_HICON_BIG:
+                            ctypes.windll.user32.SendMessageW(h, 0x0080, 1, _CACHED_HICON_BIG)
+                        if _CACHED_HICON_SMALL:
+                            ctypes.windll.user32.SendMessageW(h, 0x0080, 0, _CACHED_HICON_SMALL)
             except Exception:
                 pass
     except Exception:
         pass
 
 
-# Global hook for CustomTkinter Windows titlebar icon
+# Global hook for CustomTkinter Windows titlebar icon and smooth color switching
 try:
     import customtkinter as _ctk
+
     def _custom_windows_set_titlebar_icon(self: Any) -> None:
         apply_prior_icon(self)
 
+    def _smooth_windows_set_titlebar_color(self: Any, color_mode: str) -> None:
+        """Sets Windows titlebar dark/light mode in-place without blinking, withdraw(), or unmapping."""
+        try:
+            val = ctypes.c_int(1 if color_mode.lower() == "dark" else 0)
+            wid = self.winfo_id()
+            if wid:
+                hwnd = ctypes.windll.user32.GetParent(wid) or wid
+                if ctypes.windll.dwmapi.DwmSetWindowAttribute(hwnd, 20, ctypes.byref(val), ctypes.sizeof(val)) != 0:
+                    ctypes.windll.dwmapi.DwmSetWindowAttribute(hwnd, 19, ctypes.byref(val), ctypes.sizeof(val))
+        except Exception:
+            pass
+
     _ctk.CTk._windows_set_titlebar_icon = _custom_windows_set_titlebar_icon
     _ctk.CTkToplevel._windows_set_titlebar_icon = _custom_windows_set_titlebar_icon
+    _ctk.CTk._windows_set_titlebar_color = _smooth_windows_set_titlebar_color
+    _ctk.CTkToplevel._windows_set_titlebar_color = _smooth_windows_set_titlebar_color
 except Exception:
     pass
 

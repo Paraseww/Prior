@@ -626,18 +626,14 @@ class PriorApp(ctk.CTk):
         new_mode = "light" if current_mode == "dark" else "dark"
         ctk.set_appearance_mode(new_mode)
         self.configure(fg_color=theme.BG_MAIN)
-        database.update_profile(theme=new_mode)
         self.profile["theme"] = new_mode
         self.btn_theme.configure(text="🌙" if new_mode == "dark" else "☀️")
         if hasattr(self, "content_frame") and hasattr(self.content_frame, "redraw_pattern"):
             self.content_frame.redraw_pattern()
 
-        # Destroy and clear cached views so they are rebuilt with the new theme colors
-        for child in self.content_frame.winfo_children():
-            child.destroy()
-        self.views.clear()
-
-        self._load_and_refresh()
+        # Persist theme preference asynchronously in background to eliminate UI blocking
+        import threading
+        threading.Thread(target=database.update_profile, kwargs={"theme": new_mode}, daemon=True).start()
 
     def _on_profile_updated(self) -> None:
         self.profile = database.get_profile()
@@ -647,15 +643,15 @@ class PriorApp(ctk.CTk):
                     self.btn_profile.configure(text=f"  👤 {self.profile.get('name', 'User')}  ")
             except Exception:
                 pass
+        if hasattr(self, "btn_theme") and hasattr(self.btn_theme, "winfo_exists"):
+            try:
+                current_mode = ctk.get_appearance_mode().lower()
+                self.btn_theme.configure(text="🌙" if current_mode == "dark" else "☀️")
+            except Exception:
+                pass
         if not bool(self.profile.get("onboarding_completed", 0)):
             self._check_onboarding_and_render()
         else:
-            if "settings" in self.views:
-                try:
-                    self.views["settings"].destroy()
-                except Exception:
-                    pass
-                del self.views["settings"]
             self._load_and_refresh()
 
     # ========================================================================
