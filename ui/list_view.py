@@ -9,6 +9,7 @@ import customtkinter as ctk
 from project import filter_tasks
 from ui import theme
 from ui.dot_pattern import DottedScrollableFrame
+from ui.scrollable_dropdown import ScrollableOptionMenu
 from ui.task_card import TaskCard
 
 
@@ -58,17 +59,17 @@ class ListView(ctk.CTkFrame):
         lbl_q = ctk.CTkLabel(inner_controls, text="Quadrant:", font=(theme.FONT_FAMILY, 12, "bold"), text_color=theme.TEXT_PRIMARY)
         lbl_q.pack(side="left", padx=(0, 6))
 
-        self.opt_quadrant = ctk.CTkOptionMenu(
+        self.opt_quadrant = ScrollableOptionMenu(
             inner_controls,
             values=["All Quadrants", "Q1: Do First", "Q2: Schedule", "Q3: Delegate", "Q4: Eliminate"],
-            command=self._on_filter_changed,
-            font=(theme.FONT_FAMILY, 12),
-            height=32,
+            width=145,
+            height=30,
             corner_radius=6,
-            fg_color=theme.BG_INPUT,
-            text_color=theme.TEXT_PRIMARY,
-            button_color=theme.BG_INPUT,
+            fg_color=theme.BG_CARD,
             button_hover_color=theme.BG_CARD_HOVER,
+            dropdown_width=160,
+            dropdown_height=175,
+            command=self._on_filter_changed,
         )
         self.opt_quadrant.pack(side="left", padx=(0, 15))
 
@@ -76,30 +77,32 @@ class ListView(ctk.CTkFrame):
         lbl_s = ctk.CTkLabel(inner_controls, text="Status:", font=(theme.FONT_FAMILY, 12, "bold"), text_color=theme.TEXT_PRIMARY)
         lbl_s.pack(side="left", padx=(0, 6))
 
-        self.opt_status = ctk.CTkOptionMenu(
+        self.opt_status = ScrollableOptionMenu(
             inner_controls,
             values=["All Tasks", "Active Only", "Completed Only"],
-            command=self._on_filter_changed,
-            font=(theme.FONT_FAMILY, 12),
-            height=32,
+            width=135,
+            height=30,
             corner_radius=6,
-            fg_color=theme.BG_INPUT,
-            text_color=theme.TEXT_PRIMARY,
-            button_color=theme.BG_INPUT,
+            fg_color=theme.BG_CARD,
             button_hover_color=theme.BG_CARD_HOVER,
+            dropdown_width=145,
+            dropdown_height=125,
+            command=self._on_filter_changed,
         )
         self.opt_status.pack(side="left", padx=(0, 15))
 
-        # Clear Completed Button
+        # Hide Completed Button
         btn_clear = ctk.CTkButton(
             inner_controls,
-            text="🧹 Clear Completed",
-            font=(theme.FONT_FAMILY, 12),
-            height=32,
+            text="Hide Completed",
+            font=(theme.FONT_FAMILY, 11, "bold"),
+            height=30,
             corner_radius=6,
-            fg_color=theme.BG_INPUT,
+            fg_color=theme.BG_CARD,
             hover_color=("#FEE2E2", "#2A0A0A"),
             text_color=("#EF4444", "#F87171"),
+            border_width=1,
+            border_color=theme.BORDER_COLOR,
             command=self.on_clear_completed,
         )
         btn_clear.pack(side="right")

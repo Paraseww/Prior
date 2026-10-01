@@ -29,6 +29,9 @@ class ScrollableOptionMenu(ctk.CTkFrame):
         dropdown_height: int = 180,
         dropdown_width: Optional[int] = None,
         command: Optional[Callable[[str], None]] = None,
+        font: Optional[tuple] = None,
+        border_width: int = 1,
+        border_color: Any = None,
         **kwargs,
     ) -> None:
         super().__init__(
@@ -46,25 +49,28 @@ class ScrollableOptionMenu(ctk.CTkFrame):
         self._dropdown_width = dropdown_width or width
         self._popup: Optional[ctk.CTkToplevel] = None
         self._dismiss_bind_id: Optional[str] = None
+        self._font = font or (theme.FONT_FAMILY, 11, "bold")
 
         # Colors
-        self._btn_fg = fg_color or theme.BG_CARD
+        self._btn_fg = fg_color or button_color or theme.BG_CARD
         self._btn_hover = button_hover_color or theme.BG_CARD_HOVER
         self._text_color = text_color or theme.TEXT_PRIMARY
+        self._border_width = border_width
+        self._border_color = border_color or theme.BORDER_COLOR
 
         # Main Button
         self.btn = ctk.CTkButton(
             self,
             text=f"{self._current_value}  ▾",
-            font=(theme.FONT_FAMILY, 11, "bold"),
+            font=self._font,
             width=width,
             height=height,
             corner_radius=corner_radius,
             fg_color=self._btn_fg,
             hover_color=self._btn_hover,
             text_color=self._text_color,
-            border_width=1,
-            border_color=theme.BORDER_COLOR,
+            border_width=self._border_width,
+            border_color=self._border_color,
             command=self._toggle_popup,
         )
         self.btn.pack(fill="both", expand=True)
@@ -112,11 +118,16 @@ class ScrollableOptionMenu(ctk.CTkFrame):
 
         # Screen boundaries check
         screen_h = self.winfo_screenheight()
+        screen_w = self.winfo_screenwidth()
         if btn_y + btn_h + pop_h > screen_h - 40:
             pop_y = max(10, btn_y - pop_h - 2)
         else:
             pop_y = btn_y + btn_h + 2
-        pop_x = btn_x
+
+        if btn_x + pop_w > screen_w - 20:
+            pop_x = max(10, screen_w - pop_w - 20)
+        else:
+            pop_x = btn_x
 
         self._popup.geometry(f"{pop_w}x{pop_h}+{pop_x}+{pop_y}")
 
