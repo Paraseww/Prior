@@ -111,8 +111,77 @@ class SettingsView(DottedScrollableFrame):
             selected_hover_color=theme.ACCENT_HOVER,
             command=self._on_theme_changed,
         )
-        self.seg_theme.pack(fill="x", pady=(0, 10))
+        self.seg_theme.pack(fill="x", pady=(0, 12))
         self.seg_theme.set("Dark Mode" if current_theme == "dark" else "Light Mode")
+
+        # Interface Zoom & Display Scaling
+        lbl_zoom = ctk.CTkLabel(sec_theme, text="Interface Zoom", font=(theme.FONT_FAMILY, 13, "bold"), text_color=theme.TEXT_PRIMARY, anchor="w")
+        lbl_zoom.pack(fill="x", pady=(4, 4))
+
+        zoom_row = ctk.CTkFrame(sec_theme, fg_color="transparent")
+        zoom_row.pack(fill="x", pady=(0, 4))
+
+        btn_zoom_out = ctk.CTkButton(
+            zoom_row,
+            text="➖ Zoom Out",
+            font=(theme.FONT_FAMILY, 12),
+            width=100,
+            height=32,
+            corner_radius=8,
+            fg_color=theme.BG_INPUT,
+            hover_color=theme.BG_CARD_HOVER,
+            text_color=theme.TEXT_PRIMARY,
+            command=self._on_zoom_out,
+        )
+        btn_zoom_out.pack(side="left", padx=(0, 10))
+
+        curr_scale = ctk.ScalingTracker.get_widget_scaling(self)
+        curr_pct = int(round(curr_scale * 100)) if curr_scale else 100
+        self.lbl_zoom_val = ctk.CTkLabel(
+            zoom_row,
+            text=f"{curr_pct}%",
+            font=(theme.FONT_FAMILY, 13, "bold"),
+            text_color=theme.TEXT_PRIMARY,
+            width=60,
+        )
+        self.lbl_zoom_val.pack(side="left", padx=(0, 10))
+
+        btn_zoom_in = ctk.CTkButton(
+            zoom_row,
+            text="➕ Zoom In",
+            font=(theme.FONT_FAMILY, 12),
+            width=100,
+            height=32,
+            corner_radius=8,
+            fg_color=theme.BG_INPUT,
+            hover_color=theme.BG_CARD_HOVER,
+            text_color=theme.TEXT_PRIMARY,
+            command=self._on_zoom_in,
+        )
+        btn_zoom_in.pack(side="left", padx=(0, 10))
+
+        btn_zoom_reset = ctk.CTkButton(
+            zoom_row,
+            text="Reset (100%)",
+            font=(theme.FONT_FAMILY, 12),
+            width=100,
+            height=32,
+            corner_radius=8,
+            fg_color=theme.BG_INPUT,
+            hover_color=theme.BG_CARD_HOVER,
+            text_color=theme.TEXT_PRIMARY,
+            command=self._on_zoom_reset,
+        )
+        btn_zoom_reset.pack(side="left")
+
+        lbl_zoom_hint = ctk.CTkLabel(
+            sec_theme,
+            text="Shortcuts: Press Ctrl + to zoom in, Ctrl - to zoom out, Ctrl 0 to reset, or Ctrl + Mouse Wheel.",
+            font=(theme.FONT_FAMILY, 11),
+            text_color=theme.TEXT_MUTED,
+            anchor="w",
+        )
+        lbl_zoom_hint.pack(fill="x", pady=(2, 6))
 
         # ====================================================================
         # 3. System Integration Section
@@ -226,3 +295,23 @@ class SettingsView(DottedScrollableFrame):
         database.update_profile(onboarding_completed=0)
         self.profile["onboarding_completed"] = 0
         self.on_profile_updated()
+
+    def update_zoom_display(self, percent: int) -> None:
+        """Updates the zoom percentage label in the Appearance section."""
+        if hasattr(self, "lbl_zoom_val") and self.lbl_zoom_val.winfo_exists():
+            self.lbl_zoom_val.configure(text=f"{percent}%")
+
+    def _on_zoom_in(self) -> None:
+        top = self.winfo_toplevel()
+        if hasattr(top, "zoom_in"):
+            top.zoom_in()
+
+    def _on_zoom_out(self) -> None:
+        top = self.winfo_toplevel()
+        if hasattr(top, "zoom_out"):
+            top.zoom_out()
+
+    def _on_zoom_reset(self) -> None:
+        top = self.winfo_toplevel()
+        if hasattr(top, "zoom_reset"):
+            top.zoom_reset()

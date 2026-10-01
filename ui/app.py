@@ -130,6 +130,14 @@ class PriorApp(ctk.CTk):
         self.root_container = ctk.CTkFrame(self, fg_color="transparent")
         self.root_container.pack(fill="both", expand=True)
 
+        # Restore saved zoom scaling if configured
+        saved_zoom = float(self.profile.get("zoom_scale", 1.0) or 1.0)
+        if abs(saved_zoom - 1.0) > 0.01:
+            ctk.set_widget_scaling(saved_zoom)
+
+        # Initialize global keyboard shortcuts & zoom adjustment
+        self._init_zoom_shortcuts()
+
         self._check_onboarding_and_render()
 
         # Start periodic reminder checker for scheduled tasks
@@ -794,6 +802,150 @@ class PriorApp(ctk.CTk):
         """Clears all completed tasks."""
         database.clear_completed_tasks()
         self._load_and_refresh()
+
+    # ========================================================================
+    # Interface Zoom & Display Scaling (Ctrl +, Ctrl -, Ctrl 0, Ctrl + MouseWheel)
+    # ========================================================================
+
+    def _init_zoom_shortcuts(self) -> None:
+        """Binds Ctrl+, Ctrl-, Ctrl 0, and Ctrl+MouseWheel for app zoom adjustment."""
+        # Zoom In shortcuts (Ctrl +, Ctrl =, Ctrl Numpad +)
+        for seq in (
+            "<Control-plus>",
+            "<Control-equal>",
+            "<Control-Shift-plus>",
+            "<Control-Shift-equal>",
+            "<Control-KP_Add>",
+        ):
+            self.bind_all(seq, self.zoom_in)
+
+        # Zoom Out shortcuts (Ctrl -, Ctrl _, Ctrl Numpad -)
+        for seq in (
+            "<Control-minus>",
+            "<Control-underscore>",
+            "<Control-Shift-minus>",
+            "<Control-Shift-underscore>",
+            "<Control-KP_Subtract>",
+        ):
+            self.bind_all(seq, self.zoom_out)
+
+        # Zoom Reset shortcuts (Ctrl 0, Ctrl Numpad 0)
+        for seq in ("<Control-Key-0>", "<Control-0>", "<Control-KP_0>"):
+            self.bind_all(seq, self.zoom_reset)
+
+        # Ctrl + Mouse Wheel zoom
+        self.bind_all("<Control-MouseWheel>", self._on_ctrl_mousewheel)
+
+    def zoom_in(self, event: Any = None) -> str:
+        """Increases UI widget scaling by 10% (up to 150%)."""
+        curr = ctk.ScalingTracker.get_widget_scaling(self)
+        new_scale = round(curr + 0.1, 2)
+        if new_scale <= 1.501:
+            self.set_zoom(new_scale)
+        else:
+            self.show_zoom_toast(int(round(curr * 100)))
+        return "break"
+
+    def zoom_out(self, event: Any = None) -> str:
+        """Decreases UI widget scaling by 10% (down to 70%)."""
+        curr = ctk.ScalingTracker.get_widget_scaling(self)
+        new_scale = round(curr - 0.1, 2)
+        if new_scale >= 0.699:
+            self.set_zoom(new_scale)
+        else:
+            self.show_zoom_toast(int(round(curr * 100)))
+        return "break"
+
+    def zoom_reset(self, event: Any = None) -> str:
+        """Resets UI widget scaling back to default 100%."""
+        self.set_zoom(1.0)
+        return "break"
+
+    def set_zoom(self, new_scale: float) -> None:
+        """Applies a new widget scaling factor and updates feedback indicators."""
+        new_scale = round(max(0.7, min(1.5, new_scale)), 2)
+        ctk.set_widget_scaling(new_scale)
+        pct = int(round(new_scale * 100))
+        self.show_zoom_toast(pct)
+
+        # Persist zoom preference asynchronously
+        import threading
+
+        def _save_zoom():
+            try:
+                database.update_profile(zoom_scale=new_scale)
+            except Exception:
+                pass
+
+        threading.Thread(target=_save_zoom, daemon=True).start()
+
+        # If settings view is open, update its zoom label
+        settings_view = self.views.get("settings")
+        if settings_view and hasattr(settings_view, "update_zoom_display"):
+            settings_view.update_zoom_display(pct)
+
+    def _on_ctrl_mousewheel(self, event: Any) -> str:
+        """Handles Ctrl + Mouse Wheel for smooth zooming with rate limiting."""
+        import time
+        now = time.time()
+        if hasattr(self, "_last_wheel_zoom_time") and now - self._last_wheel_zoom_time < 0.08:
+            return "break"
+        self._last_wheel_zoom_time = now
+
+        if event.delta > 0:
+            self.zoom_in()
+        elif event.delta < 0:
+            self.zoom_out()
+        return "break"
+
+    def show_zoom_toast(self, percent: int) -> None:
+        """Displays a sleek temporary HUD badge showing the current zoom percentage."""
+        if hasattr(self, "_zoom_hud_timer") and self._zoom_hud_timer:
+            try:
+                self.after_cancel(self._zoom_hud_timer)
+            except Exception:
+                pass
+
+        if not hasattr(self, "_zoom_hud") or self._zoom_hud is None:
+            self._zoom_hud = ctk.CTkFrame(
+                self,
+                fg_color=theme.BG_CARD,
+                border_width=1,
+                border_color=theme.BORDER_COLOR,
+                corner_radius=10,
+            )
+            self._zoom_hud_lbl = ctk.CTkLabel(
+                self._zoom_hud,
+                text="",
+                font=(theme.FONT_DISPLAY, 12, "bold"),
+                text_color=theme.TEXT_PRIMARY,
+                padx=14,
+                pady=6,
+            )
+            self._zoom_hud_lbl.pack()
+
+        # Update styling & value
+        self._zoom_hud.configure(
+            fg_color=theme.BG_CARD,
+            border_color=theme.BORDER_COLOR,
+        )
+        self._zoom_hud_lbl.configure(
+            text=f"🔍  Zoom: {percent}%",
+            text_color=theme.TEXT_PRIMARY,
+        )
+
+        # Show in bottom-right corner above status/footer
+        self._zoom_hud.place(relx=0.96, rely=0.94, anchor="se")
+        self._zoom_hud.lift()
+
+        def _hide_hud():
+            if hasattr(self, "_zoom_hud") and self._zoom_hud:
+                try:
+                    self._zoom_hud.place_forget()
+                except Exception:
+                    pass
+
+        self._zoom_hud_timer = self.after(1200, _hide_hud)
 
     # ========================================================================
     # Window & System Tray Management

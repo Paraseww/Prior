@@ -98,7 +98,8 @@ class DottedCardFrame(ctk.CTkFrame):
 
         is_dark = (ctk.get_appearance_mode() == "Dark")
         cr = int(self._apply_widget_scaling(self._corner_radius)) if hasattr(self, "_corner_radius") else 0
-        self._bg_photo = DotGridHelper.get_pattern_image(w, h, cr, is_dark, self.spacing)
+        scaled_spacing = max(12, int(round(self._apply_widget_scaling(self.spacing))))
+        self._bg_photo = DotGridHelper.get_pattern_image(w, h, cr, is_dark, scaled_spacing)
 
         self._canvas.delete("bg_dot_image")
         self._canvas.create_image(
@@ -115,6 +116,13 @@ class DottedCardFrame(ctk.CTkFrame):
         if hasattr(self, "_canvas") and self._canvas.winfo_exists():
             self._canvas.itemconfig("inner_parts", fill="", outline="")
             self._canvas.tag_lower("bg_dot_image")
+
+    def _set_scaling(self, new_widget_scaling: float, new_window_scaling: float) -> None:
+        super()._set_scaling(new_widget_scaling, new_window_scaling)
+        if hasattr(self, "_canvas") and self._canvas.winfo_exists():
+            self._canvas.itemconfig("inner_parts", fill="", outline="")
+            self._canvas.tag_lower("bg_dot_image")
+        self.after_idle(self.redraw_pattern)
 
     def redraw_pattern(self) -> None:
         """Forces immediate recalculation and redraw of the dot matrix pattern."""
@@ -155,7 +163,8 @@ class DottedScrollableFrame(ctk.CTkScrollableFrame):
 
         is_dark = (ctk.get_appearance_mode() == "Dark")
         cr = int(self._apply_widget_scaling(self._corner_radius)) if hasattr(self, "_corner_radius") else 0
-        self._bg_photo = DotGridHelper.get_pattern_image(w, h, cr, is_dark, self.spacing)
+        scaled_spacing = max(12, int(round(self._apply_widget_scaling(self.spacing))))
+        self._bg_photo = DotGridHelper.get_pattern_image(w, h, cr, is_dark, scaled_spacing)
 
         self._parent_canvas.delete("bg_dot_image")
         self._parent_canvas.create_image(
@@ -165,6 +174,10 @@ class DottedScrollableFrame(ctk.CTkScrollableFrame):
             tags="bg_dot_image",
         )
         self._parent_canvas.tag_lower("bg_dot_image")
+
+    def _set_scaling(self, new_widget_scaling: float, new_window_scaling: float) -> None:
+        super()._set_scaling(new_widget_scaling, new_window_scaling)
+        self.after_idle(self.redraw_pattern)
 
     def redraw_pattern(self) -> None:
         """Forces immediate recalculation and redraw of the dot matrix pattern."""

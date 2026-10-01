@@ -88,6 +88,11 @@ def init_db(db_path: Optional[str] = None) -> None:
     except sqlite3.OperationalError:
         pass
 
+    try:
+        cursor.execute("ALTER TABLE profile ADD COLUMN zoom_scale REAL NOT NULL DEFAULT 1.0")
+    except sqlite3.OperationalError:
+        pass
+
     # Ensure a single default profile record exists
     cursor.execute("SELECT COUNT(*) as count FROM profile WHERE id = 1")
     row = cursor.fetchone()
@@ -113,13 +118,16 @@ def get_profile(db_path: Optional[str] = None) -> Dict[str, Any]:
     conn.close()
 
     if row:
-        return dict(row)
+        d = dict(row)
+        d.setdefault("zoom_scale", 1.0)
+        return d
     return {
         "id": 1,
         "name": "User",
         "theme": "dark",
         "startup_enabled": 0,
         "onboarding_completed": 0,
+        "zoom_scale": 1.0,
         "created_at": datetime.now().isoformat(),
     }
 
@@ -129,6 +137,7 @@ def update_profile(
     theme: Optional[str] = None,
     startup_enabled: Optional[int] = None,
     onboarding_completed: Optional[int] = None,
+    zoom_scale: Optional[float] = None,
     db_path: Optional[str] = None,
 ) -> bool:
     """Updates user profile settings."""
@@ -147,6 +156,9 @@ def update_profile(
     if onboarding_completed is not None:
         fields.append("onboarding_completed = ?")
         values.append(1 if onboarding_completed else 0)
+    if zoom_scale is not None:
+        fields.append("zoom_scale = ?")
+        values.append(float(zoom_scale))
 
     if not fields:
         return False
