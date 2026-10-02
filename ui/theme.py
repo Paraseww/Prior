@@ -133,13 +133,20 @@ try:
 
     def _smooth_windows_set_titlebar_color(self: Any, color_mode: str) -> None:
         """Sets Windows titlebar dark/light mode in-place without blinking, withdraw(), or unmapping."""
+        def _apply() -> None:
+            try:
+                val = ctypes.c_int(1 if color_mode.lower() == "dark" else 0)
+                wid = self.winfo_id()
+                if wid:
+                    hwnd = ctypes.windll.user32.GetParent(wid) or wid
+                    if ctypes.windll.dwmapi.DwmSetWindowAttribute(hwnd, 20, ctypes.byref(val), ctypes.sizeof(val)) != 0:
+                        ctypes.windll.dwmapi.DwmSetWindowAttribute(hwnd, 19, ctypes.byref(val), ctypes.sizeof(val))
+            except Exception:
+                pass
+
+        _apply()
         try:
-            val = ctypes.c_int(1 if color_mode.lower() == "dark" else 0)
-            wid = self.winfo_id()
-            if wid:
-                hwnd = ctypes.windll.user32.GetParent(wid) or wid
-                if ctypes.windll.dwmapi.DwmSetWindowAttribute(hwnd, 20, ctypes.byref(val), ctypes.sizeof(val)) != 0:
-                    ctypes.windll.dwmapi.DwmSetWindowAttribute(hwnd, 19, ctypes.byref(val), ctypes.sizeof(val))
+            self.after(50, _apply)
         except Exception:
             pass
 

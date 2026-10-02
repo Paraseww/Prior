@@ -43,10 +43,13 @@ class PriorApp(ctk.CTk):
     """
 
     def __init__(self) -> None:
-        super().__init__()
-
-        # Fetch local user profile
+        # Fetch local user profile and configure appearance before constructing CTk root
         self.profile: Dict[str, Any] = database.get_profile()
+        app_mode = self.profile.get("theme", "light")
+        ctk.set_appearance_mode(app_mode)
+        ctk.set_default_color_theme("blue")
+
+        super().__init__()
 
         # Configure Window Properties (screen-adaptive to prevent cutoffs on smaller/scaled displays)
         self.title("Prior - Eisenhower Matrix Task Manager")
@@ -67,10 +70,6 @@ class PriorApp(ctk.CTk):
         self._set_app_icon()
         init_windows_integration(self)
 
-        # Set appearance theme
-        app_mode = self.profile.get("theme", "light")
-        ctk.set_appearance_mode(app_mode)
-        ctk.set_default_color_theme("blue")
         self.configure(fg_color=theme.BG_MAIN)
 
         # State Variables
@@ -975,6 +974,12 @@ def launch_app() -> None:
                 ctypes.windll.user32.ShowWindow(hwnd, 0)
         except Exception:
             pass
+
+    # Ensure profile theme and default color theme are configured before window instantiation
+    profile = database.get_profile()
+    initial_mode = profile.get("theme", "light")
+    ctk.set_appearance_mode(initial_mode)
+    ctk.set_default_color_theme("blue")
 
     app = PriorApp()
     app.mainloop()

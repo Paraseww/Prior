@@ -104,6 +104,12 @@ def init_db(db_path: Optional[str] = None) -> None:
             """,
             (datetime.now().isoformat(),),
         )
+    else:
+        # If user is still in uncompleted onboarding, ensure the initial default theme is light
+        cursor.execute("SELECT onboarding_completed, theme FROM profile WHERE id = 1")
+        p_row = cursor.fetchone()
+        if p_row and p_row["onboarding_completed"] == 0 and p_row["theme"] == "dark":
+            cursor.execute("UPDATE profile SET theme = 'light' WHERE id = 1")
 
     conn.commit()
     conn.close()
