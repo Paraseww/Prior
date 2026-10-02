@@ -56,8 +56,6 @@ class TaskModal(ctk.CTkToplevel):
         self.current_time_str = self.selected_reminder or "12:00 PM"
 
         self.title("Edit Task" if self.is_edit else "Create New Task")
-        self.geometry("560x700")
-        self.minsize(520, 600)
         self.resizable(True, True)
         self.transient(master)
         self.grab_set()
@@ -65,7 +63,7 @@ class TaskModal(ctk.CTkToplevel):
         # Apply Prior application icon
         theme.apply_prior_icon(self)
 
-        # Center modal relative to master window
+        # Center modal relative to master window with screen-adaptive dimensions
         self._center_modal(master)
 
         self._build_ui()
@@ -73,13 +71,23 @@ class TaskModal(ctk.CTkToplevel):
     def _center_modal(self, master: Any) -> None:
         self.update_idletasks()
         try:
-            w = 560
-            h = 700
+            screen_w = self.winfo_screenwidth()
+            screen_h = self.winfo_screenheight()
+
+            w = min(560, max(460, screen_w - 40))
+            h = min(700, max(460, screen_h - 90))
+
             x = master.winfo_x() + (master.winfo_width() - w) // 2
             y = master.winfo_y() + (master.winfo_height() - h) // 2
-            self.geometry(f"{w}x{h}+{max(0, x)}+{max(0, y)}")
+
+            pos_x = max(10, min(x, screen_w - w - 20))
+            pos_y = max(10, min(y, screen_h - h - 50))
+
+            self.geometry(f"{w}x{h}+{pos_x}+{pos_y}")
+            self.minsize(min(480, w), min(440, h))
         except Exception:
-            pass
+            self.geometry("560x700")
+            self.minsize(520, 600)
 
     def _build_ui(self) -> None:
         self.configure(fg_color=theme.BG_CARD)

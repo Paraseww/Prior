@@ -542,13 +542,18 @@ class CalendarView(ctk.CTkFrame):
             except Exception:
                 pass
 
-        # Center modal relative to master window
+        # Center modal relative to master window with screen boundary checks
         modal.update_idletasks()
         try:
+            screen_w = modal.winfo_screenwidth()
+            screen_h = modal.winfo_screenheight()
+            w, h = 490, min(440, max(380, screen_h - 80))
             root = self.winfo_toplevel()
-            x = root.winfo_x() + (root.winfo_width() - 490) // 2
-            y = root.winfo_y() + (root.winfo_height() - 440) // 2
-            modal.geometry(f"+{max(0, x)}+{max(0, y)}")
+            x = root.winfo_x() + (root.winfo_width() - w) // 2
+            y = root.winfo_y() + (root.winfo_height() - h) // 2
+            pos_x = max(10, min(x, screen_w - w - 20))
+            pos_y = max(10, min(y, screen_h - h - 50))
+            modal.geometry(f"{w}x{h}+{pos_x}+{pos_y}")
         except Exception:
             pass
 

@@ -48,10 +48,20 @@ class PriorApp(ctk.CTk):
         # Fetch local user profile
         self.profile: Dict[str, Any] = database.get_profile()
 
-        # Configure Window Properties
+        # Configure Window Properties (screen-adaptive to prevent cutoffs on smaller/scaled displays)
         self.title("Prior - Eisenhower Matrix Task Manager")
-        self.geometry("1120x740")
-        self.minsize(980, 640)
+        try:
+            screen_w = self.winfo_screenwidth()
+            screen_h = self.winfo_screenheight()
+            target_w = min(1120, max(880, screen_w - 60))
+            target_h = min(740, max(540, screen_h - 90))
+            start_x = max(10, (screen_w - target_w) // 2)
+            start_y = max(10, (screen_h - target_h) // 2)
+            self.geometry(f"{target_w}x{target_h}+{start_x}+{start_y}")
+            self.minsize(min(920, max(750, screen_w - 80)), min(560, max(460, screen_h - 100)))
+        except Exception:
+            self.geometry("1120x740")
+            self.minsize(980, 640)
 
         # Set Window Icon and Taskbar Identity
         self._set_app_icon()

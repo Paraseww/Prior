@@ -36,8 +36,6 @@ class PomodoroModal(ctk.CTkToplevel):
         self.on_delete_task = on_delete_task
 
         self.title("Prior - Pomodoro Focus Session")
-        self.geometry("520x550")
-        self.minsize(500, 520)
         self.resizable(True, True)
         self.transient(master)
         self.grab_set()
@@ -58,13 +56,23 @@ class PomodoroModal(ctk.CTkToplevel):
     def _center_modal(self, master: Any) -> None:
         self.update_idletasks()
         try:
-            w = 520
-            h = 550
+            screen_w = self.winfo_screenwidth()
+            screen_h = self.winfo_screenheight()
+
+            w = min(520, max(440, screen_w - 40))
+            h = min(550, max(420, screen_h - 90))
+
             x = master.winfo_x() + (master.winfo_width() - w) // 2
             y = master.winfo_y() + (master.winfo_height() - h) // 2
-            self.geometry(f"{w}x{h}+{max(0, x)}+{max(0, y)}")
+
+            pos_x = max(10, min(x, screen_w - w - 20))
+            pos_y = max(10, min(y, screen_h - h - 50))
+
+            self.geometry(f"{w}x{h}+{pos_x}+{pos_y}")
+            self.minsize(min(460, w), min(420, h))
         except Exception:
-            pass
+            self.geometry("520x550")
+            self.minsize(500, 520)
 
     def _build_ui(self) -> None:
         self.configure(fg_color=theme.BG_CARD)

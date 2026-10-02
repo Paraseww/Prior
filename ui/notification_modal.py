@@ -66,13 +66,23 @@ class NotificationModal(ctk.CTkToplevel):
         self.after(20, self._reveal_modal)
 
     def _position_modal(self, master: Any) -> None:
-        """Positions and sizes the modal relative to parent window without painting prematurely."""
+        """Positions and sizes the modal relative to parent window and screen bounds."""
         try:
-            w, h = 540, 660
+            screen_w = self.winfo_screenwidth()
+            screen_h = self.winfo_screenheight()
+
+            w = min(540, max(440, screen_w - 40))
+            h = min(660, max(440, screen_h - 90))
+
             x = master.winfo_x() + (master.winfo_width() - w) // 2
             y = master.winfo_y() + (master.winfo_height() - h) // 2
-            self.geometry(f"{w}x{h}+{max(0, x)}+{max(0, y)}")
-            self.minsize(480, 500)
+
+            # Clamp coordinates to ensure modal is fully within visible screen area
+            pos_x = max(10, min(x, screen_w - w - 20))
+            pos_y = max(10, min(y, screen_h - h - 50))
+
+            self.geometry(f"{w}x{h}+{pos_x}+{pos_y}")
+            self.minsize(min(440, w), min(420, h))
         except Exception:
             self.geometry("540x660")
 

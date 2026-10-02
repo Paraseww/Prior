@@ -207,14 +207,24 @@ class ScheduleModal(ctk.CTkToplevel):
         self.current_time_str = self.selected_reminder or "12:00 PM"
 
         self.title("Prior - Schedule Task & Reminder")
-        w, h = 540, 680
         try:
+            screen_w = self.winfo_screenwidth()
+            screen_h = self.winfo_screenheight()
+
+            w = min(540, max(460, screen_w - 40))
+            h = min(680, max(460, screen_h - 90))
+
             x = master.winfo_x() + (master.winfo_width() - w) // 2
             y = master.winfo_y() + (master.winfo_height() - h) // 2
-            self.geometry(f"{w}x{h}+{max(0, x)}+{max(0, y)}")
+
+            pos_x = max(10, min(x, screen_w - w - 20))
+            pos_y = max(10, min(y, screen_h - h - 50))
+
+            self.geometry(f"{w}x{h}+{pos_x}+{pos_y}")
+            self.minsize(min(480, w), min(440, h))
         except Exception:
-            self.geometry(f"{w}x{h}")
-        self.minsize(500, 600)
+            self.geometry("540x680")
+            self.minsize(500, 600)
         self.resizable(True, True)
         self.transient(master)
         self.grab_set()
