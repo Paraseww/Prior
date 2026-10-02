@@ -2,7 +2,7 @@ from datetime import date, datetime
 import os
 from pathlib import Path
 import sys
-from typing import Any, Dict, List, Optional, Set
+from typing import Any, Dict, List, Optional, Set, Tuple
 import customtkinter as ctk
 from PIL import Image
 
@@ -80,6 +80,8 @@ class PriorApp(ctk.CTk):
         self.dismissed_notification_ids: Set[int] = set()
         self.notified_reminder_keys: Set[str] = set()
         self.active_notification_modal: Optional[Any] = None
+        self.notification_queue: List[Tuple[str, str]] = []
+        self._is_processing_notification_queue: bool = False
 
         # System Tray instance (active throughout app lifecycle)
         self.tray: Optional[TrayService] = None
@@ -532,13 +534,44 @@ class PriorApp(ctk.CTk):
             on_refresh=self._load_and_refresh,
         )
 
+    def _queue_desktop_notification(self, title: str, message: str) -> None:
+        """Enqueues a desktop balloon notification to be dispatched with smooth pacing."""
+        self.notification_queue.append((title, message))
+        if not self._is_processing_notification_queue:
+            self._process_notification_queue()
+
+    def _process_notification_queue(self) -> None:
+        """Dispatches queued desktop notifications spaced 2.5 seconds apart so Windows renders each cleanly."""
+        if not self.notification_queue:
+            self._is_processing_notification_queue = False
+            return
+
+        if not (hasattr(self, "tray") and self.tray and self.tray.tray_icon):
+            # Tray icon thread might still be starting, wait 500ms and retry
+            self._is_processing_notification_queue = True
+            self.after(500, self._process_notification_queue)
+            return
+
+        self._is_processing_notification_queue = True
+        title, message = self.notification_queue.pop(0)
+        try:
+            self.tray.notify(title=title, message=message)
+        except Exception:
+            pass
+
+        if self.notification_queue:
+            self.after(2500, self._process_notification_queue)
+        else:
+            self._is_processing_notification_queue = False
+
     def _check_reminders(self) -> None:
-        """Periodic background check for tasks reaching their scheduled reminder time."""
+        """Periodic background check for tasks reaching their scheduled reminder time and deadlines."""
         try:
             now = datetime.now()
             today_str = now.strftime("%Y-%m-%d")
             now_time = now.time()
 
+            # 1. Exact time-of-day reminders (e.g. scheduled for today at 3:30 PM)
             for task in self.all_tasks:
                 if bool(task.get("is_completed", 0)):
                     continue
@@ -563,19 +596,118 @@ class PriorApp(ctk.CTk):
 
                     # If current time is at or past the reminder time today
                     if now_time >= rem_dt:
-                        reminder_key = f"{task_id}_{today_str}_{rem_str}"
+                        reminder_key = f"time_{task_id}_{today_str}_{rem_str}"
                         if reminder_key not in self.notified_reminder_keys:
                             self.notified_reminder_keys.add(reminder_key)
                             # Un-dismiss task so it triggers notification in the panel and bell
                             self.dismissed_notification_ids.discard(task_id)
                             self._update_notification_badge()
-                            # Trigger desktop balloon notification via system tray if available
-                            if hasattr(self, "tray") and self.tray:
-                                title = task.get("title", "Task Reminder")
-                                self.tray.notify(
-                                    title=f"⏰ Task Reminder: {title}",
-                                    message=f"Scheduled for today at {rem_str}",
-                                )
+                            title = task.get("title", "Task Reminder")
+                            self._queue_desktop_notification(
+                                title=f"⏰ Task Reminder: {title}",
+                                message=f"Scheduled for today at {rem_str}",
+                            )
+
+            # 2. Categorized deadline notifications (Overdue, Due Today, Tomorrow, Upcoming in 2-3 Days)
+            active_tasks = [t for t in self.all_tasks if t.get("id") not in getattr(self, "dismissed_notification_ids", set())]
+            notifs = get_task_notifications(active_tasks, current_date_str=today_str)
+
+            # A. Overdue Tasks
+            overdue_pending = [
+                t for t in notifs.get("overdue", [])
+                if f"overdue_{t.get('id')}_{today_str}" not in self.notified_reminder_keys
+            ]
+            if overdue_pending:
+                if len(overdue_pending) <= 2:
+                    for t in overdue_pending:
+                        self.notified_reminder_keys.add(f"overdue_{t.get('id')}_{today_str}")
+                        title = t.get("title", "Task")
+                        days_ago = abs(t.get("days_diff", 1))
+                        day_text = "yesterday" if days_ago == 1 else f"{days_ago} days ago"
+                        self._queue_desktop_notification(
+                            title=f"⚠️ Overdue Task: {title}",
+                            message=f"Was due {day_text} ({t.get('due_date')}). Take action now!",
+                        )
+                else:
+                    for t in overdue_pending:
+                        self.notified_reminder_keys.add(f"overdue_{t.get('id')}_{today_str}")
+                    first_titles = ", ".join([f'"{t.get("title", "Task")}"' for t in overdue_pending[:2]])
+                    self._queue_desktop_notification(
+                        title=f"⚠️ {len(overdue_pending)} Overdue Tasks",
+                        message=f"{first_titles} and {len(overdue_pending) - 2} more are overdue.",
+                    )
+
+            # B. Tasks Due Today (without a future exact-minute reminder)
+            today_pending = [
+                t for t in notifs.get("today", [])
+                if f"today_{t.get('id')}_{today_str}" not in self.notified_reminder_keys
+                and not (t.get("reminder_time") and str(t.get("reminder_time")).strip())
+            ]
+            if today_pending:
+                if len(today_pending) <= 2:
+                    for t in today_pending:
+                        self.notified_reminder_keys.add(f"today_{t.get('id')}_{today_str}")
+                        title = t.get("title", "Task")
+                        self._queue_desktop_notification(
+                            title=f"⏰ Due Today: {title}",
+                            message="This task is scheduled for today. Keep on track!",
+                        )
+                else:
+                    for t in today_pending:
+                        self.notified_reminder_keys.add(f"today_{t.get('id')}_{today_str}")
+                    first_titles = ", ".join([f'"{t.get("title", "Task")}"' for t in today_pending[:2]])
+                    self._queue_desktop_notification(
+                        title=f"⏰ {len(today_pending)} Tasks Due Today",
+                        message=f"{first_titles} and {len(today_pending) - 2} more need focus today.",
+                    )
+
+            # C. Tasks Due Tomorrow (1 Day Left)
+            tomorrow_pending = [
+                t for t in notifs.get("tomorrow", [])
+                if f"tomorrow_{t.get('id')}_{today_str}" not in self.notified_reminder_keys
+            ]
+            if tomorrow_pending:
+                if len(tomorrow_pending) <= 2:
+                    for t in tomorrow_pending:
+                        self.notified_reminder_keys.add(f"tomorrow_{t.get('id')}_{today_str}")
+                        title = t.get("title", "Task")
+                        self._queue_desktop_notification(
+                            title=f"⏳ Due Tomorrow (1 Day Left): {title}",
+                            message=f"Due tomorrow ({t.get('due_date')}). Prepare ahead!",
+                        )
+                else:
+                    for t in tomorrow_pending:
+                        self.notified_reminder_keys.add(f"tomorrow_{t.get('id')}_{today_str}")
+                    first_titles = ", ".join([f'"{t.get("title", "Task")}"' for t in tomorrow_pending[:2]])
+                    self._queue_desktop_notification(
+                        title=f"⏳ {len(tomorrow_pending)} Tasks Due Tomorrow",
+                        message=f"{first_titles} and {len(tomorrow_pending) - 2} more are due tomorrow.",
+                    )
+
+            # D. Upcoming Deadlines (2 to 3 Days Left)
+            upcoming_pending = [
+                t for t in notifs.get("upcoming", [])
+                if f"upcoming_{t.get('id')}_{t.get('days_diff')}d_{today_str}" not in self.notified_reminder_keys
+            ]
+            if upcoming_pending:
+                if len(upcoming_pending) <= 2:
+                    for t in upcoming_pending:
+                        days_left = t.get("days_diff", 2)
+                        self.notified_reminder_keys.add(f"upcoming_{t.get('id')}_{days_left}d_{today_str}")
+                        title = t.get("title", "Task")
+                        self._queue_desktop_notification(
+                            title=f"🗓️ Upcoming ({days_left} Days Left): {title}",
+                            message=f"Due on {t.get('due_date')} ({days_left} days left).",
+                        )
+                else:
+                    for t in upcoming_pending:
+                        days_left = t.get("days_diff", 2)
+                        self.notified_reminder_keys.add(f"upcoming_{t.get('id')}_{days_left}d_{today_str}")
+                    first_titles = ", ".join([f'"{t.get("title", "Task")}"' for t in upcoming_pending[:2]])
+                    self._queue_desktop_notification(
+                        title=f"🗓️ {len(upcoming_pending)} Upcoming Deadlines",
+                        message=f"{first_titles} and {len(upcoming_pending) - 2} more due in 2-3 days.",
+                    )
         except Exception:
             pass
         finally:
