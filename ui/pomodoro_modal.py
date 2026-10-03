@@ -164,6 +164,34 @@ class PomodoroModal(ctk.CTkToplevel):
             )
             lbl_notes.pack(fill="x", pady=(3, 0))
 
+        # Estimated Runway / Focus Sprint Recommendation - STRICTLY ONLY FOR Q1 (Red Box)
+        est_duration = int(self.task.get("estimated_duration") or 0)
+        is_q1 = self.task.get("quadrant") == "Q1_DO"
+        if is_q1 and est_duration > 0:
+            if est_duration < 60:
+                dur_phrase = f"{est_duration} mins"
+            elif est_duration == 60:
+                dur_phrase = "1 hour"
+            elif est_duration % 60 == 0:
+                dur_phrase = f"{est_duration // 60} hours"
+            else:
+                dur_phrase = f"{est_duration // 60}h {est_duration % 60}m"
+            sprints = max(1, round(est_duration / 25))
+            runway_badge = ctk.CTkFrame(
+                inner_task,
+                fg_color=("#FEF2F2", "#2B0B0B"),
+                corner_radius=6,
+                border_width=1,
+                border_color=("#FCA5A5", "#7F1D1D"),
+            )
+            runway_badge.pack(anchor="w", pady=(6, 2))
+            ctk.CTkLabel(
+                runway_badge,
+                text=f"⏱️ {dur_phrase} needed: Recommended {sprints} × 25m sprints with 5m breaks.",
+                font=(theme.FONT_FAMILY, 11, "bold"),
+                text_color=("#DC2626", "#F87171"),
+            ).pack(padx=8, pady=4)
+
         # 2. Mode Selector: Focus (25m) / Short Break (5m) / Long Break (15m)
         self.mode_segment = ctk.CTkSegmentedButton(
             container,

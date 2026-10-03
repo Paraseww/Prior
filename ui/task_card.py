@@ -208,9 +208,10 @@ class TaskCard(ctk.CTkFrame):
             )
             self.lbl_desc.pack(fill="x", anchor="w", pady=(3, 2))
 
-        # Badges Row: Due Date Badge & Reminder Time Badge
+        # Badges Row: Due Date Badge, Reminder Time Badge, and Estimated Duration Runway Badge
         due_date_str = self.task.get("due_date")
         reminder_time_str = self.task.get("reminder_time")
+        est_duration = int(self.task.get("estimated_duration") or 0)
 
         has_due = False
         due_info = None
@@ -220,8 +221,9 @@ class TaskCard(ctk.CTkFrame):
                 has_due = True
 
         has_reminder = bool(reminder_time_str and str(reminder_time_str).strip())
+        has_duration = (self.q_key == "Q1_DO") and (est_duration > 0)
 
-        if has_due or has_reminder:
+        if has_due or has_reminder or has_duration:
             badges_row = ctk.CTkFrame(self.center_box, fg_color="transparent")
             badges_row.pack(anchor="w", pady=(4, 0))
 
@@ -253,7 +255,7 @@ class TaskCard(ctk.CTkFrame):
                     border_width=1,
                     border_color=self.q_info["border"],
                 )
-                time_badge.pack(side="left")
+                time_badge.pack(side="left", padx=(0, 6 if has_duration else 0))
 
                 lbl_time = ctk.CTkLabel(
                     time_badge,
@@ -262,6 +264,31 @@ class TaskCard(ctk.CTkFrame):
                     text_color=self.q_info["text"],
                 )
                 lbl_time.pack(padx=6, pady=1)
+
+            if has_duration:
+                if est_duration < 60:
+                    dur_text = f"{est_duration}m"
+                elif est_duration % 60 == 0:
+                    dur_text = f"{est_duration // 60}h"
+                else:
+                    dur_text = f"{est_duration // 60}h {est_duration % 60}m"
+                dur_badge = ctk.CTkFrame(
+                    badges_row,
+                    fg_color=("#FEF2F2", "#2A0A0A") if self.q_key == "Q1_DO" else self.q_info["bg_header"],
+                    corner_radius=6,
+                    height=20,
+                    border_width=1,
+                    border_color=("#FCA5A5", "#7F1D1D") if self.q_key == "Q1_DO" else self.q_info["border"],
+                )
+                dur_badge.pack(side="left")
+
+                lbl_dur = ctk.CTkLabel(
+                    dur_badge,
+                    text=f"⏱️ {dur_text}",
+                    font=(theme.FONT_FAMILY, 10, "bold"),
+                    text_color=("#DC2626", "#F87171") if self.q_key == "Q1_DO" else self.q_info["text"],
+                )
+                lbl_dur.pack(padx=6, pady=1)
 
         # Responsive wraplength adjustment based on container width
         def _on_resize(event: Any) -> None:

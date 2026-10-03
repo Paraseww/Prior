@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Any, Callable, Dict, Optional
 import customtkinter as ctk
 
-from project import determine_quadrant
+from project import determine_quadrant, validate_schedule_time
 from ui import theme
 from ui.scrollable_dropdown import ScrollableOptionMenu
 
@@ -53,7 +53,18 @@ class TaskModal(ctk.CTkToplevel):
         raw_reminder = self.task.get("reminder_time") if self.task else None
         self.reminder_enabled = bool(raw_reminder and str(raw_reminder).strip())
         self.selected_reminder: Optional[str] = str(raw_reminder).strip() if self.reminder_enabled else None
-        self.current_time_str = self.selected_reminder or "12:00 PM"
+        if self.selected_reminder:
+            default_time = self.selected_reminder
+        else:
+            now = datetime.now()
+            next_hour = (now + timedelta(hours=1)).replace(minute=0, second=0, microsecond=0)
+            default_time = next_hour.strftime("%I:%M %p")
+        self.current_time_str = default_time
+
+        # Estimated Time to Complete (Runway in minutes: 0, 30, 60, 90, 120, etc.)
+        self.estimated_duration = int(self.task.get("estimated_duration", 0) or 0) if self.task else 0
+        standard_presets = {0, 30, 60, 90, 120, 180, 240}
+        self.custom_dur_active = self.estimated_duration > 0 and (self.estimated_duration not in standard_presets)
 
         self.title("Edit Task" if self.is_edit else "Create New Task")
         self.resizable(True, True)
@@ -460,6 +471,156 @@ class TaskModal(ctk.CTkToplevel):
         self.opt_ampm.pack(side="left", padx=4)
 
         # ====================================================================
+        # 4.5. Estimated Duration (Runway & Drop-Dead Calculator)
+        # ====================================================================
+        # 4.5. Estimated Duration (Runway & Drop-Dead Calculator) - ONLY FOR Q1 (Red Box)
+        self.duration_box = ctk.CTkFrame(
+            scroll_frame,
+            fg_color=theme.BG_INPUT,
+            corner_radius=10,
+            border_width=1,
+            border_color=("#FCA5A5", "#7F1D1D"),
+        )
+        if self.current_quadrant == "Q1_DO":
+            self.duration_box.pack(fill="x", pady=(0, 12))
+
+        inner_dur = ctk.CTkFrame(self.duration_box, fg_color="transparent")
+        inner_dur.pack(fill="x", padx=12, pady=10)
+
+        header_dur_row = ctk.CTkFrame(inner_dur, fg_color="transparent")
+        header_dur_row.pack(fill="x", pady=(0, 4))
+
+        self.lbl_dur_header = ctk.CTkLabel(
+            header_dur_row,
+            text="⏱️ Estimated Time to Complete",
+            font=(theme.FONT_FAMILY, 12, "bold"),
+            text_color=("#DC2626", "#F87171"),
+            anchor="w",
+        )
+        self.lbl_dur_header.pack(side="left")
+
+        self.lbl_dur_hint = ctk.CTkLabel(
+            inner_dur,
+            text="How long will this take you to finish? Prior alerts you before your drop-dead start time.",
+            font=(theme.FONT_FAMILY, 10),
+            text_color=theme.TEXT_MUTED,
+            anchor="w",
+        )
+        self.lbl_dur_hint.pack(fill="x", pady=(0, 6))
+
+        dur_presets_row = ctk.CTkFrame(inner_dur, fg_color="transparent")
+        dur_presets_row.pack(fill="x", pady=(0, 4))
+
+        duration_presets = [
+            ("None", 0),
+            ("30m", 30),
+            ("1 hr", 60),
+            ("2 hrs", 120),
+            ("3 hrs", 180),
+            ("Custom ✎", -1),
+        ]
+        self.dur_preset_buttons: Dict[int, ctk.CTkButton] = {}
+        for col, (label, mins) in enumerate(duration_presets):
+            dur_presets_row.grid_columnconfigure(col, weight=1, uniform="task_modal_dur_col")
+            btn_d = ctk.CTkButton(
+                dur_presets_row,
+                text=label,
+                font=(theme.FONT_FAMILY, 11),
+                width=0,
+                height=26,
+                corner_radius=6,
+                fg_color=theme.BG_CARD,
+                hover_color=theme.BG_CARD_HOVER,
+                text_color=theme.TEXT_PRIMARY,
+                command=lambda m=mins: self._select_preset_duration(m),
+            )
+            btn_d.grid(row=0, column=col, sticky="nsew", padx=2)
+            self.dur_preset_buttons[mins] = btn_d
+
+        # Custom Runway Inline Input Frame (shown when Custom is selected or duration is custom)
+        self.custom_dur_frame = ctk.CTkFrame(
+            inner_dur,
+            fg_color=theme.BG_CARD,
+            corner_radius=8,
+            border_width=1,
+            border_color=theme.BORDER_COLOR,
+        )
+
+        custom_dur_inner = ctk.CTkFrame(self.custom_dur_frame, fg_color="transparent")
+        custom_dur_inner.pack(fill="x", padx=10, pady=6)
+
+        lbl_custom_dur = ctk.CTkLabel(
+            custom_dur_inner,
+            text="⏱️ Custom Runway:",
+            font=(theme.FONT_FAMILY, 11, "bold"),
+            text_color=theme.TEXT_PRIMARY,
+        )
+        lbl_custom_dur.pack(side="left", padx=(0, 10))
+
+        init_h = self.estimated_duration // 60 if self.estimated_duration > 0 else 1
+        init_m = self.estimated_duration % 60 if self.estimated_duration > 0 else 0
+
+        self.entry_dur_hours = ctk.CTkEntry(
+            custom_dur_inner,
+            width=50,
+            height=28,
+            corner_radius=6,
+            justify="center",
+            font=(theme.FONT_FAMILY, 12, "bold"),
+            placeholder_text="0",
+        )
+        if init_h > 0 or self.custom_dur_active:
+            self.entry_dur_hours.insert(0, str(init_h))
+        self.entry_dur_hours.pack(side="left", padx=(0, 4))
+        self.entry_dur_hours.bind("<KeyRelease>", self._on_custom_duration_input)
+
+        lbl_h = ctk.CTkLabel(
+            custom_dur_inner,
+            text="hrs",
+            font=(theme.FONT_FAMILY, 11),
+            text_color=theme.TEXT_SECONDARY,
+        )
+        lbl_h.pack(side="left", padx=(0, 10))
+
+        self.entry_dur_mins = ctk.CTkEntry(
+            custom_dur_inner,
+            width=50,
+            height=28,
+            corner_radius=6,
+            justify="center",
+            font=(theme.FONT_FAMILY, 12, "bold"),
+            placeholder_text="0",
+        )
+        if init_m > 0 or self.custom_dur_active:
+            self.entry_dur_mins.insert(0, str(init_m))
+        self.entry_dur_mins.pack(side="left", padx=(0, 4))
+        self.entry_dur_mins.bind("<KeyRelease>", self._on_custom_duration_input)
+
+        lbl_m = ctk.CTkLabel(
+            custom_dur_inner,
+            text="mins",
+            font=(theme.FONT_FAMILY, 11),
+            text_color=theme.TEXT_SECONDARY,
+        )
+        lbl_m.pack(side="left", padx=(0, 12))
+
+        self.btn_apply_custom_dur = ctk.CTkButton(
+            custom_dur_inner,
+            text="Apply",
+            width=64,
+            height=28,
+            corner_radius=6,
+            font=(theme.FONT_FAMILY, 11, "bold"),
+            fg_color=theme.ACCENT_PRIMARY,
+            hover_color=theme.ACCENT_HOVER,
+            command=self._apply_custom_duration,
+        )
+        self.btn_apply_custom_dur.pack(side="right")
+
+        if self.custom_dur_active:
+            self.custom_dur_frame.pack(fill="x", pady=(6, 2))
+
+        # ====================================================================
         # 5. Live Schedule Summary Banner
         # ====================================================================
         self.summary_card = ctk.CTkFrame(
@@ -480,6 +641,7 @@ class TaskModal(ctk.CTkToplevel):
         self.lbl_sched_summary.pack(padx=10, pady=6)
 
         self._update_date_preset_buttons()
+        self._update_duration_buttons()
         self._update_schedule_summary()
 
         # ====================================================================
@@ -501,7 +663,7 @@ class TaskModal(ctk.CTkToplevel):
         )
         btn_cancel.pack(side="left", fill="x", expand=True, padx=(0, 8))
 
-        btn_save = ctk.CTkButton(
+        self.btn_save = ctk.CTkButton(
             btn_row,
             text="Save Task" if self.is_edit else "Add to Board",
             font=(theme.FONT_FAMILY, 13, "bold"),
@@ -512,7 +674,7 @@ class TaskModal(ctk.CTkToplevel):
             text_color="#FFFFFF",
             command=self._on_save_clicked,
         )
-        btn_save.pack(side="right", fill="x", expand=True, padx=(8, 0))
+        self.btn_save.pack(side="right", fill="x", expand=True, padx=(8, 0))
 
     def _render_mini_calendar(self) -> None:
         """Renders compact 7-column calendar grid inside the modal."""
@@ -672,6 +834,111 @@ class TaskModal(ctk.CTkToplevel):
         self.selected_reminder = time_val
         self._update_schedule_summary()
 
+    def _select_preset_duration(self, minutes: int) -> None:
+        if minutes == -1:
+            self.custom_dur_active = True
+            h = self.estimated_duration // 60 if self.estimated_duration > 0 else 1
+            m = self.estimated_duration % 60 if self.estimated_duration > 0 else 0
+            if self.estimated_duration == 0:
+                self.estimated_duration = 60
+            self.entry_dur_hours.delete(0, "end")
+            self.entry_dur_hours.insert(0, str(h) if h > 0 else "")
+            self.entry_dur_mins.delete(0, "end")
+            self.entry_dur_mins.insert(0, str(m) if m > 0 else "")
+            self._show_custom_dur_frame(True)
+            self.entry_dur_hours.focus_set()
+        else:
+            self.custom_dur_active = False
+            self.estimated_duration = minutes
+            self._show_custom_dur_frame(False)
+
+        self._update_duration_buttons()
+        self._update_schedule_summary()
+
+    def _show_custom_dur_frame(self, show: bool) -> None:
+        if not hasattr(self, "custom_dur_frame"):
+            return
+        if show:
+            if not self.custom_dur_frame.winfo_ismapped():
+                self.custom_dur_frame.pack(fill="x", pady=(6, 2))
+        else:
+            if self.custom_dur_frame.winfo_ismapped():
+                self.custom_dur_frame.pack_forget()
+
+    def _on_custom_duration_input(self, _: Any = None) -> None:
+        h_str = self.entry_dur_hours.get().strip()
+        m_str = self.entry_dur_mins.get().strip()
+        try:
+            h = int(h_str) if h_str else 0
+        except ValueError:
+            h = 0
+        try:
+            m = int(m_str) if m_str else 0
+        except ValueError:
+            m = 0
+
+        h = max(0, min(48, h))
+        m = max(0, min(59, m)) if h > 0 else max(0, min(2880, m))
+
+        self.estimated_duration = h * 60 + m
+        self._update_duration_buttons()
+        self._update_schedule_summary()
+
+    def _apply_custom_duration(self) -> None:
+        self._on_custom_duration_input()
+        h = self.estimated_duration // 60
+        m = self.estimated_duration % 60
+        self.entry_dur_hours.delete(0, "end")
+        if h > 0:
+            self.entry_dur_hours.insert(0, str(h))
+        self.entry_dur_mins.delete(0, "end")
+        if m > 0 or (h == 0 and self.estimated_duration > 0):
+            self.entry_dur_mins.insert(0, str(m))
+
+    def _update_duration_buttons(self) -> None:
+        if not hasattr(self, "dur_preset_buttons"):
+            return
+        is_q1 = self.current_quadrant == "Q1_DO"
+        active_color = "#EF4444" if is_q1 else theme.ACCENT_PRIMARY
+        active_hover = "#DC2626" if is_q1 else theme.ACCENT_HOVER
+
+        if hasattr(self, "duration_box"):
+            if is_q1 and self.estimated_duration > 0:
+                self.duration_box.configure(border_color=("#FCA5A5", "#7F1D1D"))
+                self.lbl_dur_header.configure(
+                    text="⏱️ Estimated Time to Complete",
+                    text_color=("#DC2626", "#F87171"),
+                )
+            else:
+                self.duration_box.configure(border_color=theme.BORDER_COLOR)
+                self.lbl_dur_header.configure(
+                    text="⏱️ Estimated Time to Complete",
+                    text_color=theme.TEXT_PRIMARY,
+                )
+
+        if hasattr(self, "btn_apply_custom_dur"):
+            self.btn_apply_custom_dur.configure(fg_color=active_color, hover_color=active_hover)
+
+        standard_presets = {0, 30, 60, 90, 120, 180, 240}
+        is_custom = getattr(self, "custom_dur_active", False) or (self.estimated_duration > 0 and self.estimated_duration not in standard_presets)
+
+        if is_custom:
+            self._show_custom_dur_frame(True)
+
+        for mins, btn in self.dur_preset_buttons.items():
+            if (mins == -1 and is_custom) or (not is_custom and mins == self.estimated_duration):
+                btn.configure(
+                    fg_color=active_color,
+                    hover_color=active_hover,
+                    text_color="#FFFFFF",
+                )
+            else:
+                btn.configure(
+                    fg_color=theme.BG_CARD,
+                    hover_color=theme.BG_CARD_HOVER,
+                    text_color=theme.TEXT_PRIMARY,
+                )
+
     def _on_time_changed(self, _: Any = None) -> None:
         h = self.opt_hour.get()
         m = self.opt_minute.get()
@@ -697,9 +964,64 @@ class TaskModal(ctk.CTkToplevel):
     def _update_schedule_summary(self) -> None:
         if self.selected_date:
             d_str = self.selected_date.strftime("%a, %b %d, %Y")
-            if self.switch_reminder.get() and self.selected_reminder:
+            rem_str = self.selected_reminder if (self.switch_reminder.get() and self.selected_reminder) else None
+
+            is_valid, err_msg = validate_schedule_time(self.selected_date, rem_str)
+            if not is_valid:
+                self.summary_card.configure(
+                    fg_color=("#FEF2F2", "#3A0D0D"),
+                    border_color=("#FCA5A5", "#7F1D1D"),
+                )
                 self.lbl_sched_summary.configure(
-                    text=f"📌 Scheduled for: {d_str} at {self.selected_reminder}",
+                    text=f"⚠️ {err_msg}",
+                    text_color=("#DC2626", "#F87171"),
+                )
+                if hasattr(self, "btn_save"):
+                    self.btn_save.configure(state="disabled", fg_color=("#9CA3AF", "#4B5563"))
+                return
+
+            if hasattr(self, "btn_save"):
+                self.btn_save.configure(state="normal", fg_color=theme.ACCENT_PRIMARY)
+
+            # Drop-Dead Runway Calculation ONLY for Q1 (Red Box) when estimated duration is set
+            if self.current_quadrant == "Q1_DO" and rem_str and self.estimated_duration > 0:
+                try:
+                    rem_dt = datetime.strptime(rem_str, "%I:%M %p").time()
+                except ValueError:
+                    try:
+                        rem_dt = datetime.strptime(rem_str, "%H:%M").time()
+                    except ValueError:
+                        rem_dt = None
+
+                if rem_dt:
+                    deadline_dt = datetime.combine(self.selected_date, rem_dt)
+                    drop_dead_dt = deadline_dt - timedelta(minutes=self.estimated_duration)
+                    drop_dead_str = drop_dead_dt.strftime("%I:%M %p")
+                    if self.estimated_duration < 60:
+                        dur_text = f"{self.estimated_duration}m"
+                    elif self.estimated_duration % 60 == 0:
+                        dur_text = f"{self.estimated_duration // 60}h"
+                    else:
+                        dur_text = f"{self.estimated_duration // 60}h {self.estimated_duration % 60}m"
+
+                    self.summary_card.configure(
+                        fg_color=("#FEF2F2", "#3A0D0D"),
+                        border_color=("#FCA5A5", "#7F1D1D"),
+                    )
+                    self.lbl_sched_summary.configure(
+                        text=f"🚨 Point of No Return: {drop_dead_str}\n(Start by {drop_dead_str} to finish your {dur_text} work before {rem_str} deadline!)",
+                        text_color=("#DC2626", "#F87171"),
+                    )
+                    return
+
+            # Default Schedule Summary without duration
+            self.summary_card.configure(
+                fg_color=("#ECFDF5", "#042218"),
+                border_color=("#A7F3D0", "#064E3B"),
+            )
+            if rem_str:
+                self.lbl_sched_summary.configure(
+                    text=f"📌 Scheduled for: {d_str} at {rem_str}",
                     text_color=("#065F46", "#34D399"),
                 )
             else:
@@ -708,6 +1030,12 @@ class TaskModal(ctk.CTkToplevel):
                     text_color=("#065F46", "#34D399"),
                 )
         else:
+            self.summary_card.configure(
+                fg_color=("#ECFDF5", "#042218"),
+                border_color=("#A7F3D0", "#064E3B"),
+            )
+            if hasattr(self, "btn_save"):
+                self.btn_save.configure(state="normal", fg_color=theme.ACCENT_PRIMARY)
             self.lbl_sched_summary.configure(
                 text="⚠️ No due date set (Task will be unscheduled)",
                 text_color=theme.TEXT_MUTED,
@@ -718,6 +1046,20 @@ class TaskModal(ctk.CTkToplevel):
         important = bool(self.switch_important.get())
         self.current_quadrant = determine_quadrant(urgent, important)
         self._update_quadrant_badge()
+        self._toggle_q1_duration_box()
+        self._update_duration_buttons()
+        self._update_schedule_summary()
+
+    def _toggle_q1_duration_box(self) -> None:
+        """Shows the Estimated Time / Runway box ONLY for Q1 (Red Box), hiding it for other boxes."""
+        if not hasattr(self, "duration_box"):
+            return
+        if self.current_quadrant == "Q1_DO":
+            if not self.duration_box.winfo_ismapped():
+                self.duration_box.pack(before=self.summary_card, fill="x", pady=(0, 12))
+        else:
+            if self.duration_box.winfo_ismapped():
+                self.duration_box.pack_forget()
 
     def _update_quadrant_badge(self) -> None:
         info = theme.QUADRANTS.get(self.current_quadrant, theme.QUADRANTS["Q1_DO"])
@@ -737,12 +1079,22 @@ class TaskModal(ctk.CTkToplevel):
         due_date_str = self.selected_date.strftime("%Y-%m-%d") if self.selected_date else None
         reminder_time_str = self.selected_reminder if (self.selected_date and self.switch_reminder.get()) else None
 
+        # Validate schedule date and time
+        is_valid, err_msg = validate_schedule_time(self.selected_date, reminder_time_str)
+        if not is_valid:
+            self._update_schedule_summary()
+            return
+
+        # Estimated duration is ONLY assigned to Q1 (Red Box) tasks
+        saved_duration = self.estimated_duration if self.current_quadrant == "Q1_DO" else 0
+
         data = {
             "title": title,
             "description": description,
             "quadrant": self.current_quadrant,
             "due_date": due_date_str,
             "reminder_time": reminder_time_str,
+            "estimated_duration": saved_duration,
         }
 
         self.on_save_callback(data)
