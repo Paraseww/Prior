@@ -234,6 +234,28 @@ def ensure_start_menu_shortcut() -> None:
         pass
 
 
+def ensure_protocol_registration() -> None:
+    """
+    Registers the 'prior://' custom URI protocol in Windows Registry (HKCU).
+    Allows desktop toast notifications and action buttons to activate the running
+    Prior app when clicked, even from Windows Notification Center / Action Center.
+    """
+    if sys.platform != "win32":
+        return
+    try:
+        import winreg
+        py_exe = _get_python_launcher()
+        command = f'"{py_exe}" "{SCRIPT_PATH}" --open-notifications "%1"'
+        key_path = r"Software\Classes\prior"
+        with winreg.CreateKey(winreg.HKEY_CURRENT_USER, key_path) as key:
+            winreg.SetValueEx(key, "", 0, winreg.REG_SZ, "URL:Prior Protocol")
+            winreg.SetValueEx(key, "URL Protocol", 0, winreg.REG_SZ, "")
+            with winreg.CreateKey(key, r"shell\open\command") as cmd_key:
+                winreg.SetValueEx(cmd_key, "", 0, winreg.REG_SZ, command)
+    except Exception:
+        pass
+
+
 def set_window_taskbar_properties(hwnd: int) -> None:
     """
     Sets AppUserModelID and Taskbar Jump List relaunch properties (DisplayName, Icon, Command)
@@ -329,11 +351,13 @@ def apply_prior_icon(window: Any) -> None:
 def init_windows_integration(window: Optional[Any] = None) -> None:
     """
     Complete Windows Taskbar initialization: sets AppUserModelID, generates
-    Start Menu shortcut in the background, and applies icon & taskbar properties.
+    Start Menu shortcut in the background, registers prior:// URI protocol,
+    and applies icon & taskbar properties.
     """
     set_process_app_id()
     # Create / update Start Menu shortcut asynchronously to ensure fast window startup
     threading.Thread(target=ensure_start_menu_shortcut, daemon=True).start()
+    threading.Thread(target=ensure_protocol_registration, daemon=True).start()
     if window is not None:
         apply_prior_icon(window)
 
