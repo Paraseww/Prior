@@ -2,12 +2,13 @@ from datetime import date, datetime
 import os
 from pathlib import Path
 import sys
+import threading
 from typing import Any, Dict, List, Optional, Set, Tuple
 import customtkinter as ctk
 from PIL import Image
 
 import database
-from project import filter_tasks, get_task_notifications
+from project import calculate_drop_dead_time, filter_tasks, get_task_notifications
 from ui import theme
 from ui.analytics_view import AnalyticsView
 from ui.calendar_view import CalendarView
@@ -82,6 +83,8 @@ class PriorApp(ctk.CTk):
         self.active_notification_modal: Optional[Any] = None
         self.notification_queue: List[Tuple[str, str]] = []
         self._is_processing_notification_queue: bool = False
+        self.task_last_notified: Dict[int, datetime] = {}
+        self.task_renudge_counts: Dict[int, int] = {}
 
         # System Tray instance (active throughout app lifecycle)
         self.tray: Optional[TrayService] = None
@@ -106,6 +109,13 @@ class PriorApp(ctk.CTk):
 
         # Start periodic reminder checker for scheduled tasks
         self.after(3000, self._check_reminders)
+
+        # Start IPC server for single-instance activation and notification click handling
+        self._start_ipc_server()
+
+        # If launched with --open-notifications flag or prior:// protocol, open notifications
+        if "--open-notifications" in sys.argv or any("prior://" in arg.lower() for arg in sys.argv):
+            self.after(600, self._open_notifications)
 
         # Check if started with --minimized flag (e.g. Windows startup)
         if "--minimized" in sys.argv:
@@ -501,6 +511,9 @@ class PriorApp(ctk.CTk):
         else:
             self._switch_tab(self.current_tab)
 
+        # Trigger desktop reminder & deadline check promptly after tasks update
+        self.after(300, self._check_reminders)
+
     def _update_notification_badge(self) -> None:
         """Updates the notification bell button badge and highlight state."""
         if not hasattr(self, "btn_notifications"):
@@ -525,6 +538,16 @@ class PriorApp(ctk.CTk):
 
     def _open_notifications(self) -> None:
         """Opens the notification & reminders modal dialog."""
+        if hasattr(self, "active_notification_modal") and self.active_notification_modal:
+            try:
+                if self.active_notification_modal.winfo_exists():
+                    self.active_notification_modal.deiconify()
+                    self.active_notification_modal.lift()
+                    self.active_notification_modal.focus_force()
+                    return
+            except Exception:
+                pass
+
         self.active_notification_modal = NotificationModal(
             self,
             tasks=self.all_tasks,
@@ -532,11 +555,42 @@ class PriorApp(ctk.CTk):
             on_edit=self.open_task_modal,
             on_schedule=self.open_schedule_modal,
             on_refresh=self._load_and_refresh,
+            on_focus=self.open_pomodoro_modal,
         )
 
+    def flash_window(self) -> None:
+        """Gently pulses the Windows taskbar icon to draw the user's attention from background browsing."""
+        if sys.platform != "win32":
+            return
+        try:
+            import ctypes
+            from ctypes import wintypes
+
+            class FLASHWINFO(ctypes.Structure):
+                _fields_ = [
+                    ("cbSize", wintypes.UINT),
+                    ("hwnd", wintypes.HWND),
+                    ("dwFlags", wintypes.DWORD),
+                    ("uCount", wintypes.UINT),
+                    ("dwTimeout", wintypes.DWORD),
+                ]
+
+            hwnd = ctypes.windll.user32.GetParent(self.winfo_id()) or self.winfo_id()
+            fwi = FLASHWINFO(
+                cbSize=ctypes.sizeof(FLASHWINFO),
+                hwnd=hwnd,
+                dwFlags=0x00000002 | 0x0000000C,  # FLASHW_TRAY | FLASHW_TIMERNOFG
+                uCount=4,
+                dwTimeout=0,
+            )
+            ctypes.windll.user32.FlashWindowEx(ctypes.byref(fwi))
+        except Exception:
+            pass
+
     def _queue_desktop_notification(self, title: str, message: str) -> None:
-        """Enqueues a desktop balloon notification to be dispatched with smooth pacing."""
+        """Enqueues a desktop notification to be dispatched with smooth pacing and taskbar pulse."""
         self.notification_queue.append((title, message))
+        self.flash_window()
         if not self._is_processing_notification_queue:
             self._process_notification_queue()
 
@@ -546,10 +600,10 @@ class PriorApp(ctk.CTk):
             self._is_processing_notification_queue = False
             return
 
-        if not (hasattr(self, "tray") and self.tray and self.tray.tray_icon):
-            # Tray icon thread might still be starting, wait 500ms and retry
+        if not (hasattr(self, "tray") and self.tray):
+            # Tray instance not created yet, wait 300ms and retry
             self._is_processing_notification_queue = True
-            self.after(500, self._process_notification_queue)
+            self.after(300, self._process_notification_queue)
             return
 
         self._is_processing_notification_queue = True
@@ -569,9 +623,8 @@ class PriorApp(ctk.CTk):
         try:
             now = datetime.now()
             today_str = now.strftime("%Y-%m-%d")
-            now_time = now.time()
 
-            # 1. Exact time-of-day reminders (e.g. scheduled for today at 3:30 PM)
+            # 1. Timed Tasks on Today's Date (Scheduled Reminders)
             for task in self.all_tasks:
                 if bool(task.get("is_completed", 0)):
                     continue
@@ -594,120 +647,215 @@ class PriorApp(ctk.CTk):
                     if task_id is None:
                         continue
 
-                    # If current time is at or past the reminder time today
-                    if now_time >= rem_dt:
-                        reminder_key = f"time_{task_id}_{today_str}_{rem_str}"
-                        if reminder_key not in self.notified_reminder_keys:
-                            self.notified_reminder_keys.add(reminder_key)
-                            # Un-dismiss task so it triggers notification in the panel and bell
-                            self.dismissed_notification_ids.discard(task_id)
-                            self._update_notification_badge()
-                            title = task.get("title", "Task Reminder")
-                            self._queue_desktop_notification(
-                                title=f"⏰ Task Reminder: {title}",
-                                message=f"Scheduled for today at {rem_str}",
-                            )
+                    quadrant = task.get("quadrant", "Q1_DO")
+                    est_duration = int(task.get("estimated_duration") or 0)
+                    title = task.get("title", "Task")
 
-            # 2. Categorized deadline notifications (Overdue, Due Today, Tomorrow, Upcoming in 2-3 Days)
+                    # Special Runway Logic for Q1 (Do First / Critical Deadlines) with estimated duration
+                    if quadrant == "Q1_DO" and est_duration > 0:
+                        drop_info = calculate_drop_dead_time(rem_str, est_duration, today_str, reference_dt=now)
+                        if drop_info:
+                            mins_to_start = drop_info["mins_to_start"]
+                            mins_to_deadline = drop_info["mins_to_deadline"]
+                            drop_dead_str = drop_info["drop_dead_time_str"]
+                            dur_text = drop_info["duration_text"]
+                            sprints = drop_info["pomodoro_sprints"]
+
+                            # Milestone 1: 15-Minute Warning before Drop-Dead Start Time
+                            if 0 < mins_to_start <= 15:
+                                warn_key = f"q1_runway_warn_{task_id}_{today_str}_{rem_str}"
+                                if warn_key not in self.notified_reminder_keys:
+                                    self.notified_reminder_keys.add(warn_key)
+                                    mins_int = max(1, int(round(mins_to_start)))
+                                    if est_duration < 60:
+                                        dur_phrase = f"{est_duration} minutes"
+                                    elif est_duration == 60:
+                                        dur_phrase = "1 hour"
+                                    elif est_duration % 60 == 0:
+                                        dur_phrase = f"{est_duration // 60} hours"
+                                    else:
+                                        dur_phrase = f"{est_duration // 60} hours {est_duration % 60} minutes"
+
+                                    title_text = f"⚠️ 15 Mins Until Point of No Return: {title}" if mins_int >= 13 else f"⚠️ {mins_int} Mins Until Point of No Return: {title}"
+                                    self._queue_desktop_notification(
+                                        title=title_text,
+                                        message=f"Due at {rem_str} and takes {dur_phrase}. Wrap up your tabs now so you can start at {drop_dead_str}!",
+                                    )
+
+                            # Milestone 2: Point of No Return (The Drop-Dead Start Time reached)
+                            if mins_to_start <= 0 and mins_to_deadline > 0:
+                                start_key = f"q1_runway_start_{task_id}_{today_str}_{rem_str}"
+                                if start_key not in self.notified_reminder_keys:
+                                    self.notified_reminder_keys.add(start_key)
+                                    self.task_last_notified[task_id] = now
+                                    self.dismissed_notification_ids.discard(task_id)
+                                    self._update_notification_badge()
+                                    self._queue_desktop_notification(
+                                        title=f"🚨 Point of No Return: {title}",
+                                        message=f"You MUST start now to finish before your {rem_str} deadline!",
+                                    )
+
+                            # Milestone 2.5: Anti-Procrastination Re-Nudge (running out of runway)
+                            if mins_to_start <= -45 and mins_to_deadline > 15:
+                                renudge_key = f"q1_runway_renudge_{task_id}_{today_str}_{rem_str}"
+                                if renudge_key not in self.notified_reminder_keys:
+                                    self.notified_reminder_keys.add(renudge_key)
+                                    self.task_last_notified[task_id] = now
+                                    self.dismissed_notification_ids.discard(task_id)
+                                    self._update_notification_badge()
+                                    self._queue_desktop_notification(
+                                        title=f"🚨 Running Out of Runway: {title}",
+                                        message="You are cutting into your buffer before the deadline! Start a focus sprint now.",
+                                    )
+
+                            # Milestone 3: Critical Deadline reached
+                            if mins_to_deadline <= 0:
+                                deadline_key = f"q1_deadline_{task_id}_{today_str}_{rem_str}"
+                                if deadline_key not in self.notified_reminder_keys:
+                                    self.notified_reminder_keys.add(deadline_key)
+                                    self.task_last_notified[task_id] = now
+                                    self.dismissed_notification_ids.discard(task_id)
+                                    self._update_notification_badge()
+                                    self._queue_desktop_notification(
+                                        title=f"🚨 Critical Deadline: {title}",
+                                        message=f"The {rem_str} deadline has arrived! Finalize and submit your work.",
+                                    )
+                    else:
+                        # Standard Scheduled Task Logic
+                        target_dt = datetime.combine(now.date(), rem_dt)
+                        mins_diff = (target_dt - now).total_seconds() / 60.0
+
+                        # Milestone 1: 30-Minute Heads-Up (between 1 and 30 minutes before)
+                        if 0 < mins_diff <= 30:
+                            headsup_key = f"headsup_{task_id}_{today_str}_{rem_str}"
+                            if headsup_key not in self.notified_reminder_keys:
+                                self.notified_reminder_keys.add(headsup_key)
+                                title = task.get("title", "Scheduled Task")
+                                mins_int = max(1, int(round(mins_diff)))
+                                self._queue_desktop_notification(
+                                    title=f"⏳ In {mins_int} Mins: {title}",
+                                    message=f"Scheduled for {rem_str}. Wrap up your current work to focus.",
+                                )
+
+                        # Milestone 2: Exact Scheduled Time (at or past reminder time)
+                        if mins_diff <= 0:
+                            reminder_key = f"time_{task_id}_{today_str}_{rem_str}"
+                            if reminder_key not in self.notified_reminder_keys:
+                                self.notified_reminder_keys.add(reminder_key)
+                                self.task_last_notified[task_id] = now
+                                self.dismissed_notification_ids.discard(task_id)
+                                self._update_notification_badge()
+                                title = task.get("title", "Task Reminder")
+                                self._queue_desktop_notification(
+                                    title=f"⏰ Scheduled Now: {title}",
+                                    message=f"It's {rem_str}! Ready for a 25-min focus sprint? Click to begin.",
+                                )
+
+            # 2. Categorized deadline notifications for active tasks
             active_tasks = [t for t in self.all_tasks if t.get("id") not in getattr(self, "dismissed_notification_ids", set())]
             notifs = get_task_notifications(active_tasks, current_date_str=today_str)
 
-            # A. Overdue Tasks
+            # A. Overdue Tasks (Carried over from past days, notified once per day)
             overdue_pending = [
                 t for t in notifs.get("overdue", [])
                 if f"overdue_{t.get('id')}_{today_str}" not in self.notified_reminder_keys
             ]
             if overdue_pending:
-                if len(overdue_pending) <= 2:
-                    for t in overdue_pending:
-                        self.notified_reminder_keys.add(f"overdue_{t.get('id')}_{today_str}")
-                        title = t.get("title", "Task")
-                        days_ago = abs(t.get("days_diff", 1))
-                        day_text = "yesterday" if days_ago == 1 else f"{days_ago} days ago"
-                        self._queue_desktop_notification(
-                            title=f"⚠️ Overdue Task: {title}",
-                            message=f"Was due {day_text} ({t.get('due_date')}). Take action now!",
-                        )
-                else:
-                    for t in overdue_pending:
-                        self.notified_reminder_keys.add(f"overdue_{t.get('id')}_{today_str}")
-                    first_titles = ", ".join([f'"{t.get("title", "Task")}"' for t in overdue_pending[:2]])
+                for t in overdue_pending[:2]:
+                    t_id = t.get("id")
+                    self.notified_reminder_keys.add(f"overdue_{t_id}_{today_str}")
+                    if t_id:
+                        self.task_last_notified[t_id] = now
+                    title = t.get("title", "Task")
+                    days_ago = abs(t.get("days_diff", 1))
+                    day_text = "yesterday" if days_ago == 1 else f"{days_ago} days ago"
                     self._queue_desktop_notification(
-                        title=f"⚠️ {len(overdue_pending)} Overdue Tasks",
-                        message=f"{first_titles} and {len(overdue_pending) - 2} more are overdue.",
+                        title=f"⚠️ Overdue: {title}",
+                        message=f"Was due {day_text}. Knock it out with a quick 15-min sprint!",
                     )
+                for t in overdue_pending[2:]:
+                    self.notified_reminder_keys.add(f"overdue_{t.get('id')}_{today_str}")
 
-            # B. Tasks Due Today (without a future exact-minute reminder)
-            today_pending = [
+            # B. Untimed Tasks Due Today (Natural Checkpoints: Midday 12:30-14:00 & Evening 18:00-20:00)
+            untimed_today = [
                 t for t in notifs.get("today", [])
-                if f"today_{t.get('id')}_{today_str}" not in self.notified_reminder_keys
-                and not (t.get("reminder_time") and str(t.get("reminder_time")).strip())
+                if not (t.get("reminder_time") and str(t.get("reminder_time")).strip())
             ]
-            if today_pending:
-                if len(today_pending) <= 2:
-                    for t in today_pending:
-                        self.notified_reminder_keys.add(f"today_{t.get('id')}_{today_str}")
-                        title = t.get("title", "Task")
+            if untimed_today:
+                current_hour = now.hour
+                current_min = now.minute
+
+                # Midday Check-in (between 12:30 PM and 2:00 PM)
+                if (current_hour == 12 and current_min >= 30) or current_hour == 13:
+                    midday_key = f"midday_digest_{today_str}"
+                    if midday_key not in self.notified_reminder_keys:
+                        self.notified_reminder_keys.add(midday_key)
+                        first_title = untimed_today[0].get("title", "Today's Task")
+                        extra = f" and {len(untimed_today) - 1} more" if len(untimed_today) > 1 else ""
                         self._queue_desktop_notification(
-                            title=f"⏰ Due Today: {title}",
-                            message="This task is scheduled for today. Keep on track!",
+                            title="📋 Midday Check-In",
+                            message=f"{first_title}{extra} due today. Keep your momentum going!",
                         )
-                else:
-                    for t in today_pending:
-                        self.notified_reminder_keys.add(f"today_{t.get('id')}_{today_str}")
-                    first_titles = ", ".join([f'"{t.get("title", "Task")}"' for t in today_pending[:2]])
+
+                # Evening Review (between 6:00 PM and 8:00 PM)
+                elif 18 <= current_hour < 20:
+                    evening_key = f"evening_digest_{today_str}"
+                    if evening_key not in self.notified_reminder_keys:
+                        self.notified_reminder_keys.add(evening_key)
+                        first_title = untimed_today[0].get("title", "Today's Task")
+                        extra = f" and {len(untimed_today) - 1} more" if len(untimed_today) > 1 else ""
+                        self._queue_desktop_notification(
+                            title="🌅 Evening Review",
+                            message=f"{first_title}{extra} pending today. Wrap up before the day ends.",
+                        )
+
+            # C. Tasks Due Tomorrow (Evening Plan-Ahead Digest: 7:00 PM - 9:00 PM)
+            tomorrow_tasks = notifs.get("tomorrow", [])
+            if tomorrow_tasks and 19 <= now.hour < 21:
+                tomorrow_key = f"tomorrow_digest_{today_str}"
+                if tomorrow_key not in self.notified_reminder_keys:
+                    self.notified_reminder_keys.add(tomorrow_key)
+                    first_title = tomorrow_tasks[0].get("title", "Tomorrow's Task")
+                    extra = f" and {len(tomorrow_tasks) - 1} more" if len(tomorrow_tasks) > 1 else ""
                     self._queue_desktop_notification(
-                        title=f"⏰ {len(today_pending)} Tasks Due Today",
-                        message=f"{first_titles} and {len(today_pending) - 2} more need focus today.",
+                        title="⏳ Ahead for Tomorrow",
+                        message=f"{first_title}{extra} due tomorrow. Plan ahead!",
                     )
 
-            # C. Tasks Due Tomorrow (1 Day Left)
-            tomorrow_pending = [
-                t for t in notifs.get("tomorrow", [])
-                if f"tomorrow_{t.get('id')}_{today_str}" not in self.notified_reminder_keys
-            ]
-            if tomorrow_pending:
-                if len(tomorrow_pending) <= 2:
-                    for t in tomorrow_pending:
-                        self.notified_reminder_keys.add(f"tomorrow_{t.get('id')}_{today_str}")
-                        title = t.get("title", "Task")
-                        self._queue_desktop_notification(
-                            title=f"⏳ Due Tomorrow (1 Day Left): {title}",
-                            message=f"Due tomorrow ({t.get('due_date')}). Prepare ahead!",
-                        )
-                else:
-                    for t in tomorrow_pending:
-                        self.notified_reminder_keys.add(f"tomorrow_{t.get('id')}_{today_str}")
-                    first_titles = ", ".join([f'"{t.get("title", "Task")}"' for t in tomorrow_pending[:2]])
-                    self._queue_desktop_notification(
-                        title=f"⏳ {len(tomorrow_pending)} Tasks Due Tomorrow",
-                        message=f"{first_titles} and {len(tomorrow_pending) - 2} more are due tomorrow.",
-                    )
+            # D. Milestone 3: Gentle Anti-Procrastination Re-Nudge (Capped at 1x, 45m after reminder)
+            for task in self.all_tasks:
+                if bool(task.get("is_completed", 0)):
+                    continue
+                t_id = task.get("id")
+                if not t_id or t_id in getattr(self, "dismissed_notification_ids", set()):
+                    continue
 
-            # D. Upcoming Deadlines (2 to 3 Days Left)
-            upcoming_pending = [
-                t for t in notifs.get("upcoming", [])
-                if f"upcoming_{t.get('id')}_{t.get('days_diff')}d_{today_str}" not in self.notified_reminder_keys
-            ]
-            if upcoming_pending:
-                if len(upcoming_pending) <= 2:
-                    for t in upcoming_pending:
-                        days_left = t.get("days_diff", 2)
-                        self.notified_reminder_keys.add(f"upcoming_{t.get('id')}_{days_left}d_{today_str}")
-                        title = t.get("title", "Task")
-                        self._queue_desktop_notification(
-                            title=f"🗓️ Upcoming ({days_left} Days Left): {title}",
-                            message=f"Due on {t.get('due_date')} ({days_left} days left).",
-                        )
-                else:
-                    for t in upcoming_pending:
-                        days_left = t.get("days_diff", 2)
-                        self.notified_reminder_keys.add(f"upcoming_{t.get('id')}_{days_left}d_{today_str}")
-                    first_titles = ", ".join([f'"{t.get("title", "Task")}"' for t in upcoming_pending[:2]])
-                    self._queue_desktop_notification(
-                        title=f"🗓️ {len(upcoming_pending)} Upcoming Deadlines",
-                        message=f"{first_titles} and {len(upcoming_pending) - 2} more due in 2-3 days.",
-                    )
+                is_q1 = task.get("quadrant") == "Q1_DO"
+                is_due_today = str(task.get("due_date", "")).strip() == today_str
+                if not (is_q1 or is_due_today):
+                    continue
+
+                last_notif = self.task_last_notified.get(t_id)
+                nudge_count = self.task_renudge_counts.get(t_id, 0)
+                # Exactly 1 gentle follow-up so it never annoys the user
+                if last_notif and nudge_count < 1:
+                    elapsed_mins = (now - last_notif).total_seconds() / 60.0
+                    # Re-nudge after 45 minutes of inaction
+                    if elapsed_mins >= 45:
+                        self.task_last_notified[t_id] = now
+                        self.task_renudge_counts[t_id] = 1
+                        title = task.get("title", "High-Priority Task")
+                        est_duration = int(task.get("estimated_duration") or 0)
+                        if is_q1 and est_duration > 0:
+                            self._queue_desktop_notification(
+                                title=f"🚨 Running Out of Runway: {title}",
+                                message="You are cutting into your buffer before the deadline! Start a focus sprint now.",
+                            )
+                        else:
+                            self._queue_desktop_notification(
+                                title=f"🔥 Still Waiting: {title}",
+                                message="Break the hesitation! Start a 25-min Pomodoro focus sprint now.",
+                            )
         except Exception:
             pass
         finally:
@@ -777,9 +925,10 @@ class PriorApp(ctk.CTk):
                     quadrant=data["quadrant"],
                     due_date=data["due_date"],
                     reminder_time=data.get("reminder_time"),
+                    estimated_duration=data.get("estimated_duration", 0),
                 )
                 self.dismissed_notification_ids.discard(task_id)
-                self.notified_reminder_keys = {k for k in self.notified_reminder_keys if not k.startswith(f"{task_id}_")}
+                self.notified_reminder_keys = {k for k in self.notified_reminder_keys if f"_{task_id}_" not in k}
             else:
                 new_id = database.add_task(
                     title=data["title"],
@@ -787,11 +936,13 @@ class PriorApp(ctk.CTk):
                     quadrant=data["quadrant"],
                     due_date=data["due_date"],
                     reminder_time=data.get("reminder_time"),
+                    estimated_duration=data.get("estimated_duration", 0),
                 )
                 if new_id:
                     self.dismissed_notification_ids.discard(new_id)
-                    self.notified_reminder_keys = {k for k in self.notified_reminder_keys if not k.startswith(f"{new_id}_")}
+                    self.notified_reminder_keys = {k for k in self.notified_reminder_keys if f"_{new_id}_" not in k}
             self._load_and_refresh()
+            self.after(50, self._check_reminders)
 
         TaskModal(
             self,
@@ -813,7 +964,9 @@ class PriorApp(ctk.CTk):
         """Toggles task completion status."""
         database.toggle_task_completion(task_id)
         self.dismissed_notification_ids.discard(task_id)
-        self.notified_reminder_keys = {k for k in self.notified_reminder_keys if not k.startswith(f"{task_id}_")}
+        self.notified_reminder_keys = {k for k in self.notified_reminder_keys if f"_{task_id}_" not in k}
+        self.task_last_notified.pop(task_id, None)
+        self.task_renudge_counts.pop(task_id, None)
         self._load_and_refresh()
 
     def move_or_reorder_task(
@@ -862,7 +1015,9 @@ class PriorApp(ctk.CTk):
         """Deletes a task."""
         database.delete_task(task_id)
         self.dismissed_notification_ids.discard(task_id)
-        self.notified_reminder_keys = {k for k in self.notified_reminder_keys if not k.startswith(f"{task_id}_")}
+        self.notified_reminder_keys = {k for k in self.notified_reminder_keys if f"_{task_id}_" not in k}
+        self.task_last_notified.pop(task_id, None)
+        self.task_renudge_counts.pop(task_id, None)
         self._load_and_refresh()
 
     def open_pomodoro_modal(self, task: Dict[str, Any]) -> None:
@@ -877,11 +1032,22 @@ class PriorApp(ctk.CTk):
 
     def open_schedule_modal(self, task: Dict[str, Any]) -> None:
         """Opens the dedicated Schedule & Reminder modal for the selected task."""
-        def handle_save_schedule(task_id: int, due_date: Optional[str], reminder_time: Optional[str]) -> None:
-            database.update_task(task_id=task_id, due_date=due_date, reminder_time=reminder_time)
+        def handle_save_schedule(
+            task_id: int,
+            due_date: Optional[str],
+            reminder_time: Optional[str],
+            estimated_duration: int = 0,
+        ) -> None:
+            database.update_task(
+                task_id=task_id,
+                due_date=due_date,
+                reminder_time=reminder_time,
+                estimated_duration=estimated_duration,
+            )
             self.dismissed_notification_ids.discard(task_id)
-            self.notified_reminder_keys = {k for k in self.notified_reminder_keys if not k.startswith(f"{task_id}_")}
+            self.notified_reminder_keys = {k for k in self.notified_reminder_keys if f"_{task_id}_" not in k}
             self._load_and_refresh()
+            self.after(50, self._check_reminders)
 
         ScheduleModal(
             self,
@@ -1052,6 +1218,7 @@ class PriorApp(ctk.CTk):
                 on_show_app=self.show_window,
                 on_quick_add=self.show_and_quick_add,
                 on_exit_app=self.quit_completely,
+                on_notification_click=self.show_and_open_notifications,
             )
             self.tray.start()
         except Exception:
@@ -1064,7 +1231,54 @@ class PriorApp(ctk.CTk):
     def _restore_window(self) -> None:
         self.deiconify()
         self.lift()
+        # Temporarily force window topmost to bypass Windows OS background focus lock
+        self.attributes("-topmost", True)
+        self.after(100, lambda: self.attributes("-topmost", False))
+        try:
+            import ctypes
+            hwnd = ctypes.windll.user32.GetParent(self.winfo_id()) or self.winfo_id()
+            ctypes.windll.user32.ShowWindow(hwnd, 9)  # SW_RESTORE
+            ctypes.windll.user32.SetForegroundWindow(hwnd)
+        except Exception:
+            pass
         self.focus_force()
+
+    def _start_ipc_server(self) -> None:
+        """Starts a lightweight local socket listener on 127.0.0.1:49281 to receive activation commands."""
+        def _listen():
+            import socket
+            try:
+                server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+                server.bind(("127.0.0.1", 49281))
+                server.listen(5)
+                while True:
+                    conn, _ = server.accept()
+                    try:
+                        data = conn.recv(1024).decode("utf-8", errors="ignore").strip()
+                        if "open_notifications" in data:
+                            self.after(0, self.show_and_open_notifications)
+                        else:
+                            self.after(0, self.show_window)
+                    except Exception:
+                        pass
+                    finally:
+                        try:
+                            conn.close()
+                        except Exception:
+                            pass
+            except Exception:
+                pass
+
+        threading.Thread(target=_listen, daemon=True).start()
+
+    def show_and_open_notifications(self) -> None:
+        """Restores window and opens notification modal when a desktop notification is clicked."""
+        self.after(0, self._restore_and_open_notifications)
+
+    def _restore_and_open_notifications(self) -> None:
+        self._restore_window()
+        self.after(120, self._open_notifications)
 
     def show_and_quick_add(self) -> None:
         """Restores window and immediately opens Add Task modal."""

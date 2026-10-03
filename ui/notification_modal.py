@@ -27,6 +27,7 @@ class NotificationModal(ctk.CTkToplevel):
         on_edit: Callable[[Dict[str, Any]], None],
         on_schedule: Callable[[Dict[str, Any]], None],
         on_refresh: Optional[Callable[[], None]] = None,
+        on_focus: Optional[Callable[[Dict[str, Any]], None]] = None,
     ) -> None:
         super().__init__(master, fg_color=theme.BG_CARD)
 
@@ -46,6 +47,7 @@ class NotificationModal(ctk.CTkToplevel):
         self.on_edit = on_edit
         self.on_schedule = on_schedule
         self.on_refresh = on_refresh
+        self.on_focus = on_focus
         if hasattr(master, "dismissed_notification_ids"):
             self.dismissed_task_ids: Set[int] = master.dismissed_notification_ids
         else:
@@ -396,6 +398,33 @@ class NotificationModal(ctk.CTkToplevel):
         )
         lbl_q_badge.pack(padx=6, pady=1)
 
+        # Runway Pill (STRICTLY ONLY FOR RED / Q1_DO TASKS)
+        is_q1 = task.get("quadrant") == "Q1_DO"
+        est_duration = int(task.get("estimated_duration") or 0)
+        if is_q1 and est_duration > 0:
+            if est_duration < 60:
+                dur_text = f"{est_duration}m"
+            elif est_duration % 60 == 0:
+                dur_text = f"{est_duration // 60}h"
+            else:
+                dur_text = f"{est_duration // 60}h {est_duration % 60}m"
+
+            runway_pill = ctk.CTkFrame(
+                row_badges,
+                fg_color=("#FEF2F2", "#2A0A0A"),
+                corner_radius=6,
+                border_width=1,
+                border_color=("#FCA5A5", "#7F1D1D"),
+            )
+            runway_pill.pack(side="left", padx=(0, 8))
+            lbl_runway_pill = ctk.CTkLabel(
+                runway_pill,
+                text=f"⏱️ {dur_text} Runway",
+                font=(theme.FONT_FAMILY, 10, "bold"),
+                text_color=("#DC2626", "#F87171"),
+            )
+            lbl_runway_pill.pack(padx=6, pady=1)
+
         # Relative Status Badge (only needed for overdue and upcoming, not redundant today/tomorrow)
         days_diff = task.get("days_diff", 0)
         due_str = task.get("due_date", "")
@@ -466,11 +495,7 @@ class NotificationModal(ctk.CTkToplevel):
             )
             lbl_desc.pack(fill="x", pady=(0, 6))
 
-        # Row 3: Due Date Details & Quick Action Buttons
-        row_actions = ctk.CTkFrame(inner, fg_color="transparent")
-        row_actions.pack(fill="x", pady=(4, 0))
-
-        # Due Date info text
+        # Row 3: Scheduled Due Date Details (Always clearly visible)
         date_display = due_str
         if due_str:
             try:
@@ -480,23 +505,49 @@ class NotificationModal(ctk.CTkToplevel):
                 pass
 
         reminder_info = f" • 🔔 {task['reminder_time']}" if task.get("reminder_time") else ""
+
+        row_date = ctk.CTkFrame(inner, fg_color="transparent")
+        row_date.pack(fill="x", pady=(2, 4))
+
         lbl_due_date = ctk.CTkLabel(
-            row_actions,
+            row_date,
             text=f"📅 {date_display}{reminder_info}",
             font=(theme.FONT_FAMILY, 11),
             text_color=theme.TEXT_MUTED,
+            anchor="w",
         )
         lbl_due_date.pack(side="left")
 
-        # Action Buttons on Right
+        # Row 4: Quick Action Buttons (Aligned to right with explicit compact sizing)
+        row_actions = ctk.CTkFrame(inner, fg_color="transparent")
+        row_actions.pack(fill="x", pady=(2, 0))
+
         btn_box = ctk.CTkFrame(row_actions, fg_color="transparent")
         btn_box.pack(side="right")
+
+        # Focus Sprint button (🍅 Focus) - STRICTLY ONLY FOR RED (Q1_DO) TASKS
+        if is_q1:
+            btn_focus = ctk.CTkButton(
+                btn_box,
+                text="🍅 Focus",
+                width=68,
+                height=26,
+                corner_radius=6,
+                font=(theme.FONT_FAMILY, 11, "bold"),
+                fg_color=("#FEF2F2", "#260C0C"),
+                hover_color=("#FCA5A5", "#5C1D1D"),
+                text_color=("#DC2626", "#F87171"),
+                border_width=1,
+                border_color=("#F87171", "#7F1D1D"),
+                command=lambda t=task: self._on_focus_click(t),
+            )
+            btn_focus.pack(side="left", padx=(0, 6))
 
         # Done button (✓)
         btn_done = ctk.CTkButton(
             btn_box,
             text="✓ Done",
-            width=65,
+            width=62,
             height=26,
             corner_radius=6,
             font=(theme.FONT_FAMILY, 11, "bold"),
@@ -511,7 +562,7 @@ class NotificationModal(ctk.CTkToplevel):
         btn_reschedule = ctk.CTkButton(
             btn_box,
             text="📅 Schedule",
-            width=85,
+            width=82,
             height=26,
             corner_radius=6,
             font=(theme.FONT_FAMILY, 11, "bold"),
@@ -524,7 +575,7 @@ class NotificationModal(ctk.CTkToplevel):
         )
         btn_reschedule.pack(side="left", padx=(0, 6))
 
-        # Edit button (✏️)
+        # Edit button (✏️) - explicit width with comfortable padding so it is never cut off
         btn_edit = ctk.CTkButton(
             btn_box,
             text="✏️",
@@ -594,3 +645,20 @@ class NotificationModal(ctk.CTkToplevel):
         """Closes notification modal and opens the TaskModal for editing."""
         self.destroy()
         self.on_edit(task)
+
+    def _on_focus_click(self, task: Dict[str, Any]) -> None:
+        """Closes notification modal and launches Pomodoro timer for this task."""
+        self.destroy()
+        if self.on_focus:
+            self.on_focus(task)
+        elif hasattr(self.master, "open_pomodoro_modal"):
+            self.master.open_pomodoro_modal(task)
+
+    def destroy(self) -> None:
+        """Cleans up active modal reference and destroys the window."""
+        try:
+            if hasattr(self.master, "active_notification_modal") and self.master.active_notification_modal is self:
+                self.master.active_notification_modal = None
+        except Exception:
+            pass
+        super().destroy()
