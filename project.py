@@ -4,12 +4,49 @@ Prior — Eisenhower Matrix Time Management Desktop Application.
 CS50P Final Project implementation.
 """
 
-from datetime import date, datetime
-import re
+import os
 import sys
-from typing import Any, Dict, List, Optional
+import tempfile
+
+# Route all temporary files to local .tmp directory on Drive G: (which has 350+ GB free)
+# Prevents OSError [Errno 28] 'No space left on device' when host C: drive is full
+_temp_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".tmp")
+os.makedirs(_temp_dir, exist_ok=True)
+os.environ["TEMP"] = _temp_dir
+os.environ["TMP"] = _temp_dir
+tempfile.tempdir = _temp_dir
+
+from datetime import date, datetime, timedelta
+import re
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 import database
+
+
+def is_existing_instance_running(signal_notifications: bool = False) -> bool:
+    """
+    Checks if an existing instance of Prior is already running.
+    If so, communicates with it via local IPC to bring it to foreground,
+    optionally opens the notification modal, and returns True.
+    """
+    import socket
+    try:
+        with socket.create_connection(("127.0.0.1", 49281), timeout=0.6) as s:
+            msg = b"open_notifications\n" if signal_notifications else b"show\n"
+            s.sendall(msg)
+
+        if sys.platform == "win32":
+            try:
+                import ctypes
+                hwnd = ctypes.windll.user32.FindWindowW(None, "Prior - Eisenhower Matrix Task Manager")
+                if hwnd:
+                    ctypes.windll.user32.ShowWindow(hwnd, 9)  # SW_RESTORE
+                    ctypes.windll.user32.SetForegroundWindow(hwnd)
+            except Exception:
+                pass
+        return True
+    except Exception:
+        return False
 
 
 def main() -> None:
@@ -17,6 +54,10 @@ def main() -> None:
     Main entrypoint for Prior desktop application.
     Initializes local SQLite database and launches the GUI.
     """
+    is_notification_trigger = "--open-notifications" in sys.argv or any("prior://" in arg.lower() for arg in sys.argv)
+    if is_existing_instance_running(signal_notifications=is_notification_trigger):
+        sys.exit(0)
+
     if sys.platform == "win32":
         try:
             import ctypes
@@ -387,6 +428,137 @@ def get_task_notifications(
         "today": today_list,
         "tomorrow": tomorrow_list,
         "upcoming": upcoming_list,
+    }
+
+
+def validate_schedule_time(
+    due_date: Union[date, str, None],
+    reminder_time: Optional[str] = None,
+    current_dt: Optional[datetime] = None,
+) -> Tuple[bool, Optional[str]]:
+    """
+    Validates whether a scheduled due date and reminder time are valid and not in the past.
+    Returns (is_valid, error_message).
+    - If no due date is provided, returns (True, None) (unscheduled task is valid).
+    - If due date is in the past (< today), returns (False, "Selected date is in the past. Please choose today or a future date.").
+    - If due date is today and reminder_time is provided, checks if reminder time has already passed.
+      If it has passed, returns (False, f"Reminder time ({reminder_time}) has already passed today! Please select a future time.").
+    - Otherwise returns (True, None).
+    """
+    if not due_date:
+        return True, None
+
+    now = current_dt if current_dt is not None else datetime.now()
+    today = now.date()
+
+    if isinstance(due_date, str):
+        try:
+            d = datetime.strptime(due_date.strip(), "%Y-%m-%d").date()
+        except ValueError:
+            return False, "Invalid date format. Expected YYYY-MM-DD."
+    elif isinstance(due_date, date):
+        d = due_date
+    else:
+        return False, "Invalid date type."
+
+    if d < today:
+        return False, "Selected date is in the past. Please choose today or a future date."
+
+    if d == today and reminder_time and str(reminder_time).strip():
+        rem_str = str(reminder_time).strip()
+        rem_time = None
+        for fmt in ("%I:%M %p", "%H:%M", "%I:%M%p"):
+            try:
+                rem_time = datetime.strptime(rem_str, fmt).time()
+                break
+            except ValueError:
+                pass
+
+        if rem_time is None:
+            return False, "Invalid reminder time format."
+
+        # Compare hours and minutes against current time
+        if (rem_time.hour, rem_time.minute) <= (now.hour, now.minute):
+            return False, f"Reminder time ({rem_str}) has already passed today! Please select a future time."
+
+    return True, None
+
+
+def calculate_drop_dead_time(
+    deadline_time_str: str,
+    duration_minutes: int,
+    deadline_date: Union[date, str, None] = None,
+    reference_dt: Optional[datetime] = None,
+) -> Optional[Dict[str, Any]]:
+    """
+    Calculates the 'Point of No Return' (Drop-Dead Start Time) for a task given its deadline time
+    and estimated duration needed to complete the work.
+
+    :param deadline_time_str: Deadline time string (e.g. '11:00 PM', '23:00').
+    :param duration_minutes: Non-negative integer duration in minutes (e.g. 120).
+    :param deadline_date: Target deadline date as date or 'YYYY-MM-DD' string (defaults to reference date).
+    :param reference_dt: Optional reference datetime (defaults to datetime.now()).
+    :return: Dict containing drop dead details, or None if invalid inputs or duration <= 0.
+    :raises TypeError: If duration_minutes is not an integer.
+    """
+    if not isinstance(duration_minutes, int) or isinstance(duration_minutes, bool):
+        raise TypeError("duration_minutes must be an integer.")
+
+    if duration_minutes <= 0 or not deadline_time_str or not str(deadline_time_str).strip():
+        return None
+
+    now = reference_dt if reference_dt is not None else datetime.now()
+
+    # Determine deadline date
+    if deadline_date is None:
+        target_date = now.date()
+    elif isinstance(deadline_date, str):
+        try:
+            target_date = datetime.strptime(deadline_date.strip(), "%Y-%m-%d").date()
+        except ValueError:
+            return None
+    elif isinstance(deadline_date, date):
+        target_date = deadline_date
+    else:
+        return None
+
+    # Parse deadline time
+    rem_str = str(deadline_time_str).strip()
+    rem_time = None
+    for fmt in ("%I:%M %p", "%H:%M", "%I:%M%p"):
+        try:
+            rem_time = datetime.strptime(rem_str, fmt).time()
+            break
+        except ValueError:
+            pass
+
+    if rem_time is None:
+        return None
+
+    deadline_dt = datetime.combine(target_date, rem_time)
+    drop_dead_dt = deadline_dt - timedelta(minutes=duration_minutes)
+    drop_dead_time_str = drop_dead_dt.strftime("%I:%M %p")
+
+    # Format human-friendly duration text (e.g. 30m, 1h, 1h 30m, 2h)
+    if duration_minutes < 60:
+        duration_text = f"{duration_minutes}m"
+    elif duration_minutes % 60 == 0:
+        duration_text = f"{duration_minutes // 60}h"
+    else:
+        duration_text = f"{duration_minutes // 60}h {duration_minutes % 60}m"
+
+    sprints = max(1, round(duration_minutes / 25))
+    mins_to_start = (drop_dead_dt - now).total_seconds() / 60.0
+    mins_to_deadline = (deadline_dt - now).total_seconds() / 60.0
+
+    return {
+        "drop_dead_time_str": drop_dead_time_str,
+        "drop_dead_dt": drop_dead_dt,
+        "deadline_dt": deadline_dt,
+        "duration_text": duration_text,
+        "pomodoro_sprints": sprints,
+        "mins_to_start": mins_to_start,
+        "mins_to_deadline": mins_to_deadline,
     }
 
 

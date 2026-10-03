@@ -4,15 +4,18 @@ Comprehensive pytest unit test suite for Prior (CS50P Final Project).
 Tests all required custom functions defined in project.py.
 """
 
+from datetime import date, datetime
 import pytest
 
 from project import (
+    calculate_drop_dead_time,
     calculate_matrix_stats,
     determine_quadrant,
     filter_tasks,
     format_due_status,
     format_timer_display,
     get_task_notifications,
+    validate_schedule_time,
 )
 
 
@@ -332,4 +335,129 @@ def test_get_task_notifications_categorization_and_sorting():
     assert [t["id"] for t in res["upcoming"]] == [5, 6]
     assert res["upcoming"][0]["days_diff"] == 2
     assert res["upcoming"][1]["days_diff"] == 3
+
+
+# ============================================================================
+# 7. Tests for validate_schedule_time()
+# ============================================================================
+
+def test_validate_schedule_time_scenarios():
+    """Verify schedule date and reminder time validation across past, present, and future scenarios."""
+    ref_now = datetime(2026, 10, 3, 19, 22)  # 7:22 PM on Oct 03, 2026
+
+    # 1. Setting a reminder for earlier today (e.g. 6:00 AM when current time is 7:22 PM) -> MUST FAIL
+    is_valid, err = validate_schedule_time("2026-10-03", "6:00 AM", current_dt=ref_now)
+    assert is_valid is False
+    assert "has already passed today" in err
+
+    # With leading zero "06:00 AM"
+    is_valid, err = validate_schedule_time(date(2026, 10, 3), "06:00 AM", current_dt=ref_now)
+    assert is_valid is False
+    assert "has already passed today" in err
+
+    # 2. Setting a reminder for future time today (e.g. 8:00 PM) -> MUST PASS
+    is_valid, err = validate_schedule_time("2026-10-03", "8:00 PM", current_dt=ref_now)
+    assert is_valid is True
+    assert err is None
+
+    # 3. Setting a reminder for tomorrow (e.g. 6:00 AM tomorrow) -> MUST PASS
+    is_valid, err = validate_schedule_time("2026-10-04", "6:00 AM", current_dt=ref_now)
+    assert is_valid is True
+    assert err is None
+
+    # 4. Setting a date in the past (yesterday) -> MUST FAIL
+    is_valid, err = validate_schedule_time("2026-10-02", "6:00 AM", current_dt=ref_now)
+    assert is_valid is False
+    assert "in the past" in err
+
+    # 5. Setting task for today without a reminder time -> MUST PASS
+    is_valid, err = validate_schedule_time("2026-10-03", None, current_dt=ref_now)
+    assert is_valid is True
+    assert err is None
+
+    # 6. Unscheduled task (no date, no reminder) -> MUST PASS
+    is_valid, err = validate_schedule_time(None, None, current_dt=ref_now)
+    assert is_valid is True
+    assert err is None
+
+
+# ============================================================================
+# 8. Tests for calculate_drop_dead_time()
+# ============================================================================
+
+def test_calculate_drop_dead_time_basic():
+    """Verify drop dead start time calculation for standard scenarios."""
+    ref_now = datetime(2026, 10, 4, 20, 0)  # 8:00 PM
+
+    # 2 hours runway for 11:00 PM deadline -> Drop-dead start must be 09:00 PM
+    res = calculate_drop_dead_time("11:00 PM", 120, "2026-10-04", reference_dt=ref_now)
+    assert res is not None
+    assert res["drop_dead_time_str"] == "09:00 PM"
+    assert res["duration_text"] == "2h"
+    assert res["pomodoro_sprints"] == 5
+    assert res["mins_to_start"] == 60.0
+    assert res["mins_to_deadline"] == 180.0
+
+    # 30 mins runway for 10:00 AM deadline
+    res30 = calculate_drop_dead_time("10:00 AM", 30, "2026-10-04", reference_dt=ref_now)
+    assert res30 is not None
+    assert res30["drop_dead_time_str"] == "09:30 AM"
+    assert res30["duration_text"] == "30m"
+    assert res30["pomodoro_sprints"] == 1
+
+    # Custom duration: 75 mins (1 hr 15 mins) for 11:00 PM deadline -> Drop dead 09:45 PM
+    res75 = calculate_drop_dead_time("11:00 PM", 75, "2026-10-04", reference_dt=ref_now)
+    assert res75 is not None
+    assert res75["drop_dead_time_str"] == "09:45 PM"
+    assert res75["duration_text"] == "1h 15m"
+    assert res75["pomodoro_sprints"] == 3
+
+
+def test_calculate_drop_dead_time_midnight_crossover():
+    """Verify cross-midnight drop dead time calculation (e.g., deadline 1:00 AM)."""
+    # Deadline at 1:00 AM on Oct 5th with 2 hours runway -> Drop dead is 11:00 PM on Oct 4th
+    res = calculate_drop_dead_time("1:00 AM", 120, "2026-10-05")
+    assert res is not None
+    assert res["drop_dead_time_str"] == "11:00 PM"
+    assert res["drop_dead_dt"] == datetime(2026, 10, 4, 23, 0)
+
+
+def test_calculate_drop_dead_time_invalid_inputs():
+    """Verify handling of invalid or non-positive durations and malformed inputs."""
+    assert calculate_drop_dead_time("11:00 PM", 0) is None
+    assert calculate_drop_dead_time("11:00 PM", -30) is None
+    assert calculate_drop_dead_time("", 60) is None
+    assert calculate_drop_dead_time("invalid_time", 60) is None
+    assert calculate_drop_dead_time("11:00 PM", 60, deadline_date="invalid_date") is None
+
+    with pytest.raises(TypeError):
+        calculate_drop_dead_time("11:00 PM", "60")  # type: ignore
+
+    with pytest.raises(TypeError):
+        calculate_drop_dead_time("11:00 PM", True)  # type: ignore
+
+
+def test_calculate_drop_dead_time_user_persona_milestones():
+    """Verify precision milestones for user persona: Bio paper due 11:00 PM, 2 hours duration."""
+    # At 8:45 PM (15 mins before drop-dead start)
+    ref_845pm = datetime(2026, 10, 4, 20, 45)
+    res_845 = calculate_drop_dead_time("11:00 PM", 120, "2026-10-04", reference_dt=ref_845pm)
+    assert res_845 is not None
+    assert res_845["drop_dead_time_str"] == "09:00 PM"
+    assert res_845["mins_to_start"] == 15.0
+    assert 0 < res_845["mins_to_start"] <= 15  # Triggers 15-min warning
+
+    # At 9:00 PM (Drop-Dead Start Time / Point of No Return)
+    ref_900pm = datetime(2026, 10, 4, 21, 0)
+    res_900 = calculate_drop_dead_time("11:00 PM", 120, "2026-10-04", reference_dt=ref_900pm)
+    assert res_900 is not None
+    assert res_900["mins_to_start"] == 0.0
+    assert res_900["mins_to_deadline"] == 120.0  # Triggers Point of No Return
+
+    # At 11:00 PM (Critical Deadline)
+    ref_1100pm = datetime(2026, 10, 4, 23, 0)
+    res_1100 = calculate_drop_dead_time("11:00 PM", 120, "2026-10-04", reference_dt=ref_1100pm)
+    assert res_1100 is not None
+    assert res_1100["mins_to_deadline"] == 0.0  # Triggers Critical Deadline
+
 
