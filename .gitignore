@@ -9,6 +9,7 @@ __pycache__/
 .coverage
 htmlcov/
 *.db
+.tmp/
 
 # Virtual environments
 venv/

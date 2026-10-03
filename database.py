@@ -89,6 +89,11 @@ def init_db(db_path: Optional[str] = None) -> None:
         pass
 
     try:
+        cursor.execute("ALTER TABLE tasks ADD COLUMN estimated_duration INTEGER DEFAULT 0")
+    except sqlite3.OperationalError:
+        pass
+
+    try:
         cursor.execute("ALTER TABLE profile ADD COLUMN zoom_scale REAL NOT NULL DEFAULT 1.0")
     except sqlite3.OperationalError:
         pass
@@ -185,6 +190,7 @@ def add_task(
     quadrant: str = "Q1_DO",
     due_date: Optional[str] = None,
     reminder_time: Optional[str] = None,
+    estimated_duration: int = 0,
     db_path: Optional[str] = None,
 ) -> int:
     """
@@ -201,15 +207,16 @@ def add_task(
         normalized_quadrant = "Q1_DO"
 
     created_at = datetime.now().isoformat()
+    duration_val = int(estimated_duration or 0)
 
     conn = get_connection(db_path)
     cursor = conn.cursor()
     cursor.execute(
         """
-        INSERT INTO tasks (title, description, quadrant, due_date, reminder_time, is_completed, position, created_at, completed_at)
-        VALUES (?, ?, ?, ?, ?, 0, 0, ?, NULL)
+        INSERT INTO tasks (title, description, quadrant, due_date, reminder_time, estimated_duration, is_completed, position, created_at, completed_at)
+        VALUES (?, ?, ?, ?, ?, ?, 0, 0, ?, NULL)
         """,
-        (clean_title, description.strip(), normalized_quadrant, due_date, reminder_time, created_at),
+        (clean_title, description.strip(), normalized_quadrant, due_date, reminder_time, duration_val, created_at),
     )
     task_id = cursor.lastrowid
     conn.commit()
@@ -247,6 +254,7 @@ def update_task(
     quadrant: Any = _UNSET,
     due_date: Any = _UNSET,
     reminder_time: Any = _UNSET,
+    estimated_duration: Any = _UNSET,
     is_completed: Any = _UNSET,
     position: Any = _UNSET,
     db_path: Optional[str] = None,
@@ -280,6 +288,10 @@ def update_task(
     if reminder_time is not _UNSET:
         fields.append("reminder_time = ?")
         values.append(reminder_time.strip() if reminder_time and str(reminder_time).strip() else None)
+
+    if estimated_duration is not _UNSET:
+        fields.append("estimated_duration = ?")
+        values.append(int(estimated_duration) if estimated_duration is not None else 0)
 
     if is_completed is not _UNSET:
         val = 1 if is_completed else 0
