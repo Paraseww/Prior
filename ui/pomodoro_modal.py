@@ -12,7 +12,11 @@ from typing import Any, Callable, Dict, List, Optional
 import customtkinter as ctk
 
 import database
-from project import calculate_pomodoro_stage, format_timer_display
+from project import (
+    calculate_pomodoro_stage,
+    calculate_recommended_sprints,
+    format_timer_display,
+)
 from ui import theme
 
 
@@ -47,10 +51,17 @@ class PomodoroModal(ctk.CTkToplevel):
         # Apply Prior application icon
         theme.apply_prior_icon(self)
 
+        # Determine target sprints based on estimated duration (accounting for 130m cycle with 15m long break)
+        est_duration = int(self.task.get("estimated_duration") or 0)
+        if est_duration > 0:
+            self.total_target_sprints = calculate_recommended_sprints(est_duration)
+        else:
+            self.total_target_sprints = self.SET_SIZE
+
         # State Variables
         self.current_mode = "work"         # "work", "short_break", "long_break"
-        self.sprint_count = 1              # 1 to SET_SIZE (current sprint in set)
-        self.completed_sprints_in_set = 0  # 0 to SET_SIZE
+        self.sprint_count = 1              # 1 to total_target_sprints (current sprint index)
+        self.completed_sprints_in_set = 0  # 0 to total_target_sprints (completed sprints)
 
         # Initialize today's completed sprints count from SQLite
         try:
@@ -64,6 +75,11 @@ class PomodoroModal(ctk.CTkToplevel):
         self.is_running = False
         self._timer_id: Optional[str] = None
         self.pill_buttons: List[ctk.CTkButton] = []
+        self.runway_badge: Optional[ctk.CTkFrame] = None
+        self.lbl_runway_main: Optional[ctk.CTkLabel] = None
+        self.lbl_runway_sub: Optional[ctk.CTkLabel] = None
+        self.badge_sprints: Optional[ctk.CTkFrame] = None
+        self.badge_cycles: Optional[ctk.CTkFrame] = None
 
         self._center_modal(master)
         self._build_ui()
@@ -77,8 +93,8 @@ class PomodoroModal(ctk.CTkToplevel):
             screen_w = self.winfo_screenwidth()
             screen_h = self.winfo_screenheight()
 
-            w = min(560, max(490, screen_w - 40))
-            h = min(620, max(520, screen_h - 70))
+            w = min(540, max(490, screen_w - 40))
+            h = min(500, max(460, screen_h - 70))
 
             x = master.winfo_x() + (master.winfo_width() - w) // 2
             y = master.winfo_y() + (master.winfo_height() - h) // 2
@@ -87,10 +103,10 @@ class PomodoroModal(ctk.CTkToplevel):
             pos_y = max(10, min(y, screen_h - h - 50))
 
             self.geometry(f"{w}x{h}+{pos_x}+{pos_y}")
-            self.minsize(480, 500)
+            self.minsize(480, 440)
         except Exception:
-            self.geometry("540x600")
-            self.minsize(480, 500)
+            self.geometry("520x480")
+            self.minsize(480, 440)
 
     def _build_ui(self) -> None:
         self.configure(fg_color=theme.BG_CARD)
@@ -117,7 +133,7 @@ class PomodoroModal(ctk.CTkToplevel):
 
         lbl_target = ctk.CTkLabel(
             header_row,
-            text="🎯 FOCUS TARGET",
+            text="FOCUS TARGET",
             font=(theme.FONT_FAMILY, 10, "bold"),
             text_color="#EF4444",
             anchor="w",
@@ -156,17 +172,58 @@ class PomodoroModal(ctk.CTkToplevel):
             )
             btn_edit.pack(side="right", padx=(0, 6) if self.on_delete_task else 0)
 
+        # Title row: Task title on left + Sprints & Cycles badges on right
+        title_row = ctk.CTkFrame(inner_task, fg_color="transparent")
+        title_row.pack(fill="x", pady=(4, 0))
+
         task_title = self.task.get("title", "Prior Focus Task")
         lbl_title = ctk.CTkLabel(
-            inner_task,
+            title_row,
             text=task_title,
             font=(theme.FONT_FAMILY, 15, "bold"),
             text_color=theme.TEXT_PRIMARY,
             anchor="w",
-            wraplength=450,
             justify="left",
         )
-        lbl_title.pack(fill="x", pady=(4, 0))
+        lbl_title.pack(side="left", fill="x", expand=True)
+
+        # Right badges container: Sprints done & Cycles done
+        stats_box = ctk.CTkFrame(title_row, fg_color="transparent")
+        stats_box.pack(side="right")
+
+        self.badge_sprints = ctk.CTkFrame(
+            stats_box,
+            fg_color=theme.BG_CARD,
+            corner_radius=6,
+            border_width=1,
+            border_color=theme.BORDER_COLOR,
+        )
+        self.badge_sprints.pack(side="left", padx=(0, 6))
+
+        self.lbl_sprints_done = ctk.CTkLabel(
+            self.badge_sprints,
+            text=f"Sprints done: {self.completed_sprints_in_set}",
+            font=(theme.FONT_FAMILY, 10, "bold"),
+            text_color=theme.TEXT_SECONDARY,
+        )
+        self.lbl_sprints_done.pack(padx=8, pady=2)
+
+        self.badge_cycles = ctk.CTkFrame(
+            stats_box,
+            fg_color=theme.BG_CARD,
+            corner_radius=6,
+            border_width=1,
+            border_color=theme.BORDER_COLOR,
+        )
+        self.badge_cycles.pack(side="left")
+
+        self.lbl_cycles_done = ctk.CTkLabel(
+            self.badge_cycles,
+            text=f"Cycles done: {self.completed_sprints_in_set // 4}",
+            font=(theme.FONT_FAMILY, 10, "bold"),
+            text_color=theme.TEXT_SECONDARY,
+        )
+        self.lbl_cycles_done.pack(padx=8, pady=2)
 
         # Description / Notes (if present)
         task_notes = (self.task.get("description") or self.task.get("notes") or "").strip()
@@ -182,10 +239,9 @@ class PomodoroModal(ctk.CTkToplevel):
             )
             lbl_notes.pack(fill="x", pady=(3, 0))
 
-        # Estimated Runway / Focus Sprint Recommendation - STRICTLY FOR Q1 (Red Box)
+        # Estimated Runway / Focus Sprint Recommendation
         est_duration = int(self.task.get("estimated_duration") or 0)
-        is_q1 = self.task.get("quadrant") == "Q1_DO"
-        if is_q1 and est_duration > 0:
+        if est_duration > 0:
             if est_duration < 60:
                 dur_phrase = f"{est_duration} mins"
             elif est_duration == 60:
@@ -194,82 +250,60 @@ class PomodoroModal(ctk.CTkToplevel):
                 dur_phrase = f"{est_duration // 60} hours"
             else:
                 dur_phrase = f"{est_duration // 60}h {est_duration % 60}m"
-            sprints = max(1, round(est_duration / 25))
-            runway_badge = ctk.CTkFrame(
+            sprints = self.total_target_sprints
+            sprint_word = "sprint" if sprints == 1 else "sprints"
+
+            cycles = sprints // 4
+            extra = sprints % 4
+            if cycles > 0 and extra > 0:
+                cycle_str = "1 full 130 min cycle" if cycles == 1 else f"{cycles} full 130 min cycles"
+                extra_str = "1 extra sprint" if extra == 1 else f"{extra} extra sprints"
+                break_clause = f"({cycle_str} + {extra_str})"
+            elif cycles > 0 and extra == 0:
+                cycle_str = "1 full 130 min cycle" if cycles == 1 else f"{cycles} full 130 min cycles"
+                break_clause = f"({cycle_str})"
+            else:
+                break_clause = ""
+
+            self.runway_badge = ctk.CTkFrame(
                 inner_task,
                 fg_color=("#FEF2F2", "#2B0B0B"),
-                corner_radius=6,
+                corner_radius=8,
                 border_width=1,
                 border_color=("#FCA5A5", "#7F1D1D"),
             )
-            runway_badge.pack(anchor="w", pady=(6, 2))
-            ctk.CTkLabel(
-                runway_badge,
-                text=f"⏱️ {dur_phrase} needed: Recommended {sprints} × 25m sprints with breaks.",
-                font=(theme.FONT_FAMILY, 11, "bold"),
-                text_color=("#DC2626", "#F87171"),
-            ).pack(padx=8, pady=4)
+            self.runway_badge.pack(fill="x", pady=(6, 2))
 
-        # 2. Cycle Progress Tracker Card
-        cycle_box = ctk.CTkFrame(
-            container,
-            fg_color=theme.BG_INPUT,
-            corner_radius=12,
-            border_width=1,
-            border_color=theme.BORDER_COLOR,
-        )
-        cycle_box.pack(fill="x", pady=(0, 12))
+            if break_clause:
+                self.lbl_runway_main = ctk.CTkLabel(
+                    self.runway_badge,
+                    text=f"⏱️ Estimated {dur_phrase}: With breaks, you get {sprints} {sprint_word}",
+                    font=(theme.FONT_FAMILY, 11, "bold"),
+                    text_color=("#DC2626", "#F87171"),
+                    anchor="w",
+                )
+                self.lbl_runway_main.pack(anchor="w", padx=12, pady=(6, 1))
 
-        inner_cycle = ctk.CTkFrame(cycle_box, fg_color="transparent")
-        inner_cycle.pack(fill="x", padx=14, pady=10)
+                self.lbl_runway_sub = ctk.CTkLabel(
+                    self.runway_badge,
+                    text=break_clause,
+                    font=(theme.FONT_FAMILY, 10),
+                    text_color=("#DC2626", "#FCA5A5"),
+                    anchor="w",
+                )
+                self.lbl_runway_sub.pack(anchor="w", padx=(34, 12), pady=(0, 6))
+            else:
+                self.lbl_runway_main = ctk.CTkLabel(
+                    self.runway_badge,
+                    text=f"⏱️ Estimated {dur_phrase}: With breaks, you get {sprints} {sprint_word}.",
+                    font=(theme.FONT_FAMILY, 11, "bold"),
+                    text_color=("#DC2626", "#F87171"),
+                    anchor="w",
+                )
+                self.lbl_runway_main.pack(anchor="w", padx=12, pady=6)
+                self.lbl_runway_sub = None
 
-        cycle_head = ctk.CTkFrame(inner_cycle, fg_color="transparent")
-        cycle_head.pack(fill="x", pady=(0, 8))
-
-        lbl_cycle_title = ctk.CTkLabel(
-            cycle_head,
-            text="🍅 4-STAGE POMODORO CYCLE",
-            font=(theme.FONT_FAMILY, 10, "bold"),
-            text_color=theme.TEXT_SECONDARY,
-            anchor="w",
-        )
-        lbl_cycle_title.pack(side="left")
-
-        self.lbl_total_tally = ctk.CTkLabel(
-            cycle_head,
-            text=f"Today: {self.completed_sprints_total} 🍅",
-            font=(theme.FONT_FAMILY, 11, "bold"),
-            text_color=theme.TEXT_PRIMARY,
-            anchor="e",
-        )
-        self.lbl_total_tally.pack(side="right")
-
-        # Pills Row (Sprint 1 .. 4) using equal-width uniform grid
-        pills_row = ctk.CTkFrame(inner_cycle, fg_color="transparent")
-        pills_row.pack(fill="x")
-        for col in range(self.SET_SIZE):
-            pills_row.grid_columnconfigure(col, weight=1, uniform="sprint_pill")
-
-        self.pill_buttons.clear()
-        for i in range(1, self.SET_SIZE + 1):
-            btn = ctk.CTkButton(
-                pills_row,
-                text=f"Sprint {i}",
-                font=(theme.FONT_FAMILY, 11, "bold"),
-                height=32,
-                width=0,
-                corner_radius=8,
-                border_width=1,
-                border_color=theme.BORDER_COLOR,
-                fg_color=theme.BG_CARD,
-                hover_color=theme.BG_CARD_HOVER,
-                text_color=theme.TEXT_MUTED,
-                command=lambda idx=i: self._on_sprint_pill_click(idx),
-            )
-            btn.grid(row=0, column=i - 1, sticky="ew", padx=3)
-            self.pill_buttons.append(btn)
-
-        # 3. Mode Selector: Focus (25m) / Short Break (5m) / Long Break (15m)
+        # 2. Mode Selector: Focus (25m) / Short Break (5m) / Long Break (15m)
         self.mode_segment = ctk.CTkSegmentedButton(
             container,
             values=["Focus (25m)", "Short Break (5m)", "Long Break (15m)"],
@@ -297,7 +331,7 @@ class PomodoroModal(ctk.CTkToplevel):
 
         self.lbl_stage_badge = ctk.CTkLabel(
             self.timer_frame,
-            text=f"🍅 SPRINT {self.sprint_count} OF {self.SET_SIZE} • DEEP FOCUS",
+            text=f"🍅 SPRINT {self.sprint_count} OF {self.total_target_sprints} • DEEP FOCUS",
             font=(theme.FONT_FAMILY, 11, "bold"),
             text_color=("#DC2626", "#F87171"),
         )
@@ -376,7 +410,7 @@ class PomodoroModal(ctk.CTkToplevel):
         btn_reset.pack(side="right")
 
         # 7. Mark Task Done & Finish Button
-        btn_complete = ctk.CTkButton(
+        self.btn_complete = ctk.CTkButton(
             container,
             text="✓ Mark Task Completed & Finish",
             font=(theme.FONT_FAMILY, 13, "bold"),
@@ -389,15 +423,102 @@ class PomodoroModal(ctk.CTkToplevel):
             border_color=("#EF4444", "#DC2626"),
             command=self._on_mark_completed,
         )
-        btn_complete.pack(fill="x")
+        self.btn_complete.pack(fill="x")
 
     def _update_cycle_tracker(self) -> None:
-        """Updates the 4-stage pill buttons and today's session completed count."""
-        self.lbl_total_tally.configure(text=f"Today: {self.completed_sprints_total} 🍅")
+        """Updates sprint and cycle badges and today's session completed count."""
+        if hasattr(self, "lbl_total_tally") and self.lbl_total_tally:
+            try:
+                self.lbl_total_tally.configure(text=f"Today: {self.completed_sprints_total} 🍅")
+            except Exception:
+                pass
+
+        cycles_done = self.completed_sprints_in_set // 4
+        sprints_done = self.completed_sprints_in_set
+        is_target_completed = self.completed_sprints_in_set >= self.total_target_sprints
+
+        # Green theme when target completed, otherwise red/secondary
+        if is_target_completed:
+            sprints_color = ("#059669", "#34D399")
+            cycles_color = ("#059669", "#34D399")
+            pill_border = ("#10B981", "#059669")
+            pill_bg = ("#ECFDF5", "#042218")
+        else:
+            sprints_color = ("#EF4444", "#F87171") if sprints_done > 0 else theme.TEXT_SECONDARY
+            cycles_color = ("#EF4444", "#F87171") if cycles_done > 0 else theme.TEXT_SECONDARY
+            pill_border = theme.BORDER_COLOR
+            pill_bg = theme.BG_CARD
+
+        if hasattr(self, "lbl_sprints_done") and self.lbl_sprints_done:
+            self.lbl_sprints_done.configure(
+                text=f"Sprints done: {sprints_done}",
+                text_color=sprints_color,
+            )
+        if hasattr(self, "badge_sprints") and self.badge_sprints:
+            self.badge_sprints.configure(
+                border_color=pill_border,
+                fg_color=pill_bg,
+            )
+
+        if hasattr(self, "lbl_cycles_done") and self.lbl_cycles_done:
+            self.lbl_cycles_done.configure(
+                text=f"Cycles done: {cycles_done}",
+                text_color=cycles_color,
+            )
+        if hasattr(self, "badge_cycles") and self.badge_cycles:
+            self.badge_cycles.configure(
+                border_color=pill_border,
+                fg_color=pill_bg,
+            )
+
+        # Update runway banner text and background to green when target completed
+        if hasattr(self, "runway_badge") and self.runway_badge:
+            if is_target_completed:
+                self.runway_badge.configure(
+                    fg_color=("#ECFDF5", "#06281E"),
+                    border_color=("#6EE7B7", "#065F46"),
+                )
+                if hasattr(self, "lbl_runway_main") and self.lbl_runway_main:
+                    self.lbl_runway_main.configure(text_color=("#059669", "#34D399"))
+                if hasattr(self, "lbl_runway_sub") and self.lbl_runway_sub and self.lbl_runway_sub is not None:
+                    self.lbl_runway_sub.configure(text_color=("#059669", "#6EE7B7"))
+            else:
+                self.runway_badge.configure(
+                    fg_color=("#FEF2F2", "#2B0B0B"),
+                    border_color=("#FCA5A5", "#7F1D1D"),
+                )
+                if hasattr(self, "lbl_runway_main") and self.lbl_runway_main:
+                    self.lbl_runway_main.configure(text_color=("#DC2626", "#F87171"))
+                if hasattr(self, "lbl_runway_sub") and self.lbl_runway_sub and self.lbl_runway_sub is not None:
+                    self.lbl_runway_sub.configure(text_color=("#DC2626", "#FCA5A5"))
+
+        if hasattr(self, "btn_skip") and self.btn_skip:
+            if self.completed_sprints_in_set >= self.total_target_sprints:
+                self.btn_skip.configure(state="disabled")
+            else:
+                self.btn_skip.configure(state="normal")
+
+        if hasattr(self, "btn_complete") and self.btn_complete:
+            if self.completed_sprints_in_set >= self.total_target_sprints:
+                self.btn_complete.configure(
+                    text="🏆 Congrats, You Did It! Mark Completed & Finish",
+                    fg_color=("#10B981", "#059669"),
+                    text_color="#FFFFFF",
+                    hover_color=("#059669", "#047857"),
+                    border_color=("#10B981", "#059669"),
+                )
+            else:
+                self.btn_complete.configure(
+                    text="✓ Mark Task Completed & Finish",
+                    fg_color="transparent",
+                    hover_color=("#FEF2F2", "#2A0A0A"),
+                    text_color=("#EF4444", "#F87171"),
+                    border_color=("#EF4444", "#DC2626"),
+                )
 
         for idx, btn in enumerate(self.pill_buttons, start=1):
             if idx <= self.completed_sprints_in_set:
-                # Completed sprint in current set
+                # Completed sprint
                 btn.configure(
                     text=f"✓ Sprint {idx}",
                     fg_color=("#FEF2F2", "#2B0B0B"),
@@ -417,26 +538,25 @@ class PomodoroModal(ctk.CTkToplevel):
                         text_color="#FFFFFF",
                         border_width=1,
                     )
-                else:
-                    # Currently active break stage
-                    if self.current_mode == "short_break":
-                        btn.configure(
-                            text=f"☕ Break {idx}",
-                            fg_color=("#ECFDF5", "#042218"),
-                            hover_color=("#D1FAE5", "#063A2A"),
-                            border_color=("#6EE7B7", "#065F46"),
-                            text_color=("#059669", "#34D399"),
-                            border_width=1,
-                        )
-                    else:  # long_break
-                        btn.configure(
-                            text="🌴 Break",
-                            fg_color=("#EEF2FF", "#1E1B4B"),
-                            hover_color=("#E0E7FF", "#2E2A72"),
-                            border_color=("#A5B4FC", "#3730A3"),
-                            text_color=("#4F46E5", "#818CF8"),
-                            border_width=1,
-                        )
+                elif self.current_mode == "short_break":
+                    # Currently active short break
+                    btn.configure(
+                        text=f"☕ Break {idx}",
+                        fg_color=("#ECFDF5", "#042218"),
+                        hover_color=("#D1FAE5", "#063A2A"),
+                        border_color=("#6EE7B7", "#065F46"),
+                        text_color=("#059669", "#34D399"),
+                        border_width=1,
+                    )
+                else:  # long_break
+                    btn.configure(
+                        text="🌴 Break",
+                        fg_color=("#EEF2FF", "#1E1B4B"),
+                        hover_color=("#E0E7FF", "#2E2A72"),
+                        border_color=("#A5B4FC", "#3730A3"),
+                        text_color=("#4F46E5", "#818CF8"),
+                        border_width=1,
+                    )
             else:
                 # Pending future sprint
                 btn.configure(
@@ -449,16 +569,17 @@ class PomodoroModal(ctk.CTkToplevel):
                 )
 
     def _on_sprint_pill_click(self, sprint_idx: int) -> None:
-        """Allows jumping directly to a chosen sprint in the 4-stage cycle."""
+        """Allows jumping directly to a chosen sprint in the cycle."""
         self.sprint_count = sprint_idx
-        self._set_stage("work", status_msg=f"Selected Sprint {sprint_idx} of {self.SET_SIZE}.")
+        self.completed_sprints_in_set = sprint_idx - 1
+        self._set_stage("work", status_msg=f"Selected Sprint {sprint_idx} of {self.total_target_sprints}.")
 
     def _update_theme_colors(self) -> None:
         """Dynamically styles timer frame, progress bar, and action buttons according to mode."""
         if self.current_mode == "work":
             accent = "#EF4444"
             hover = "#DC2626"
-            badge_text = f"🍅 SPRINT {self.sprint_count} OF {self.SET_SIZE} • DEEP FOCUS"
+            badge_text = f"🍅 SPRINT {self.sprint_count} OF {self.total_target_sprints} • DEEP FOCUS"
             badge_color = ("#DC2626", "#F87171")
             start_btn_text = f"▶  Start Sprint {self.sprint_count} (25m)"
             self.mode_segment.configure(selected_color="#EF4444", selected_hover_color="#DC2626")
@@ -472,14 +593,25 @@ class PomodoroModal(ctk.CTkToplevel):
         else:  # long_break
             accent = "#6366F1"
             hover = "#4F46E5"
-            badge_text = "🌴 LONG BREAK • 15 MINUTES"
-            badge_color = ("#4F46E5", "#818CF8")
+            if self.completed_sprints_in_set >= self.total_target_sprints:
+                badge_text = "🎉 CONGRATS, YOU DID IT! • LONG BREAK (15M)"
+                badge_color = ("#4F46E5", "#818CF8")
+            else:
+                badge_text = "🌴 LONG BREAK • 15 MINUTES"
+                badge_color = ("#4F46E5", "#818CF8")
             start_btn_text = "🌴  Start Long Break (15m)"
             self.mode_segment.configure(selected_color="#6366F1", selected_hover_color="#4F46E5")
 
         self.timer_frame.configure(border_color=accent)
         self.progress_bar.configure(progress_color=accent)
         self.lbl_stage_badge.configure(text=badge_text, text_color=badge_color)
+
+        # Disable skip button if all target sprints are completed
+        if hasattr(self, "btn_skip") and self.btn_skip:
+            if self.completed_sprints_in_set >= self.total_target_sprints:
+                self.btn_skip.configure(state="disabled")
+            else:
+                self.btn_skip.configure(state="normal")
 
         if not self.is_running:
             self.btn_toggle.configure(
@@ -514,7 +646,7 @@ class PomodoroModal(ctk.CTkToplevel):
             self.remaining_seconds = self.WORK_TIME
             self.mode_segment.set("Focus (25m)")
             if not status_msg:
-                status_msg = f"Sprint {self.sprint_count} of {self.SET_SIZE} • Stay in the zone."
+                status_msg = f"Sprint {self.sprint_count} of {self.total_target_sprints} • Stay in the zone."
         elif mode == "short_break":
             self.total_seconds = self.SHORT_BREAK
             self.remaining_seconds = self.SHORT_BREAK
@@ -549,7 +681,7 @@ class PomodoroModal(ctk.CTkToplevel):
             self.is_running = True
             if self.current_mode == "work":
                 self.btn_toggle.configure(text="⏸  Pause Session")
-                self.lbl_status.configure(text=f"Focus active: Sprint {self.sprint_count} of {self.SET_SIZE}. Keep going!")
+                self.lbl_status.configure(text=f"Focus active: Sprint {self.sprint_count} of {self.total_target_sprints}. Keep going!")
             else:
                 self.btn_toggle.configure(text="⏸  Pause Break")
                 self.lbl_status.configure(text="Rest and recharge. Step away from your desk.")
@@ -574,6 +706,7 @@ class PomodoroModal(ctk.CTkToplevel):
                 completed_sprints=self.completed_sprints_in_set,
                 current_mode=self.current_mode,
                 set_size=self.SET_SIZE,
+                total_target_sprints=self.total_target_sprints,
             )
 
             task_title = (self.task.get("title") or "Prior Focus Task").strip()
@@ -591,47 +724,101 @@ class PomodoroModal(ctk.CTkToplevel):
                 except Exception:
                     pass
 
+                self.completed_sprints_in_set += 1
+                new_completed = self.completed_sprints_in_set
+
                 if stage_info["is_set_completed"]:
-                    self.completed_sprints_in_set = 0
-                    self.sprint_count = 1
-                    status_text = "🏆 4 Sprints finished! You completed a full set. Enjoy a 15-minute Long Break!"
+                    set_num = new_completed // self.SET_SIZE
+                    if new_completed < self.total_target_sprints:
+                        self.sprint_count = new_completed + 1
+                        status_text = f"🏆 Sprint {new_completed} finished! You completed Set {set_num}. Enjoy a 15-minute Long Break!"
+                        notify_title = f"🏆 Set {set_num} Completed ({new_completed} Sprints)!"
+                        notify_msg = f"Outstanding work on \"{task_title}\"! Take a 15-minute Long Break."
+                    else:
+                        self.sprint_count = self.total_target_sprints
+                        status_text = f"🎉 Congrats, you did it! All {self.total_target_sprints} sprints completed! Enjoy your well-deserved 15-minute Long Break! 🏆"
+                        notify_title = f"🎉 Congrats, You Did It! All {self.total_target_sprints} Sprints Completed!"
+                        notify_msg = f"Outstanding work on \"{task_title}\"! Target achieved. Enjoy your 15-minute Long Break."
                     self._set_stage("long_break", status_msg=status_text)
                     self._notify_stage_completion(
-                        title="🏆 4 Sprints Completed! Full Set Finished!",
-                        message=f"Outstanding work on \"{task_title}\"! Take a 15-minute Long Break.",
+                        title=notify_title,
+                        message=notify_msg,
                         sound_type="set_completed",
                     )
                 else:
-                    self.completed_sprints_in_set += 1
-                    self.sprint_count = self.completed_sprints_in_set + 1
-                    status_text = f"🎉 Sprint {self.completed_sprints_in_set} finished! Take a 5-minute breather."
+                    self.sprint_count = min(new_completed + 1, self.total_target_sprints)
+                    status_text = f"🎉 Sprint {new_completed} finished! Take a 5-minute breather."
                     self._set_stage("short_break", status_msg=status_text)
                     self._notify_stage_completion(
-                        title=f"🍅 Sprint {self.completed_sprints_in_set} Completed!",
+                        title=f"🍅 Sprint {new_completed} Completed!",
                         message=f"Great focus on \"{task_title}\"! Time for a 5-minute breather.",
                         sound_type="work_done",
                     )
             elif self.current_mode == "short_break":
-                status_text = f"⚡ Break finished! Ready for Sprint {self.sprint_count} of {self.SET_SIZE}."
+                status_text = f"⚡ Break finished! Ready for Sprint {self.sprint_count} of {self.total_target_sprints}."
                 self._set_stage("work", status_msg=status_text)
                 self._notify_stage_completion(
                     title="⚡ Short Break Finished!",
-                    message=f"Recharged? Time to dive into Sprint {self.sprint_count} of {self.SET_SIZE}.",
+                    message=f"Recharged? Time to dive into Sprint {self.sprint_count} of {self.total_target_sprints}.",
                     sound_type="break_done",
                 )
             else:  # long_break
-                self.sprint_count = 1
-                self.completed_sprints_in_set = 0
-                status_text = f"✨ Fully recharged! Ready to start Set 2 (Sprint 1 of {self.SET_SIZE})."
-                self._set_stage("work", status_msg=status_text)
-                self._notify_stage_completion(
-                    title="✨ Long Break Finished!",
-                    message=f"Fully recharged! Ready to start Sprint 1 on \"{task_title}\".",
-                    sound_type="break_done",
-                )
+                if self.sprint_count < self.total_target_sprints and self.completed_sprints_in_set < self.total_target_sprints:
+                    status_text = f"✨ Fully recharged! Ready to start Sprint {self.sprint_count} of {self.total_target_sprints}."
+                    self._set_stage("work", status_msg=status_text)
+                    self._notify_stage_completion(
+                        title="✨ Long Break Finished!",
+                        message=f"Fully recharged! Ready to start Sprint {self.sprint_count} on \"{task_title}\".",
+                        sound_type="break_done",
+                    )
+                else:
+                    self._mark_target_completed_celebration()
+
+    def _mark_target_completed_celebration(self) -> None:
+        """Celebrates full session target completion and prompts marking task done."""
+        self._stop_timer_loop()
+        self.is_running = False
+        self.remaining_seconds = 0
+        self._update_display()
+
+        task_title = (self.task.get("title") or "Prior Focus Task").strip()
+        celebrate_status = f"🎉 Congrats, you did it! All {self.total_target_sprints} sprints completed! Outstanding work on \"{task_title}\"! 🏆"
+        self.lbl_status.configure(text=celebrate_status)
+        self.lbl_stage_badge.configure(
+            text="🏆 TARGET COMPLETED • CONGRATS, YOU DID IT!",
+            text_color=("#10B981", "#34D399"),
+        )
+        self.timer_frame.configure(border_color="#10B981")
+        self.progress_bar.configure(progress_color="#10B981")
+        self.progress_bar.set(1.0)
+        self.btn_toggle.configure(
+            text="🏆 Target Achieved!",
+            state="disabled",
+            fg_color="#10B981",
+            hover_color="#059669",
+        )
+        self.btn_skip.configure(state="disabled")
+
+        if hasattr(self, "btn_complete") and self.btn_complete:
+            self.btn_complete.configure(
+                text="🏆 Congrats, You Did It! Mark Completed & Finish",
+                fg_color=("#10B981", "#059669"),
+                text_color="#FFFFFF",
+                hover_color=("#059669", "#047857"),
+                border_color=("#10B981", "#059669"),
+            )
+
+        self._notify_stage_completion(
+            title="🏆 Target Completed! Congrats, You Did It!",
+            message=f"Outstanding focus on \"{task_title}\"! All {self.total_target_sprints} sprints finished.",
+            sound_type="set_completed",
+        )
 
     def _on_skip_stage(self) -> None:
         """Skips the active sprint or break to advance immediately to the next stage."""
+        if self.completed_sprints_in_set >= self.total_target_sprints:
+            return  # Target already finished; do not roll back to Sprint 1
+
         self._stop_timer_loop()
         self.is_running = False
 
@@ -639,24 +826,31 @@ class PomodoroModal(ctk.CTkToplevel):
             completed_sprints=self.completed_sprints_in_set,
             current_mode=self.current_mode,
             set_size=self.SET_SIZE,
+            total_target_sprints=self.total_target_sprints,
         )
 
         if self.current_mode == "work":
             self.completed_sprints_total += 1
+            self.completed_sprints_in_set += 1
+            new_completed = self.completed_sprints_in_set
             if stage_info["is_set_completed"]:
-                self.completed_sprints_in_set = 0
-                self.sprint_count = 1
-                self._set_stage("long_break", status_msg="Skipped to Long Break (15m).")
+                if new_completed < self.total_target_sprints:
+                    self.sprint_count = new_completed + 1
+                    status_text = f"Skipped to Long Break (15m) after Sprint {new_completed}."
+                else:
+                    self.sprint_count = self.total_target_sprints
+                    status_text = f"🎉 Congrats, you did it! All {self.total_target_sprints} sprints completed! Enjoy your well-deserved Long Break! 🏆"
+                self._set_stage("long_break", status_msg=status_text)
             else:
-                self.completed_sprints_in_set += 1
-                self.sprint_count = self.completed_sprints_in_set + 1
-                self._set_stage("short_break", status_msg=f"Skipped to Short Break (after Sprint {self.completed_sprints_in_set}).")
+                self.sprint_count = min(new_completed + 1, self.total_target_sprints)
+                self._set_stage("short_break", status_msg=f"Skipped to Short Break (after Sprint {new_completed}).")
         elif self.current_mode == "short_break":
-            self._set_stage("work", status_msg=f"Skipped break. Ready for Sprint {self.sprint_count} of {self.SET_SIZE}.")
+            self._set_stage("work", status_msg=f"Skipped break. Ready for Sprint {self.sprint_count} of {self.total_target_sprints}.")
         else:  # long_break
-            self.sprint_count = 1
-            self.completed_sprints_in_set = 0
-            self._set_stage("work", status_msg=f"Skipped long break. Ready for Sprint 1 of {self.SET_SIZE}.")
+            if self.completed_sprints_in_set < self.total_target_sprints:
+                self._set_stage("work", status_msg=f"Skipped long break. Ready for Sprint {self.sprint_count} of {self.total_target_sprints}.")
+            else:
+                return
 
     def _update_display(self) -> None:
         self.lbl_timer.configure(text=format_timer_display(self.remaining_seconds))

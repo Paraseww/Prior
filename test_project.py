@@ -10,12 +10,13 @@ import pytest
 from project import (
     calculate_drop_dead_time,
     calculate_matrix_stats,
+    calculate_pomodoro_stage,
+    calculate_pomodoro_stats,
+    calculate_recommended_sprints,
     determine_quadrant,
     filter_tasks,
     format_due_status,
     format_timer_display,
-    calculate_pomodoro_stage,
-    calculate_pomodoro_stats,
     get_task_notifications,
     validate_schedule_time,
 )
@@ -298,6 +299,37 @@ def test_calculate_pomodoro_stage_progression():
     assert lb["stage_title"] == "Sprint 1"
 
 
+def test_calculate_pomodoro_stage_multi_set_target():
+    """Verify 8-sprint multi-set cycle transitions (e.g., 4-hour task runway)."""
+    # 1. Fourth sprint finished in an 8-sprint session -> triggers Long Break, but next sprint is 5
+    s4 = calculate_pomodoro_stage(completed_sprints=3, current_mode="work", set_size=4, total_target_sprints=8)
+    assert s4["next_mode"] == "long_break"
+    assert s4["next_sprint"] == 5
+    assert s4["is_set_completed"] is True
+
+    # 2. Long break finishes -> advances to Sprint 5
+    lb4 = calculate_pomodoro_stage(completed_sprints=4, current_mode="long_break", set_size=4, total_target_sprints=8)
+    assert lb4["next_mode"] == "work"
+    assert lb4["next_sprint"] == 5
+    assert lb4["stage_title"] == "Sprint 5"
+
+    # 3. Sprint 5 finishes -> Short Break before Sprint 6
+    s5 = calculate_pomodoro_stage(completed_sprints=4, current_mode="work", set_size=4, total_target_sprints=8)
+    assert s5["next_mode"] == "short_break"
+    assert s5["next_sprint"] == 6
+
+    # 4. Short break finishes -> advances to Sprint 6
+    b5 = calculate_pomodoro_stage(completed_sprints=5, current_mode="short_break", set_size=4, total_target_sprints=8)
+    assert b5["next_mode"] == "work"
+    assert b5["next_sprint"] == 6
+
+    # 5. Sprint 8 finishes -> triggers final Long Break, cycles back to 1
+    s8 = calculate_pomodoro_stage(completed_sprints=7, current_mode="work", set_size=4, total_target_sprints=8)
+    assert s8["next_mode"] == "long_break"
+    assert s8["next_sprint"] == 1
+    assert s8["is_set_completed"] is True
+
+
 def test_calculate_pomodoro_stage_invalid():
     """Verify error handling on invalid types and negative arguments."""
     with pytest.raises(TypeError):
@@ -308,6 +340,12 @@ def test_calculate_pomodoro_stage_invalid():
 
     with pytest.raises(TypeError):
         calculate_pomodoro_stage(1, "work", set_size="4")  # type: ignore
+
+    with pytest.raises(TypeError):
+        calculate_pomodoro_stage(1, "work", total_target_sprints="8")  # type: ignore
+
+    with pytest.raises(ValueError):
+        calculate_pomodoro_stage(1, "work", total_target_sprints=0)
 
     with pytest.raises(ValueError):
         calculate_pomodoro_stage(-1, "work")
@@ -357,6 +395,34 @@ def test_calculate_pomodoro_stats_invalid():
         calculate_pomodoro_stats("not a list")  # type: ignore
     with pytest.raises(TypeError):
         calculate_pomodoro_stats(123)  # type: ignore
+
+
+def test_calculate_recommended_sprints_valid():
+    """Verify cycle-aware Pomodoro sprint recommendations across standard durations."""
+    # Under 2 hours (<= 120 mins)
+    assert calculate_recommended_sprints(30) == 1
+    assert calculate_recommended_sprints(60) == 2
+    assert calculate_recommended_sprints(75) == 2
+    assert calculate_recommended_sprints(90) == 3
+    assert calculate_recommended_sprints(120) == 4   # 2 hours
+
+    # Multi-cycle sessions (> 120 mins) taking 130m full cycles into account
+    assert calculate_recommended_sprints(180) == 6   # 3 hours: 1 cycle (130m) + 2 sprints (50m)
+    assert calculate_recommended_sprints(240) == 8   # 4 hours: 1 cycle (130m) + 4 sprints (110m)
+    assert calculate_recommended_sprints(480) == 15  # 8 hours: 3 cycles (390m) + 3 sprints (90m) = 480m exactly
+
+    # Zero duration
+    assert calculate_recommended_sprints(0) == 0
+
+
+def test_calculate_recommended_sprints_invalid():
+    """Verify error handling on invalid types and negative durations."""
+    with pytest.raises(TypeError):
+        calculate_recommended_sprints("60")  # type: ignore
+    with pytest.raises(TypeError):
+        calculate_recommended_sprints(True)  # type: ignore
+    with pytest.raises(ValueError):
+        calculate_recommended_sprints(-30)
 
 
 def test_database_pomodoro_persistence(tmp_path):
@@ -555,7 +621,7 @@ def test_calculate_drop_dead_time_basic():
     assert res is not None
     assert res["drop_dead_time_str"] == "09:00 PM"
     assert res["duration_text"] == "2h"
-    assert res["pomodoro_sprints"] == 5
+    assert res["pomodoro_sprints"] == 4
     assert res["mins_to_start"] == 60.0
     assert res["mins_to_deadline"] == 180.0
 
@@ -571,7 +637,14 @@ def test_calculate_drop_dead_time_basic():
     assert res75 is not None
     assert res75["drop_dead_time_str"] == "09:45 PM"
     assert res75["duration_text"] == "1h 15m"
-    assert res75["pomodoro_sprints"] == 3
+    assert res75["pomodoro_sprints"] == 2
+
+    # 8 hours runway (480 mins) -> 15 sprints fills exactly 480m with 130m cycles and long breaks
+    res480 = calculate_drop_dead_time("11:00 PM", 480, "2026-10-04", reference_dt=ref_now)
+    assert res480 is not None
+    assert res480["drop_dead_time_str"] == "03:00 PM"
+    assert res480["duration_text"] == "8h"
+    assert res480["pomodoro_sprints"] == 15
 
 
 def test_calculate_drop_dead_time_midnight_crossover():

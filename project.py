@@ -319,16 +319,18 @@ def calculate_pomodoro_stage(
     completed_sprints: int,
     current_mode: str = "work",
     set_size: int = 4,
+    total_target_sprints: Optional[int] = None,
 ) -> Dict[str, Any]:
     """
     Computes the next stage, sprint number, and cycle state for the Pomodoro workflow.
 
-    :param completed_sprints: Non-negative integer count of completed sprints in current set.
+    :param completed_sprints: Non-negative integer count of completed sprints.
     :param current_mode: Current stage ('work', 'short_break', or 'long_break').
     :param set_size: Positive integer representing sprints per full set (default 4).
+    :param total_target_sprints: Optional total target sprints for multi-set tasks (e.g. 8 for 4 hours).
     :return: Dictionary containing:
              - 'next_mode': 'work', 'short_break', or 'long_break'
-             - 'next_sprint': Target sprint index (1 to set_size)
+             - 'next_sprint': Target sprint index (1 to set_size or total_target_sprints)
              - 'is_set_completed': Boolean indicating if a full set was just concluded
              - 'stage_title': Human-readable stage name
     :raises TypeError: If inputs have invalid types.
@@ -338,6 +340,11 @@ def calculate_pomodoro_stage(
         raise TypeError("completed_sprints must be an integer.")
     if not isinstance(set_size, int) or isinstance(set_size, bool):
         raise TypeError("set_size must be an integer.")
+    if total_target_sprints is not None:
+        if not isinstance(total_target_sprints, int) or isinstance(total_target_sprints, bool):
+            raise TypeError("total_target_sprints must be an integer.")
+        if total_target_sprints <= 0:
+            raise ValueError("total_target_sprints must be greater than zero.")
     if completed_sprints < 0:
         raise ValueError("completed_sprints cannot be negative.")
     if set_size <= 0:
@@ -347,22 +354,34 @@ def calculate_pomodoro_stage(
 
     if current_mode == "work":
         new_completed = completed_sprints + 1
-        if new_completed >= set_size:
+        is_set_completed = (new_completed % set_size == 0)
+        if is_set_completed:
+            if total_target_sprints is not None and new_completed < total_target_sprints:
+                next_sprint = new_completed + 1
+            else:
+                next_sprint = 1
             return {
                 "next_mode": "long_break",
-                "next_sprint": 1,
+                "next_sprint": next_sprint,
                 "is_set_completed": True,
                 "stage_title": "Long Break",
             }
         else:
+            if total_target_sprints is not None and new_completed < total_target_sprints:
+                next_sprint = new_completed + 1
+            else:
+                next_sprint = ((new_completed % set_size) + 1)
             return {
                 "next_mode": "short_break",
-                "next_sprint": new_completed + 1,
+                "next_sprint": next_sprint,
                 "is_set_completed": False,
                 "stage_title": "Short Break",
             }
     elif current_mode == "short_break":
-        next_sprint = (completed_sprints % set_size) + 1
+        if total_target_sprints is not None:
+            next_sprint = min(completed_sprints + 1, total_target_sprints)
+        else:
+            next_sprint = (completed_sprints % set_size) + 1
         return {
             "next_mode": "work",
             "next_sprint": next_sprint,
@@ -370,12 +389,17 @@ def calculate_pomodoro_stage(
             "stage_title": f"Sprint {next_sprint}",
         }
     else:  # long_break
+        if total_target_sprints is not None and completed_sprints < total_target_sprints:
+            next_sprint = completed_sprints + 1
+        else:
+            next_sprint = 1
         return {
             "next_mode": "work",
-            "next_sprint": 1,
+            "next_sprint": next_sprint,
             "is_set_completed": False,
-            "stage_title": "Sprint 1",
+            "stage_title": f"Sprint {next_sprint}",
         }
+
 
 
 def calculate_pomodoro_stats(
@@ -426,6 +450,31 @@ def calculate_pomodoro_stats(
         "total_break_minutes": total_break_minutes,
         "average_sprint_minutes": avg_sprint,
     }
+
+
+def calculate_recommended_sprints(duration_minutes: int) -> int:
+    """
+    Computes recommended Pomodoro sprints for a given task duration in minutes.
+    Accounts for 25m work + 5m short break, and 15m long break every 4 sprints
+    (1 full cycle = 4 sprints = 130 minutes).
+
+    :param duration_minutes: Non-negative integer duration in minutes.
+    :return: Integer count of recommended focus sprints.
+    :raises TypeError: If duration_minutes is not an integer or is a boolean.
+    :raises ValueError: If duration_minutes is negative.
+    """
+    if not isinstance(duration_minutes, int) or isinstance(duration_minutes, bool):
+        raise TypeError("duration_minutes must be an integer.")
+    if duration_minutes < 0:
+        raise ValueError("duration_minutes cannot be negative.")
+    if duration_minutes == 0:
+        return 0
+
+    # 1 full cycle of 4 sprints = 3x30m + 1x40m (with 15m long break) = 130 min
+    cycles = duration_minutes // 130
+    rem = duration_minutes % 130
+    extra_sprints = round(rem / 30)
+    return max(1, cycles * 4 + extra_sprints)
 
 
 def get_task_notifications(
@@ -660,7 +709,7 @@ def calculate_drop_dead_time(
     else:
         duration_text = f"{duration_minutes // 60}h {duration_minutes % 60}m"
 
-    sprints = max(1, round(duration_minutes / 25))
+    sprints = calculate_recommended_sprints(duration_minutes)
     mins_to_start = (drop_dead_dt - now).total_seconds() / 60.0
     mins_to_deadline = (deadline_dt - now).total_seconds() / 60.0
 
