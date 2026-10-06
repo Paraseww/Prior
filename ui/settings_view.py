@@ -230,6 +230,19 @@ class SettingsView(DottedScrollableFrame):
         )
         btn_clear_comp.pack(side="left", padx=(0, 10))
 
+        btn_reset_focus = ctk.CTkButton(
+            data_row,
+            text="🍅 Reset Focus History",
+            font=(theme.FONT_FAMILY, 12),
+            height=36,
+            corner_radius=8,
+            fg_color=theme.BG_INPUT,
+            hover_color=("#FEE2E2", "#2A0A0A"),
+            text_color=("#EF4444", "#F87171"),
+            command=self._reset_focus_history,
+        )
+        btn_reset_focus.pack(side="left", padx=(0, 10))
+
         btn_replay_intro = ctk.CTkButton(
             data_row,
             text="🔄 Replay Welcome Onboarding",
@@ -289,6 +302,10 @@ class SettingsView(DottedScrollableFrame):
 
     def _clear_completed(self) -> None:
         database.clear_completed_tasks()
+        self.on_data_cleared()
+
+    def _reset_focus_history(self) -> None:
+        database.clear_all_pomodoro_sessions()
         self.on_data_cleared()
 
     def _replay_onboarding(self) -> None:

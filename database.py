@@ -139,6 +139,11 @@ def init_db(db_path: Optional[str] = None) -> None:
     conn.commit()
     conn.close()
 
+    try:
+        cleanup_orphaned_sessions(db_path)
+    except Exception:
+        pass
+
 
 def get_profile(db_path: Optional[str] = None) -> Dict[str, Any]:
     """Retrieves user profile settings."""
@@ -382,7 +387,7 @@ def toggle_task_completion(task_id: int, db_path: Optional[str] = None) -> bool:
 
 
 def delete_task(task_id: int, db_path: Optional[str] = None) -> bool:
-    """Deletes a task by ID."""
+    """Deletes a task by ID and removes its associated pomodoro focus sessions."""
     conn = get_connection(db_path)
     cursor = conn.cursor()
     cursor.execute("SELECT COUNT(*) FROM tasks WHERE id = ?", (task_id,))
@@ -390,6 +395,8 @@ def delete_task(task_id: int, db_path: Optional[str] = None) -> bool:
         conn.close()
         return False
 
+    # Cascade delete pomodoro sessions linked to this task
+    cursor.execute("DELETE FROM pomodoro_sessions WHERE task_id = ?", (task_id,))
     cursor.execute("DELETE FROM tasks WHERE id = ?", (task_id,))
     conn.commit()
     conn.close()
@@ -397,10 +404,37 @@ def delete_task(task_id: int, db_path: Optional[str] = None) -> bool:
 
 
 def clear_completed_tasks(db_path: Optional[str] = None) -> int:
-    """Deletes all completed tasks and returns the number of deleted rows."""
+    """Deletes all completed tasks and their pomodoro sessions, returning number of deleted tasks."""
     conn = get_connection(db_path)
     cursor = conn.cursor()
+    cursor.execute(
+        "DELETE FROM pomodoro_sessions WHERE task_id IN (SELECT id FROM tasks WHERE is_completed = 1)"
+    )
     cursor.execute("DELETE FROM tasks WHERE is_completed = 1")
+    deleted_count = cursor.rowcount
+    conn.commit()
+    conn.close()
+    return deleted_count
+
+
+def cleanup_orphaned_sessions(db_path: Optional[str] = None) -> int:
+    """Removes pomodoro sessions whose parent task no longer exists or is NULL."""
+    conn = get_connection(db_path)
+    cursor = conn.cursor()
+    cursor.execute(
+        "DELETE FROM pomodoro_sessions WHERE task_id NOT IN (SELECT id FROM tasks) OR task_id IS NULL"
+    )
+    deleted_count = cursor.rowcount
+    conn.commit()
+    conn.close()
+    return deleted_count
+
+
+def clear_all_pomodoro_sessions(db_path: Optional[str] = None) -> int:
+    """Deletes all pomodoro session records and returns the number of deleted rows."""
+    conn = get_connection(db_path)
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM pomodoro_sessions")
     deleted_count = cursor.rowcount
     conn.commit()
     conn.close()
