@@ -6,6 +6,8 @@ with a 4-stage cycle engine, visual progress indicators, and automated stage pro
 """
 
 from pathlib import Path
+import sys
+import threading
 from typing import Any, Callable, Dict, List, Optional
 import customtkinter as ctk
 
@@ -559,7 +561,6 @@ class PomodoroModal(ctk.CTkToplevel):
             # Stage finished!
             self.is_running = False
             self._stop_timer_loop()
-            self._play_bell_notification()
 
             stage_info = calculate_pomodoro_stage(
                 completed_sprints=self.completed_sprints_in_set,
@@ -567,22 +568,48 @@ class PomodoroModal(ctk.CTkToplevel):
                 set_size=self.SET_SIZE,
             )
 
+            task_title = (self.task.get("title") or "Prior Focus Task").strip()
+
             if self.current_mode == "work":
                 self.completed_sprints_total += 1
                 if stage_info["is_set_completed"]:
                     self.completed_sprints_in_set = 0
                     self.sprint_count = 1
-                    self._set_stage("long_break", status_msg="🏆 4 Sprints finished! You completed a full set. Enjoy a 15-minute Long Break!")
+                    status_text = "🏆 4 Sprints finished! You completed a full set. Enjoy a 15-minute Long Break!"
+                    self._set_stage("long_break", status_msg=status_text)
+                    self._notify_stage_completion(
+                        title="🏆 4 Sprints Completed! Full Set Finished!",
+                        message=f"Outstanding work on \"{task_title}\"! Take a 15-minute Long Break.",
+                        sound_type="set_completed",
+                    )
                 else:
                     self.completed_sprints_in_set += 1
                     self.sprint_count = self.completed_sprints_in_set + 1
-                    self._set_stage("short_break", status_msg=f"🎉 Sprint {self.completed_sprints_in_set} finished! Take a 5-minute breather.")
+                    status_text = f"🎉 Sprint {self.completed_sprints_in_set} finished! Take a 5-minute breather."
+                    self._set_stage("short_break", status_msg=status_text)
+                    self._notify_stage_completion(
+                        title=f"🍅 Sprint {self.completed_sprints_in_set} Completed!",
+                        message=f"Great focus on \"{task_title}\"! Time for a 5-minute breather.",
+                        sound_type="work_done",
+                    )
             elif self.current_mode == "short_break":
-                self._set_stage("work", status_msg=f"⚡ Break finished! Ready for Sprint {self.sprint_count} of {self.SET_SIZE}.")
+                status_text = f"⚡ Break finished! Ready for Sprint {self.sprint_count} of {self.SET_SIZE}."
+                self._set_stage("work", status_msg=status_text)
+                self._notify_stage_completion(
+                    title="⚡ Short Break Finished!",
+                    message=f"Recharged? Time to dive into Sprint {self.sprint_count} of {self.SET_SIZE}.",
+                    sound_type="break_done",
+                )
             else:  # long_break
                 self.sprint_count = 1
                 self.completed_sprints_in_set = 0
-                self._set_stage("work", status_msg=f"✨ Fully recharged! Ready to start Set 2 (Sprint 1 of {self.SET_SIZE}).")
+                status_text = f"✨ Fully recharged! Ready to start Set 2 (Sprint 1 of {self.SET_SIZE})."
+                self._set_stage("work", status_msg=status_text)
+                self._notify_stage_completion(
+                    title="✨ Long Break Finished!",
+                    message=f"Fully recharged! Ready to start Sprint 1 on \"{task_title}\".",
+                    sound_type="break_done",
+                )
 
     def _on_skip_stage(self) -> None:
         """Skips the active sprint or break to advance immediately to the next stage."""
@@ -633,11 +660,61 @@ class PomodoroModal(ctk.CTkToplevel):
                 pass
             self._timer_id = None
 
+    def _notify_stage_completion(self, title: str, message: str, sound_type: str = "work_done") -> None:
+        """Dispatches an acoustic chime, native Windows desktop notification, and taskbar pulse."""
+        # 1. Play acoustic chime in background thread
+        self._play_acoustic_chime(sound_type)
+
+        # 2. Flash Windows taskbar icon
+        if hasattr(self.master, "flash_window"):
+            try:
+                self.master.flash_window()
+            except Exception:
+                pass
+
+        # 3. Deliver desktop notification (toast / tray balloon)
+        if hasattr(self.master, "notify_desktop"):
+            try:
+                self.master.notify_desktop(title, message)
+            except Exception:
+                pass
+        elif hasattr(self.master, "_queue_desktop_notification"):
+            try:
+                self.master._queue_desktop_notification(title, message)
+            except Exception:
+                pass
+
+    def _play_acoustic_chime(self, sound_type: str = "work_done") -> None:
+        """Plays melodious chimes using winsound on Windows without blocking the GUI."""
+        def _sound_worker() -> None:
+            try:
+                if sys.platform == "win32":
+                    import winsound
+                    if sound_type == "set_completed":
+                        # C5, E5, G5, C6 triumphant ascending fanfare
+                        for freq, dur in [(523, 100), (659, 100), (784, 100), (1046, 260)]:
+                            winsound.Beep(freq, dur)
+                    elif sound_type == "work_done":
+                        # E5, A5, C#6 crisp upbeat completion chime
+                        for freq, dur in [(659, 110), (880, 110), (1108, 220)]:
+                            winsound.Beep(freq, dur)
+                    else:  # break_done
+                        # A4, E5 gentle two-tone wake-up chime
+                        for freq, dur in [(440, 130), (659, 220)]:
+                            winsound.Beep(freq, dur)
+                else:
+                    self.bell()
+            except Exception:
+                try:
+                    self.bell()
+                except Exception:
+                    pass
+
+        threading.Thread(target=_sound_worker, daemon=True).start()
+
     def _play_bell_notification(self) -> None:
-        try:
-            self.bell()
-        except Exception:
-            pass
+        """Fallback bell notification."""
+        self._play_acoustic_chime("work_done")
 
     def _on_edit_click(self) -> None:
         self._stop_timer_loop()

@@ -588,6 +588,10 @@ class PriorApp(ctk.CTk):
         except Exception:
             pass
 
+    def notify_desktop(self, title: str, message: str) -> None:
+        """Dispatches a native Windows desktop notification and pulses the taskbar icon."""
+        self._queue_desktop_notification(title, message)
+
     def _queue_desktop_notification(self, title: str, message: str) -> None:
         """Enqueues a desktop notification to be dispatched with smooth pacing and taskbar pulse."""
         self.notification_queue.append((title, message))
