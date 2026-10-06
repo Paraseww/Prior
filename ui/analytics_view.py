@@ -211,8 +211,8 @@ class AnalyticsView(DottedScrollableFrame):
         focus_cards_row.pack(fill="x", pady=(0, 20))
 
         # 1. Today's Focus Card
-        today_mins = today_stats.get("total_minutes", 0)
-        today_sprints = today_stats.get("sprints_count", 0)
+        today_mins = int(today_stats.get("total_focus_minutes") or today_stats.get("total_minutes") or 0)
+        today_sprints = int(today_stats.get("sprints_count", 0))
         card_today = self._create_metric_card(
             focus_cards_row,
             title="Today's Focus",

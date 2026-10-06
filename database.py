@@ -526,6 +526,7 @@ def get_daily_pomodoro_stats(
         "date": day_str,
         "sprints_count": row["sprints_count"] if row else 0,
         "total_focus_minutes": row["total_focus_minutes"] if row else 0,
+        "total_minutes": row["total_focus_minutes"] if row else 0,
     }
     conn.close()
     return stats
