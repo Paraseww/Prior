@@ -342,8 +342,10 @@ def update_task(
     conn = get_connection(db_path)
     cursor = conn.cursor()
     cursor.execute(query, tuple(values))
-    conn.commit()
     affected = cursor.rowcount > 0
+    if is_completed is not _UNSET and not is_completed:
+        cursor.execute("DELETE FROM pomodoro_sessions WHERE task_id = ?", (task_id,))
+    conn.commit()
     conn.close()
     return affected
 
@@ -380,8 +382,12 @@ def toggle_task_completion(task_id: int, db_path: Optional[str] = None) -> bool:
         "UPDATE tasks SET is_completed = ?, completed_at = ? WHERE id = ?",
         (new_state, completed_at, task_id),
     )
-    conn.commit()
     affected = cursor.rowcount > 0
+    if new_state == 0:
+        # Task unmarked as incomplete: clear focus session data for this task
+        cursor.execute("DELETE FROM pomodoro_sessions WHERE task_id = ?", (task_id,))
+
+    conn.commit()
     conn.close()
     return affected
 

@@ -827,3 +827,41 @@ def test_format_focus_duration():
         format_focus_duration(-5)
 
 
+def test_unmarking_task_clears_pomodoro_sessions(tmp_path):
+    """Verify that unchecking/unmarking a task clears its pomodoro sessions and analytics data."""
+    db_file = str(tmp_path / "test_unmark.db")
+    database.init_db(db_file)
+
+    t_id = database.add_task("Test Incomplete", "Desc", "Q1_DO", db_path=db_file)
+    database.log_pomodoro_session(t_id, 25, "work", db_path=db_file)
+    database.log_pomodoro_session(t_id, 25, "work", db_path=db_file)
+
+    # Mark completed
+    database.toggle_task_completion(t_id, db_path=db_file)
+    task = database.get_task_by_id(t_id, db_path=db_file)
+    assert task["is_completed"] == 1
+    assert database.get_daily_pomodoro_stats(db_path=db_file)["sprints_count"] == 2
+
+    # Uncheck / unmark task (new_state == 0)
+    database.toggle_task_completion(t_id, db_path=db_file)
+    task_after = database.get_task_by_id(t_id, db_path=db_file)
+    assert task_after["is_completed"] == 0
+
+    # Sessions must be cleared
+    daily = database.get_daily_pomodoro_stats(db_path=db_file)
+    assert daily["sprints_count"] == 0
+    assert daily["total_focus_minutes"] == 0
+    summary = database.get_all_time_pomodoro_summary(db_path=db_file)
+    assert summary["total_sprints"] == 0
+    assert summary["total_focus_minutes"] == 0
+
+    # Also test update_task with is_completed=0
+    database.log_pomodoro_session(t_id, 25, "work", db_path=db_file)
+    database.update_task(t_id, is_completed=1, db_path=db_file)
+    assert database.get_daily_pomodoro_stats(db_path=db_file)["sprints_count"] == 1
+
+    database.update_task(t_id, is_completed=0, db_path=db_file)
+    assert database.get_daily_pomodoro_stats(db_path=db_file)["sprints_count"] == 0
+
+
+
