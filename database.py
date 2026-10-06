@@ -4,7 +4,7 @@ Local SQLite persistence layer for Prior desktop application.
 Handles user profile settings and task CRUD operations with offline support.
 """
 
-from datetime import datetime
+from datetime import datetime, timedelta
 import os
 from pathlib import Path
 import sqlite3
@@ -558,3 +558,136 @@ def get_all_time_pomodoro_summary(db_path: Optional[str] = None) -> Dict[str, An
     }
     conn.close()
     return summary
+
+
+def get_weekly_pomodoro_breakdown(
+    reference_date: Optional[str] = None,
+    db_path: Optional[str] = None,
+) -> List[Dict[str, Any]]:
+    """
+    Computes daily focus minutes and sprint counts for the 7-day period ending on reference_date.
+
+    :param reference_date: ISO date string 'YYYY-MM-DD' (defaults to today).
+    :param db_path: Optional database path.
+    :return: List of 7 dictionaries ordered oldest to newest, each with:
+             'date', 'day_name' (e.g. 'Mon'), 'sprints_count', 'focus_minutes', 'is_today'
+    """
+    ref_dt = datetime.strptime(reference_date.strip(), "%Y-%m-%d").date() if reference_date else datetime.now().date()
+    today_str = datetime.now().strftime("%Y-%m-%d")
+
+    # Generate 7 days from (ref_dt - 6 days) up to ref_dt
+    days_list = [ref_dt - timedelta(days=i) for i in range(6, -1, -1)]
+
+    start_str = days_list[0].strftime("%Y-%m-%d")
+    end_str = days_list[-1].strftime("%Y-%m-%d")
+
+    conn = get_connection(db_path)
+    cursor = conn.cursor()
+    cursor.execute(
+        """
+        SELECT 
+            SUBSTR(completed_at, 1, 10) as day_date,
+            COUNT(*) as sprints_count,
+            COALESCE(SUM(duration_minutes), 0) as focus_minutes
+        FROM pomodoro_sessions
+        WHERE session_type = 'work'
+          AND completed_at >= ?
+          AND completed_at <= ?
+        GROUP BY SUBSTR(completed_at, 1, 10)
+        """,
+        (f"{start_str}T00:00:00", f"{end_str}T23:59:59"),
+    )
+    data_by_date = {row["day_date"]: dict(row) for row in cursor.fetchall()}
+    conn.close()
+
+    result = []
+    for d in days_list:
+        d_str = d.strftime("%Y-%m-%d")
+        row = data_by_date.get(d_str, {})
+        result.append({
+            "date": d_str,
+            "day_name": d.strftime("%a"),
+            "sprints_count": int(row.get("sprints_count", 0)),
+            "focus_minutes": int(row.get("focus_minutes", 0)),
+            "is_today": (d_str == today_str),
+        })
+    return result
+
+
+def get_pomodoro_quadrant_distribution(
+    db_path: Optional[str] = None,
+) -> Dict[str, Dict[str, Any]]:
+    """
+    Calculates total focus sprints and minutes categorized by Eisenhower quadrant.
+
+    :param db_path: Optional database path.
+    :return: Dictionary keyed by quadrant code ('Q1_DO', 'Q2_SCHEDULE', etc.)
+             mapping to {'sprints_count': int, 'focus_minutes': int}.
+    """
+    conn = get_connection(db_path)
+    cursor = conn.cursor()
+    cursor.execute(
+        """
+        SELECT 
+            t.quadrant,
+            COUNT(p.id) as sprints_count,
+            COALESCE(SUM(p.duration_minutes), 0) as focus_minutes
+        FROM pomodoro_sessions p
+        JOIN tasks t ON p.task_id = t.id
+        WHERE p.session_type = 'work'
+        GROUP BY t.quadrant
+        """
+    )
+    rows = cursor.fetchall()
+    conn.close()
+
+    dist = {
+        "Q1_DO": {"sprints_count": 0, "focus_minutes": 0},
+        "Q2_SCHEDULE": {"sprints_count": 0, "focus_minutes": 0},
+        "Q3_DELEGATE": {"sprints_count": 0, "focus_minutes": 0},
+        "Q4_ELIMINATE": {"sprints_count": 0, "focus_minutes": 0},
+    }
+    for row in rows:
+        q = row["quadrant"]
+        if q in dist:
+            dist[q] = {
+                "sprints_count": int(row["sprints_count"]),
+                "focus_minutes": int(row["focus_minutes"]),
+            }
+    return dist
+
+
+def get_top_focused_tasks(
+    limit: int = 5,
+    db_path: Optional[str] = None,
+) -> List[Dict[str, Any]]:
+    """
+    Retrieves the most focused tasks ranked by total pomodoro time and sprints.
+
+    :param limit: Maximum number of tasks to return (default 5).
+    :param db_path: Optional database path.
+    :return: List of dictionaries with task details and focus statistics.
+    """
+    conn = get_connection(db_path)
+    cursor = conn.cursor()
+    cursor.execute(
+        """
+        SELECT 
+            t.id,
+            t.title,
+            t.quadrant,
+            t.is_completed,
+            COUNT(p.id) as sprints_count,
+            COALESCE(SUM(p.duration_minutes), 0) as focus_minutes
+        FROM pomodoro_sessions p
+        JOIN tasks t ON p.task_id = t.id
+        WHERE p.session_type = 'work'
+        GROUP BY t.id
+        ORDER BY focus_minutes DESC, sprints_count DESC
+        LIMIT ?
+        """,
+        (max(1, limit),),
+    )
+    rows = [dict(row) for row in cursor.fetchall()]
+    conn.close()
+    return rows

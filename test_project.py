@@ -9,6 +9,7 @@ import pytest
 
 from project import (
     calculate_drop_dead_time,
+    calculate_focus_quadrant_distribution,
     calculate_matrix_stats,
     calculate_pomodoro_stage,
     calculate_pomodoro_stats,
@@ -16,6 +17,7 @@ from project import (
     determine_quadrant,
     filter_tasks,
     format_due_status,
+    format_focus_duration,
     format_timer_display,
     get_task_notifications,
     validate_schedule_time,
@@ -693,5 +695,135 @@ def test_calculate_drop_dead_time_user_persona_milestones():
     res_1100 = calculate_drop_dead_time("11:00 PM", 120, "2026-10-04", reference_dt=ref_1100pm)
     assert res_1100 is not None
     assert res_1100["mins_to_deadline"] == 0.0  # Triggers Critical Deadline
+
+
+# ============================================================================
+# 9. Tests for calculate_focus_quadrant_distribution() & Focus Analytics
+# ============================================================================
+
+def test_calculate_focus_quadrant_distribution_empty():
+    """Verify focus quadrant distribution on empty inputs."""
+    res = calculate_focus_quadrant_distribution([], [])
+    assert res["total_focus_minutes"] == 0
+    assert res["total_sprints"] == 0
+    assert res["proactive_ratio"] == 0.0
+    for q in ["Q1_DO", "Q2_SCHEDULE", "Q3_DELEGATE", "Q4_ELIMINATE"]:
+        assert res["quadrants"][q]["sprints_count"] == 0
+        assert res["quadrants"][q]["focus_minutes"] == 0
+        assert res["quadrants"][q]["percentage"] == 0.0
+
+    # None inputs
+    res_none = calculate_focus_quadrant_distribution(None, None)
+    assert res_none["total_sprints"] == 0
+
+
+def test_calculate_focus_quadrant_distribution_aggregation():
+    """Verify quadrant-level aggregation, focus time, and proactive ratio."""
+    tasks = [
+        {"id": 1, "title": "Math Assignment", "quadrant": "Q1_DO"},
+        {"id": 2, "title": "Read Chapter 4", "quadrant": "Q2_SCHEDULE"},
+        {"id": 3, "title": "Reply Email", "quadrant": "Q3_DELEGATE"},
+    ]
+    sessions = [
+        {"task_id": 1, "duration_minutes": 25, "session_type": "work"},
+        {"task_id": 1, "duration_minutes": 25, "session_type": "work"},
+        {"task_id": 2, "duration_minutes": 25, "session_type": "work"},
+        {"task_id": 2, "duration_minutes": 25, "session_type": "work"},
+        {"task_id": 3, "duration_minutes": 25, "session_type": "work"},
+        # Break sessions must be ignored
+        {"task_id": 1, "duration_minutes": 5, "session_type": "short_break"},
+        {"task_id": 2, "duration_minutes": 15, "session_type": "long_break"},
+    ]
+
+    res = calculate_focus_quadrant_distribution(sessions, tasks)
+    assert res["total_sprints"] == 5
+    assert res["total_focus_minutes"] == 125
+    assert res["quadrants"]["Q1_DO"]["sprints_count"] == 2
+    assert res["quadrants"]["Q1_DO"]["focus_minutes"] == 50
+    assert res["quadrants"]["Q1_DO"]["percentage"] == 40.0
+
+    assert res["quadrants"]["Q2_SCHEDULE"]["sprints_count"] == 2
+    assert res["quadrants"]["Q2_SCHEDULE"]["focus_minutes"] == 50
+    assert res["quadrants"]["Q2_SCHEDULE"]["percentage"] == 40.0
+
+    assert res["quadrants"]["Q3_DELEGATE"]["sprints_count"] == 1
+    assert res["quadrants"]["Q3_DELEGATE"]["focus_minutes"] == 25
+    assert res["quadrants"]["Q3_DELEGATE"]["percentage"] == 20.0
+
+    # High-value quadrants (Q1 + Q2) = 40% + 40% = 80.0%
+    assert res["proactive_ratio"] == 80.0
+
+
+def test_calculate_focus_quadrant_distribution_type_errors():
+    """Verify TypeError on invalid inputs."""
+    with pytest.raises(TypeError):
+        calculate_focus_quadrant_distribution("invalid", [])  # type: ignore
+
+    with pytest.raises(TypeError):
+        calculate_focus_quadrant_distribution([], "invalid")  # type: ignore
+
+
+def test_database_pomodoro_analytics_queries(tmp_path):
+    """Verify weekly breakdown, quadrant distribution, and top tasks SQLite queries."""
+    db_file = str(tmp_path / "test_analytics.db")
+    database.init_db(db_file)
+
+    # Create test tasks
+    t1_id = database.add_task("Bio Research", "notes", "Q1_DO", db_path=db_file)
+    t2_id = database.add_task("History Reading", "notes", "Q2_SCHEDULE", db_path=db_file)
+
+    # Log pomodoro sessions
+    database.log_pomodoro_session(t1_id, 25, "work", completed_at="2026-10-06T10:00:00", db_path=db_file)
+    database.log_pomodoro_session(t1_id, 25, "work", completed_at="2026-10-06T11:00:00", db_path=db_file)
+    database.log_pomodoro_session(t2_id, 25, "work", completed_at="2026-10-05T14:00:00", db_path=db_file)
+
+    # 1. Weekly breakdown (ending on 2026-10-06)
+    weekly = database.get_weekly_pomodoro_breakdown(reference_date="2026-10-06", db_path=db_file)
+    assert len(weekly) == 7
+    # Last item is 2026-10-06 with 2 sprints (50 mins)
+    assert weekly[-1]["date"] == "2026-10-06"
+    assert weekly[-1]["sprints_count"] == 2
+    assert weekly[-1]["focus_minutes"] == 50
+    # Second to last item is 2026-10-05 with 1 sprint (25 mins)
+    assert weekly[-2]["date"] == "2026-10-05"
+    assert weekly[-2]["sprints_count"] == 1
+    assert weekly[-2]["focus_minutes"] == 25
+
+    # 2. Quadrant distribution
+    q_dist = database.get_pomodoro_quadrant_distribution(db_path=db_file)
+    assert q_dist["Q1_DO"]["sprints_count"] == 2
+    assert q_dist["Q1_DO"]["focus_minutes"] == 50
+    assert q_dist["Q2_SCHEDULE"]["sprints_count"] == 1
+    assert q_dist["Q2_SCHEDULE"]["focus_minutes"] == 25
+    assert q_dist["Q3_DELEGATE"]["sprints_count"] == 0
+
+    # 3. Top focused tasks leaderboard
+    top_tasks = database.get_top_focused_tasks(limit=5, db_path=db_file)
+    assert len(top_tasks) == 2
+    assert top_tasks[0]["id"] == t1_id
+    assert top_tasks[0]["sprints_count"] == 2
+    assert top_tasks[0]["focus_minutes"] == 50
+    assert top_tasks[1]["id"] == t2_id
+    assert top_tasks[1]["sprints_count"] == 1
+    assert top_tasks[1]["focus_minutes"] == 25
+
+
+def test_format_focus_duration():
+    """Verify conversion of minutes to readable focus duration string."""
+    assert format_focus_duration(0) == "0m"
+    assert format_focus_duration(25) == "25m"
+    assert format_focus_duration(60) == "1h"
+    assert format_focus_duration(75) == "1h 15m"
+    assert format_focus_duration(130) == "2h 10m"
+    assert format_focus_duration(180) == "3h"
+
+    with pytest.raises(TypeError):
+        format_focus_duration("30")  # type: ignore
+
+    with pytest.raises(TypeError):
+        format_focus_duration(True)  # type: ignore
+
+    with pytest.raises(ValueError):
+        format_focus_duration(-5)
 
 

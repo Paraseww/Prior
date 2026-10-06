@@ -452,6 +452,110 @@ def calculate_pomodoro_stats(
     }
 
 
+def calculate_focus_quadrant_distribution(
+    sessions: Optional[List[Dict[str, Any]]],
+    tasks: Optional[List[Dict[str, Any]]],
+) -> Dict[str, Any]:
+    """
+    Computes total focus sprints and focus minutes categorized across Eisenhower quadrants.
+    Associates each work session to its task's quadrant.
+
+    :param sessions: List of pomodoro session dictionaries containing 'task_id', 'duration_minutes', 'session_type'.
+    :param tasks: List of task dictionaries containing 'id' and 'quadrant'.
+    :return: Dictionary containing:
+             - 'quadrants': Mapping of 'Q1_DO', 'Q2_SCHEDULE', etc. to {'sprints_count': int, 'focus_minutes': int, 'percentage': float}
+             - 'total_focus_minutes': Total focus minutes across all quadrants
+             - 'total_sprints': Total focus sprint count
+             - 'proactive_ratio': Percentage of focus time spent in high-value quadrants (Q1 + Q2)
+    :raises TypeError: If sessions or tasks are invalid types.
+    """
+    if sessions is None:
+        sessions = []
+    if tasks is None:
+        tasks = []
+    if not isinstance(sessions, list):
+        raise TypeError("Sessions must be a list of dictionaries.")
+    if not isinstance(tasks, list):
+        raise TypeError("Tasks must be a list of dictionaries.")
+
+    task_quad_map = {}
+    for t in tasks:
+        if isinstance(t, dict) and "id" in t and "quadrant" in t:
+            task_quad_map[t["id"]] = t["quadrant"]
+
+    dist = {
+        "Q1_DO": {"sprints_count": 0, "focus_minutes": 0},
+        "Q2_SCHEDULE": {"sprints_count": 0, "focus_minutes": 0},
+        "Q3_DELEGATE": {"sprints_count": 0, "focus_minutes": 0},
+        "Q4_ELIMINATE": {"sprints_count": 0, "focus_minutes": 0},
+    }
+
+    total_focus_minutes = 0
+    total_sprints = 0
+
+    for s in sessions:
+        if not isinstance(s, dict):
+            continue
+        if s.get("session_type") != "work":
+            continue
+        task_id = s.get("task_id")
+        duration = int(s.get("duration_minutes") or 0)
+        quad = task_quad_map.get(task_id, "Q1_DO")
+        if quad not in dist:
+            quad = "Q1_DO"
+
+        dist[quad]["sprints_count"] += 1
+        dist[quad]["focus_minutes"] += duration
+        total_focus_minutes += duration
+        total_sprints += 1
+
+    # Compute percentages
+    result_quads = {}
+    for q, data in dist.items():
+        mins = data["focus_minutes"]
+        pct = round((mins / total_focus_minutes) * 100.0, 1) if total_focus_minutes > 0 else 0.0
+        result_quads[q] = {
+            "sprints_count": data["sprints_count"],
+            "focus_minutes": mins,
+            "percentage": pct,
+        }
+
+    q1_q2_mins = dist["Q1_DO"]["focus_minutes"] + dist["Q2_SCHEDULE"]["focus_minutes"]
+    proactive_ratio = round((q1_q2_mins / total_focus_minutes) * 100.0, 1) if total_focus_minutes > 0 else 0.0
+
+    return {
+        "quadrants": result_quads,
+        "total_focus_minutes": total_focus_minutes,
+        "total_sprints": total_sprints,
+        "proactive_ratio": proactive_ratio,
+    }
+
+
+def format_focus_duration(minutes: int) -> str:
+    """
+    Formats an integer minute count into a concise human-readable duration string.
+    Example: 0 -> '0m', 45 -> '45m', 60 -> '1h', 130 -> '2h 10m'.
+
+    :param minutes: Non-negative integer minute count.
+    :return: Formatted duration string.
+    :raises TypeError: If minutes is not an integer or is a boolean.
+    :raises ValueError: If minutes is negative.
+    """
+    if not isinstance(minutes, int) or isinstance(minutes, bool):
+        raise TypeError("Minutes must be an integer.")
+    if minutes < 0:
+        raise ValueError("Minutes cannot be negative.")
+    if minutes == 0:
+        return "0m"
+    hours = minutes // 60
+    rem = minutes % 60
+    if hours > 0 and rem > 0:
+        return f"{hours}h {rem}m"
+    elif hours > 0:
+        return f"{hours}h"
+    return f"{rem}m"
+
+
 def calculate_recommended_sprints(duration_minutes: int) -> int:
     """
     Computes recommended Pomodoro sprints for a given task duration in minutes.
