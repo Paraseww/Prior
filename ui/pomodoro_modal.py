@@ -831,6 +831,17 @@ class PomodoroModal(ctk.CTkToplevel):
 
         if self.current_mode == "work":
             self.completed_sprints_total += 1
+            # Persist completed sprint to SQLite database
+            try:
+                task_id = self.task.get("id")
+                database.log_pomodoro_session(
+                    task_id=task_id,
+                    duration_minutes=round(self.WORK_TIME / 60),
+                    session_type="work",
+                )
+            except Exception:
+                pass
+
             self.completed_sprints_in_set += 1
             new_completed = self.completed_sprints_in_set
             if stage_info["is_set_completed"]:
