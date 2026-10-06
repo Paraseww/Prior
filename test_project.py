@@ -902,5 +902,39 @@ def test_marking_task_completed_directly_populates_analytics_sessions(tmp_path):
     assert stats2["total_focus_minutes"] == 25
 
 
+def test_no_duplicate_sessions_on_repeated_timer_or_mark_completed(tmp_path):
+    """
+    Verify that completing sprints via timer and then clicking mark as completed / finish
+    never duplicates focus data beyond the task's required sprint target.
+    """
+    db_file = str(tmp_path / "test_no_dupes.db")
+    database.init_db(db_file)
+
+    # 2 hours = 4 sprints
+    t_id = database.add_task("Bio Chemistry", "", "Q1_DO", estimated_duration=120, db_path=db_file)
+
+    # Simulate user skipping or completing 4 sprints in Pomodoro timer
+    for _ in range(4):
+        database.log_pomodoro_session(t_id, 25, "work", db_path=db_file)
+
+    # Attempting to log a 5th sprint is capped and does not duplicate
+    database.log_pomodoro_session(t_id, 25, "work", db_path=db_file)
+
+    sessions_before = database.get_pomodoro_sessions(task_id=t_id, session_type="work", db_path=db_file)
+    assert len(sessions_before) == 4
+
+    # Now click "Congrats, You Did It! Mark Completed & Finish" (update_task or toggle_task_completion)
+    database.update_task(t_id, is_completed=1, db_path=db_file)
+
+    sessions_after = database.get_pomodoro_sessions(task_id=t_id, session_type="work", db_path=db_file)
+    assert len(sessions_after) == 4
+
+    stats = database.get_daily_pomodoro_stats(db_path=db_file)
+    assert stats["sprints_count"] == 4
+    # Sprints count is exactly 4, never 8
+    assert stats["sprints_count"] == 4
+
+
+
 
 

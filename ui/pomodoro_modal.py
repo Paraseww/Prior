@@ -63,6 +63,20 @@ class PomodoroModal(ctk.CTkToplevel):
         self.sprint_count = 1              # 1 to total_target_sprints (current sprint index)
         self.completed_sprints_in_set = 0  # 0 to total_target_sprints (completed sprints)
 
+        # Check existing completed sprints for this task from SQLite
+        t_id = self.task.get("id")
+        if t_id:
+            try:
+                task_sessions = database.get_pomodoro_sessions(task_id=t_id, session_type="work")
+                self.completed_sprints_in_set = min(len(task_sessions), self.total_target_sprints)
+                if self.completed_sprints_in_set >= self.total_target_sprints:
+                    self.sprint_count = self.total_target_sprints
+                    self.current_mode = "long_break"
+                else:
+                    self.sprint_count = self.completed_sprints_in_set + 1
+            except Exception:
+                pass
+
         # Initialize today's completed sprints count from SQLite
         try:
             today_stats = database.get_daily_pomodoro_stats()
@@ -70,8 +84,8 @@ class PomodoroModal(ctk.CTkToplevel):
         except Exception:
             self.completed_sprints_total = 0
 
-        self.total_seconds = self.WORK_TIME
-        self.remaining_seconds = self.WORK_TIME
+        self.total_seconds = self.LONG_BREAK if self.current_mode == "long_break" else self.WORK_TIME
+        self.remaining_seconds = self.total_seconds
         self.is_running = False
         self._timer_id: Optional[str] = None
         self.pill_buttons: List[ctk.CTkButton] = []

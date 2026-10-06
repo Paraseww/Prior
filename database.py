@@ -360,14 +360,9 @@ def _ensure_completed_task_sessions(cursor: sqlite3.Cursor, task_id: int, comple
     Ensures that when a task is marked as completed directly (e.g. via checkbox, Done,
     or Mark Task Completed without using the pomodoro timer panel), its focus sprint
     and duration data are logged into pomodoro_sessions for analytics tracking.
-    If pomodoro sessions were already recorded (e.g. via Pomodoro timer), they are preserved.
+    Guarantees no duplicate sessions are recorded beyond the task's required sprint target.
+    Prunes any excess sessions if the task was already completed or repeated.
     """
-    cursor.execute("SELECT COUNT(*) FROM pomodoro_sessions WHERE task_id = ?", (task_id,))
-    row = cursor.fetchone()
-    existing_count = row[0] if row else 0
-    if existing_count > 0:
-        return
-
     cursor.execute("SELECT estimated_duration, quadrant FROM tasks WHERE id = ?", (task_id,))
     t_row = cursor.fetchone()
     if not t_row:
@@ -378,25 +373,52 @@ def _ensure_completed_task_sessions(cursor: sqlite3.Cursor, task_id: int, comple
         cycles = est_duration // 130
         rem = est_duration % 130
         extra_sprints = round(rem / 30)
-        sprints = max(1, cycles * 4 + extra_sprints)
+        target_sprints = max(1, cycles * 4 + extra_sprints)
         total_mins = est_duration
     else:
-        sprints = 1
+        target_sprints = 1
         total_mins = 25
 
-    base_dur = total_mins // sprints
-    rem_dur = total_mins % sprints
-    session_time = completed_at or datetime.now().isoformat()
+    cursor.execute(
+        "SELECT id, duration_minutes FROM pomodoro_sessions WHERE task_id = ? AND session_type = 'work' ORDER BY id ASC",
+        (task_id,),
+    )
+    existing_sessions = cursor.fetchall()
+    current_count = len(existing_sessions)
 
-    for i in range(sprints):
-        dur = base_dur + (1 if i < rem_dur else 0)
-        cursor.execute(
-            """
-            INSERT INTO pomodoro_sessions (task_id, duration_minutes, session_type, completed_at)
-            VALUES (?, ?, 'work', ?)
-            """,
-            (task_id, dur, session_time),
-        )
+    if est_duration > 0:
+        # If duplicate / excess sessions exist beyond target_sprints, prune the extras
+        if current_count > target_sprints:
+            excess_ids = [row["id"] for row in existing_sessions[target_sprints:]]
+            placeholders = ",".join("?" for _ in excess_ids)
+            cursor.execute(f"DELETE FROM pomodoro_sessions WHERE id IN ({placeholders})", tuple(excess_ids))
+            current_count = target_sprints
+
+        # If sessions are missing, add only the remaining needed sprints
+        if current_count < target_sprints:
+            base_dur = total_mins // target_sprints
+            rem_dur = total_mins % target_sprints
+            session_time = completed_at or datetime.now().isoformat()
+            for i in range(current_count, target_sprints):
+                dur = base_dur + (1 if i < rem_dur else 0)
+                cursor.execute(
+                    """
+                    INSERT INTO pomodoro_sessions (task_id, duration_minutes, session_type, completed_at)
+                    VALUES (?, ?, 'work', ?)
+                    """,
+                    (task_id, dur, session_time),
+                )
+    else:
+        # If no estimate was set and no sessions exist yet, record 1 default sprint
+        if current_count == 0:
+            session_time = completed_at or datetime.now().isoformat()
+            cursor.execute(
+                """
+                INSERT INTO pomodoro_sessions (task_id, duration_minutes, session_type, completed_at)
+                VALUES (?, ?, 'work', ?)
+                """,
+                (task_id, total_mins, session_time),
+            )
 
 
 def reorder_tasks(ordered_task_ids: List[int], db_path: Optional[str] = None) -> bool:
@@ -530,6 +552,33 @@ def log_pomodoro_session(
 
     conn = get_connection(db_path)
     cursor = conn.cursor()
+
+    # Prevent duplicating work sessions beyond task's target sprint count
+    if task_id is not None and session_type == "work":
+        cursor.execute("SELECT estimated_duration FROM tasks WHERE id = ?", (task_id,))
+        t_row = cursor.fetchone()
+        if t_row:
+            est_dur = max(0, int(t_row["estimated_duration"] or 0))
+            if est_dur > 0:
+                cycles = est_dur // 130
+                rem = est_dur % 130
+                extra_sprints = round(rem / 30)
+                target_sprints = max(1, cycles * 4 + extra_sprints)
+
+                cursor.execute(
+                    "SELECT COUNT(*) FROM pomodoro_sessions WHERE task_id = ? AND session_type = 'work'",
+                    (task_id,),
+                )
+                count = cursor.fetchone()[0]
+                if count >= target_sprints:
+                    cursor.execute(
+                        "SELECT id FROM pomodoro_sessions WHERE task_id = ? AND session_type = 'work' ORDER BY id DESC LIMIT 1",
+                        (task_id,),
+                    )
+                    existing_row = cursor.fetchone()
+                    conn.close()
+                    return existing_row[0] if existing_row else 0
+
     cursor.execute(
         """
         INSERT INTO pomodoro_sessions (task_id, duration_minutes, session_type, completed_at)

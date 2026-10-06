@@ -977,6 +977,15 @@ class PriorApp(ctk.CTk):
         self.task_renudge_counts.pop(task_id, None)
         self._load_and_refresh()
 
+    def mark_task_completed(self, task_id: int) -> None:
+        """Explicitly marks a task as completed (idempotent, does not toggle to incomplete)."""
+        database.update_task(task_id, is_completed=1)
+        self.dismissed_notification_ids.discard(task_id)
+        self.notified_reminder_keys = {k for k in self.notified_reminder_keys if f"_{task_id}_" not in k}
+        self.task_last_notified.pop(task_id, None)
+        self.task_renudge_counts.pop(task_id, None)
+        self._load_and_refresh()
+
     def move_or_reorder_task(
         self,
         task_id: int,
@@ -1042,7 +1051,7 @@ class PriorApp(ctk.CTk):
         self.active_pomodoro_modal = PomodoroModal(
             self,
             task=task,
-            on_complete_task=self.toggle_task,
+            on_complete_task=self.mark_task_completed,
             on_edit_task=self.open_task_modal,
             on_delete_task=self.delete_task,
         )
@@ -1070,7 +1079,7 @@ class PriorApp(ctk.CTk):
             self,
             task=task,
             on_save_schedule=handle_save_schedule,
-            on_complete_task=self.toggle_task,
+            on_complete_task=self.mark_task_completed,
             on_edit_task=self.open_task_modal,
             on_delete_task=self.delete_task,
         )
