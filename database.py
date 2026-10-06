@@ -318,13 +318,15 @@ def update_task(
         fields.append("estimated_duration = ?")
         values.append(int(estimated_duration) if estimated_duration is not None else 0)
 
+    comp_time = None
     if is_completed is not _UNSET:
         val = 1 if is_completed else 0
         fields.append("is_completed = ?")
         values.append(val)
         if val == 1:
             fields.append("completed_at = ?")
-            values.append(datetime.now().isoformat())
+            comp_time = datetime.now().isoformat()
+            values.append(comp_time)
         else:
             fields.append("completed_at = ?")
             values.append(None)
@@ -343,11 +345,58 @@ def update_task(
     cursor = conn.cursor()
     cursor.execute(query, tuple(values))
     affected = cursor.rowcount > 0
-    if is_completed is not _UNSET and not is_completed:
-        cursor.execute("DELETE FROM pomodoro_sessions WHERE task_id = ?", (task_id,))
+    if is_completed is not _UNSET:
+        if is_completed:
+            _ensure_completed_task_sessions(cursor, task_id, comp_time)
+        else:
+            cursor.execute("DELETE FROM pomodoro_sessions WHERE task_id = ?", (task_id,))
     conn.commit()
     conn.close()
     return affected
+
+
+def _ensure_completed_task_sessions(cursor: sqlite3.Cursor, task_id: int, completed_at: Optional[str] = None) -> None:
+    """
+    Ensures that when a task is marked as completed directly (e.g. via checkbox, Done,
+    or Mark Task Completed without using the pomodoro timer panel), its focus sprint
+    and duration data are logged into pomodoro_sessions for analytics tracking.
+    If pomodoro sessions were already recorded (e.g. via Pomodoro timer), they are preserved.
+    """
+    cursor.execute("SELECT COUNT(*) FROM pomodoro_sessions WHERE task_id = ?", (task_id,))
+    row = cursor.fetchone()
+    existing_count = row[0] if row else 0
+    if existing_count > 0:
+        return
+
+    cursor.execute("SELECT estimated_duration, quadrant FROM tasks WHERE id = ?", (task_id,))
+    t_row = cursor.fetchone()
+    if not t_row:
+        return
+
+    est_duration = max(0, int(t_row["estimated_duration"] or 0))
+    if est_duration > 0:
+        cycles = est_duration // 130
+        rem = est_duration % 130
+        extra_sprints = round(rem / 30)
+        sprints = max(1, cycles * 4 + extra_sprints)
+        total_mins = est_duration
+    else:
+        sprints = 1
+        total_mins = 25
+
+    base_dur = total_mins // sprints
+    rem_dur = total_mins % sprints
+    session_time = completed_at or datetime.now().isoformat()
+
+    for i in range(sprints):
+        dur = base_dur + (1 if i < rem_dur else 0)
+        cursor.execute(
+            """
+            INSERT INTO pomodoro_sessions (task_id, duration_minutes, session_type, completed_at)
+            VALUES (?, ?, 'work', ?)
+            """,
+            (task_id, dur, session_time),
+        )
 
 
 def reorder_tasks(ordered_task_ids: List[int], db_path: Optional[str] = None) -> bool:
@@ -383,7 +432,10 @@ def toggle_task_completion(task_id: int, db_path: Optional[str] = None) -> bool:
         (new_state, completed_at, task_id),
     )
     affected = cursor.rowcount > 0
-    if new_state == 0:
+    if new_state == 1:
+        # Task marked as completed: ensure focus session data is logged for analytics
+        _ensure_completed_task_sessions(cursor, task_id, completed_at)
+    elif new_state == 0:
         # Task unmarked as incomplete: clear focus session data for this task
         cursor.execute("DELETE FROM pomodoro_sessions WHERE task_id = ?", (task_id,))
 

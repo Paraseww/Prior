@@ -864,4 +864,43 @@ def test_unmarking_task_clears_pomodoro_sessions(tmp_path):
     assert database.get_daily_pomodoro_stats(db_path=db_file)["sprints_count"] == 0
 
 
+def test_marking_task_completed_directly_populates_analytics_sessions(tmp_path):
+    """
+    Verify that completing a task directly (via checkbox / Mark Completed without pomodoro timer)
+    automatically logs focus sprint and duration data to pomodoro_sessions.
+    """
+    db_file = str(tmp_path / "test_direct_complete.db")
+    database.init_db(db_file)
+
+    # 1. Task in Q1_DO with estimated duration 60 mins (2 sprints)
+    t1_id = database.add_task("Bio Study", "Notes", "Q1_DO", estimated_duration=60, db_path=db_file)
+    # Complete directly via toggle_task_completion
+    database.toggle_task_completion(t1_id, db_path=db_file)
+
+    task1 = database.get_task_by_id(t1_id, db_path=db_file)
+    assert task1["is_completed"] == 1
+
+    stats1 = database.get_daily_pomodoro_stats(db_path=db_file)
+    assert stats1["sprints_count"] == 2
+    assert stats1["total_focus_minutes"] == 60
+
+    q_dist = database.get_pomodoro_quadrant_distribution(db_path=db_file)
+    assert q_dist["Q1_DO"]["sprints_count"] == 2
+    assert q_dist["Q1_DO"]["focus_minutes"] == 60
+
+    # 2. Uncheck task -> clears data
+    database.toggle_task_completion(t1_id, db_path=db_file)
+    stats_cleared = database.get_daily_pomodoro_stats(db_path=db_file)
+    assert stats_cleared["sprints_count"] == 0
+    assert stats_cleared["total_focus_minutes"] == 0
+
+    # 3. Task with 0 duration defaults to 1 sprint (25m)
+    t2_id = database.add_task("Quick Chore", "", "Q1_DO", estimated_duration=0, db_path=db_file)
+    database.toggle_task_completion(t2_id, db_path=db_file)
+    stats2 = database.get_daily_pomodoro_stats(db_path=db_file)
+    assert stats2["sprints_count"] == 1
+    assert stats2["total_focus_minutes"] == 25
+
+
+
 
