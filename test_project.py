@@ -15,9 +15,11 @@ from project import (
     format_due_status,
     format_timer_display,
     calculate_pomodoro_stage,
+    calculate_pomodoro_stats,
     get_task_notifications,
     validate_schedule_time,
 )
+import database
 
 
 # ============================================================================
@@ -315,6 +317,106 @@ def test_calculate_pomodoro_stage_invalid():
 
     with pytest.raises(ValueError):
         calculate_pomodoro_stage(1, "invalid_mode")
+
+
+def test_calculate_pomodoro_stats_valid():
+    """Verify aggregation of sprints, focus minutes, and break minutes."""
+    sample_sessions = [
+        {"duration_minutes": 25, "session_type": "work"},
+        {"duration_minutes": 5, "session_type": "short_break"},
+        {"duration_minutes": 25, "session_type": "work"},
+        {"duration_minutes": 15, "session_type": "long_break"},
+        {"duration_minutes": 50, "session_type": "work"},
+    ]
+    stats = calculate_pomodoro_stats(sample_sessions)
+    assert stats["total_sprints"] == 3
+    assert stats["total_focus_minutes"] == 100
+    assert stats["total_break_minutes"] == 20
+    assert stats["average_sprint_minutes"] == round(100 / 3, 1)
+
+
+def test_calculate_pomodoro_stats_empty_and_none():
+    """Verify safe fallback on empty or None session lists."""
+    assert calculate_pomodoro_stats([]) == {
+        "total_sprints": 0,
+        "total_focus_minutes": 0,
+        "total_break_minutes": 0,
+        "average_sprint_minutes": 0.0,
+    }
+    assert calculate_pomodoro_stats(None) == {
+        "total_sprints": 0,
+        "total_focus_minutes": 0,
+        "total_break_minutes": 0,
+        "average_sprint_minutes": 0.0,
+    }
+
+
+def test_calculate_pomodoro_stats_invalid():
+    """Verify TypeError raised when non-list argument is passed."""
+    with pytest.raises(TypeError):
+        calculate_pomodoro_stats("not a list")  # type: ignore
+    with pytest.raises(TypeError):
+        calculate_pomodoro_stats(123)  # type: ignore
+
+
+def test_database_pomodoro_persistence(tmp_path):
+    """Verify SQLite persistence of Pomodoro sessions and daily/all-time queries."""
+    db_file = str(tmp_path / "test_pomodoro.db")
+    database.init_db(db_file)
+
+    # 1. Log sessions
+    s1_id = database.log_pomodoro_session(
+        task_id=None,
+        duration_minutes=25,
+        session_type="work",
+        completed_at="2026-10-06T10:00:00",
+        db_path=db_file,
+    )
+    assert s1_id > 0
+
+    s2_id = database.log_pomodoro_session(
+        task_id=42,
+        duration_minutes=25,
+        session_type="work",
+        completed_at="2026-10-06T11:00:00",
+        db_path=db_file,
+    )
+    assert s2_id > s1_id
+
+    # Log a break
+    b1_id = database.log_pomodoro_session(
+        task_id=None,
+        duration_minutes=5,
+        session_type="short_break",
+        completed_at="2026-10-06T10:25:00",
+        db_path=db_file,
+    )
+    assert b1_id > 0
+
+    # 2. Query sessions
+    all_sessions = database.get_pomodoro_sessions(db_path=db_file)
+    assert len(all_sessions) == 3
+
+    task_sessions = database.get_pomodoro_sessions(task_id=42, db_path=db_file)
+    assert len(task_sessions) == 1
+    assert task_sessions[0]["task_id"] == 42
+
+    # 3. Daily stats
+    daily_stats = database.get_daily_pomodoro_stats("2026-10-06", db_path=db_file)
+    assert daily_stats["sprints_count"] == 2
+    assert daily_stats["total_focus_minutes"] == 50
+
+    # 4. All-time summary
+    summary = database.get_all_time_pomodoro_summary(db_path=db_file)
+    assert summary["total_sprints"] == 2
+    assert summary["total_focus_minutes"] == 50
+    assert summary["active_days_count"] == 1
+
+    # 5. Validation error tests
+    with pytest.raises(ValueError):
+        database.log_pomodoro_session(None, 0, "work", db_path=db_file)
+    with pytest.raises(ValueError):
+        database.log_pomodoro_session(None, 25, "invalid_type", db_path=db_file)
 
 
 # ============================================================================

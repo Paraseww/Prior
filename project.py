@@ -378,6 +378,56 @@ def calculate_pomodoro_stage(
         }
 
 
+def calculate_pomodoro_stats(
+    sessions: Optional[List[Dict[str, Any]]],
+) -> Dict[str, Any]:
+    """
+    Computes aggregate metrics from a collection of Pomodoro session records.
+
+    :param sessions: List of session dictionaries, each containing 'duration_minutes' and 'session_type'.
+    :return: Dictionary containing:
+             - 'total_sprints': Total count of completed work sprint sessions
+             - 'total_focus_minutes': Total minutes spent in focus work
+             - 'total_break_minutes': Total minutes spent in short or long breaks
+             - 'average_sprint_minutes': Average focus sprint duration in minutes (rounded to 1 decimal)
+    :raises TypeError: If sessions is provided but is not a list.
+    """
+    if sessions is None:
+        return {
+            "total_sprints": 0,
+            "total_focus_minutes": 0,
+            "total_break_minutes": 0,
+            "average_sprint_minutes": 0.0,
+        }
+    if not isinstance(sessions, list):
+        raise TypeError("Sessions must be a list of dictionaries.")
+
+    total_sprints = 0
+    total_focus_minutes = 0
+    total_break_minutes = 0
+
+    for s in sessions:
+        if not isinstance(s, dict):
+            continue
+        duration = int(s.get("duration_minutes") or 0)
+        stype = s.get("session_type", "work")
+
+        if stype == "work":
+            total_sprints += 1
+            total_focus_minutes += duration
+        elif stype in ("short_break", "long_break"):
+            total_break_minutes += duration
+
+    avg_sprint = round(total_focus_minutes / total_sprints, 1) if total_sprints > 0 else 0.0
+
+    return {
+        "total_sprints": total_sprints,
+        "total_focus_minutes": total_focus_minutes,
+        "total_break_minutes": total_break_minutes,
+        "average_sprint_minutes": avg_sprint,
+    }
+
+
 def get_task_notifications(
     tasks: Optional[List[Dict[str, Any]]],
     current_date_str: Optional[str] = None,

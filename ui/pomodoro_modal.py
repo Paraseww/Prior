@@ -11,6 +11,7 @@ import threading
 from typing import Any, Callable, Dict, List, Optional
 import customtkinter as ctk
 
+import database
 from project import calculate_pomodoro_stage, format_timer_display
 from ui import theme
 
@@ -50,7 +51,14 @@ class PomodoroModal(ctk.CTkToplevel):
         self.current_mode = "work"         # "work", "short_break", "long_break"
         self.sprint_count = 1              # 1 to SET_SIZE (current sprint in set)
         self.completed_sprints_in_set = 0  # 0 to SET_SIZE
-        self.completed_sprints_total = 0   # Total completed in this session
+
+        # Initialize today's completed sprints count from SQLite
+        try:
+            today_stats = database.get_daily_pomodoro_stats()
+            self.completed_sprints_total = int(today_stats.get("sprints_count", 0))
+        except Exception:
+            self.completed_sprints_total = 0
+
         self.total_seconds = self.WORK_TIME
         self.remaining_seconds = self.WORK_TIME
         self.is_running = False
@@ -229,7 +237,7 @@ class PomodoroModal(ctk.CTkToplevel):
 
         self.lbl_total_tally = ctk.CTkLabel(
             cycle_head,
-            text=f"Total Done: {self.completed_sprints_total} 🍅",
+            text=f"Today: {self.completed_sprints_total} 🍅",
             font=(theme.FONT_FAMILY, 11, "bold"),
             text_color=theme.TEXT_PRIMARY,
             anchor="e",
@@ -384,8 +392,8 @@ class PomodoroModal(ctk.CTkToplevel):
         btn_complete.pack(fill="x")
 
     def _update_cycle_tracker(self) -> None:
-        """Updates the 4-stage pill buttons and total session completed count."""
-        self.lbl_total_tally.configure(text=f"Total Done: {self.completed_sprints_total} 🍅")
+        """Updates the 4-stage pill buttons and today's session completed count."""
+        self.lbl_total_tally.configure(text=f"Today: {self.completed_sprints_total} 🍅")
 
         for idx, btn in enumerate(self.pill_buttons, start=1):
             if idx <= self.completed_sprints_in_set:
@@ -572,6 +580,17 @@ class PomodoroModal(ctk.CTkToplevel):
 
             if self.current_mode == "work":
                 self.completed_sprints_total += 1
+                # Persist completed sprint to SQLite database
+                try:
+                    task_id = self.task.get("id")
+                    database.log_pomodoro_session(
+                        task_id=task_id,
+                        duration_minutes=round(self.WORK_TIME / 60),
+                        session_type="work",
+                    )
+                except Exception:
+                    pass
+
                 if stage_info["is_set_completed"]:
                     self.completed_sprints_in_set = 0
                     self.sprint_count = 1

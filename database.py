@@ -77,6 +77,26 @@ def init_db(db_path: Optional[str] = None) -> None:
         "CREATE INDEX IF NOT EXISTS idx_tasks_completed ON tasks(is_completed)"
     )
 
+    # Pomodoro sessions table for focus tracking and analytics
+    cursor.execute(
+        """
+        CREATE TABLE IF NOT EXISTS pomodoro_sessions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            task_id INTEGER,
+            duration_minutes INTEGER NOT NULL,
+            session_type TEXT NOT NULL DEFAULT 'work',
+            completed_at TEXT NOT NULL,
+            FOREIGN KEY(task_id) REFERENCES tasks(id) ON DELETE SET NULL
+        )
+        """
+    )
+    cursor.execute(
+        "CREATE INDEX IF NOT EXISTS idx_pomodoro_completed_at ON pomodoro_sessions(completed_at)"
+    )
+    cursor.execute(
+        "CREATE INDEX IF NOT EXISTS idx_pomodoro_task_id ON pomodoro_sessions(task_id)"
+    )
+
     # Optional column migrations
     try:
         cursor.execute("ALTER TABLE tasks ADD COLUMN reminder_time TEXT")
@@ -385,3 +405,156 @@ def clear_completed_tasks(db_path: Optional[str] = None) -> int:
     conn.commit()
     conn.close()
     return deleted_count
+
+
+# ============================================================================
+# Pomodoro Focus Sessions Persistence & Queries
+# ============================================================================
+
+def log_pomodoro_session(
+    task_id: Optional[int],
+    duration_minutes: int,
+    session_type: str = "work",
+    completed_at: Optional[str] = None,
+    db_path: Optional[str] = None,
+) -> int:
+    """
+    Logs a completed Pomodoro session (focus sprint or break) to SQLite.
+
+    :param task_id: Optional ID of the task associated with the focus session.
+    :param duration_minutes: Duration of the session in minutes (positive integer).
+    :param session_type: Type of session ('work', 'short_break', or 'long_break').
+    :param completed_at: ISO formatted completion timestamp (defaults to now).
+    :param db_path: Optional custom database path.
+    :return: The integer primary key ID of the inserted session row.
+    :raises ValueError: If duration_minutes <= 0 or session_type is invalid.
+    """
+    if not isinstance(duration_minutes, int) or isinstance(duration_minutes, bool) or duration_minutes <= 0:
+        raise ValueError("duration_minutes must be a positive integer.")
+    if session_type not in ("work", "short_break", "long_break"):
+        raise ValueError("session_type must be 'work', 'short_break', or 'long_break'.")
+
+    timestamp = completed_at if completed_at is not None else datetime.now().isoformat()
+
+    conn = get_connection(db_path)
+    cursor = conn.cursor()
+    cursor.execute(
+        """
+        INSERT INTO pomodoro_sessions (task_id, duration_minutes, session_type, completed_at)
+        VALUES (?, ?, ?, ?)
+        """,
+        (task_id, duration_minutes, session_type, timestamp),
+    )
+    session_id = cursor.lastrowid
+    conn.commit()
+    conn.close()
+    return session_id
+
+
+def get_pomodoro_sessions(
+    task_id: Optional[int] = None,
+    session_type: Optional[str] = None,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    db_path: Optional[str] = None,
+) -> List[Dict[str, Any]]:
+    """
+    Retrieves logged Pomodoro sessions with optional filtering.
+
+    :param task_id: Optional task ID filter.
+    :param session_type: Optional filter ('work', 'short_break', 'long_break').
+    :param start_date: Optional start date 'YYYY-MM-DD' filter.
+    :param end_date: Optional end date 'YYYY-MM-DD' filter.
+    :param db_path: Optional database path.
+    :return: List of session dictionaries.
+    """
+    conn = get_connection(db_path)
+    cursor = conn.cursor()
+
+    query = "SELECT * FROM pomodoro_sessions WHERE 1=1"
+    params: List[Any] = []
+
+    if task_id is not None:
+        query += " AND task_id = ?"
+        params.append(task_id)
+
+    if session_type is not None:
+        query += " AND session_type = ?"
+        params.append(session_type)
+
+    if start_date is not None:
+        query += " AND completed_at >= ?"
+        params.append(f"{start_date}T00:00:00")
+
+    if end_date is not None:
+        query += " AND completed_at <= ?"
+        params.append(f"{end_date}T23:59:59")
+
+    query += " ORDER BY completed_at DESC"
+
+    cursor.execute(query, tuple(params))
+    rows = [dict(row) for row in cursor.fetchall()]
+    conn.close()
+    return rows
+
+
+def get_daily_pomodoro_stats(
+    target_date: Optional[str] = None,
+    db_path: Optional[str] = None,
+) -> Dict[str, Any]:
+    """
+    Calculates total sprints and focus minutes for a given date.
+
+    :param target_date: Target date 'YYYY-MM-DD' (defaults to today).
+    :param db_path: Optional database path.
+    :return: Dictionary containing 'date', 'sprints_count', and 'total_focus_minutes'.
+    """
+    day_str = target_date if target_date is not None else datetime.now().strftime("%Y-%m-%d")
+
+    conn = get_connection(db_path)
+    cursor = conn.cursor()
+    cursor.execute(
+        """
+        SELECT COUNT(*) as sprints_count, COALESCE(SUM(duration_minutes), 0) as total_focus_minutes
+        FROM pomodoro_sessions
+        WHERE session_type = 'work' AND completed_at LIKE ?
+        """,
+        (f"{day_str}%",),
+    )
+    row = cursor.fetchone()
+    stats = {
+        "date": day_str,
+        "sprints_count": row["sprints_count"] if row else 0,
+        "total_focus_minutes": row["total_focus_minutes"] if row else 0,
+    }
+    conn.close()
+    return stats
+
+
+def get_all_time_pomodoro_summary(db_path: Optional[str] = None) -> Dict[str, Any]:
+    """
+    Calculates all-time lifetime focus statistics.
+
+    :param db_path: Optional database path.
+    :return: Dictionary containing 'total_sprints', 'total_focus_minutes', and 'active_days_count'.
+    """
+    conn = get_connection(db_path)
+    cursor = conn.cursor()
+    cursor.execute(
+        """
+        SELECT 
+            COUNT(*) as total_sprints,
+            COALESCE(SUM(duration_minutes), 0) as total_focus_minutes,
+            COUNT(DISTINCT SUBSTR(completed_at, 1, 10)) as active_days_count
+        FROM pomodoro_sessions
+        WHERE session_type = 'work'
+        """
+    )
+    row = cursor.fetchone()
+    summary = {
+        "total_sprints": row["total_sprints"] if row else 0,
+        "total_focus_minutes": row["total_focus_minutes"] if row else 0,
+        "active_days_count": row["active_days_count"] if row else 0,
+    }
+    conn.close()
+    return summary
