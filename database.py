@@ -360,6 +360,8 @@ def _ensure_completed_task_sessions(cursor: sqlite3.Cursor, task_id: int, comple
     Ensures that when a task is marked as completed directly (e.g. via checkbox, Done,
     or Mark Task Completed without using the pomodoro timer panel), its focus sprint
     and duration data are logged into pomodoro_sessions for analytics tracking.
+    Standardizes each Pomodoro focus sprint to 25 minutes so that analytics metrics
+    are 100% consistent across both direct completion and Pomodoro timer usage.
     Guarantees no duplicate sessions are recorded beyond the task's required sprint target.
     Prunes any excess sessions if the task was already completed or repeated.
     """
@@ -374,10 +376,8 @@ def _ensure_completed_task_sessions(cursor: sqlite3.Cursor, task_id: int, comple
         rem = est_duration % 130
         extra_sprints = round(rem / 30)
         target_sprints = max(1, cycles * 4 + extra_sprints)
-        total_mins = est_duration
     else:
         target_sprints = 1
-        total_mins = 25
 
     cursor.execute(
         "SELECT id, duration_minutes FROM pomodoro_sessions WHERE task_id = ? AND session_type = 'work' ORDER BY id ASC",
@@ -394,30 +394,30 @@ def _ensure_completed_task_sessions(cursor: sqlite3.Cursor, task_id: int, comple
             cursor.execute(f"DELETE FROM pomodoro_sessions WHERE id IN ({placeholders})", tuple(excess_ids))
             current_count = target_sprints
 
-        # If sessions are missing, add only the remaining needed sprints
+        # Standardize all existing work sessions for this task to 25m
+        cursor.execute("UPDATE pomodoro_sessions SET duration_minutes = 25 WHERE task_id = ? AND session_type = 'work'", (task_id,))
+
+        # If sessions are missing, add only the remaining needed sprints (each 25 minutes)
         if current_count < target_sprints:
-            base_dur = total_mins // target_sprints
-            rem_dur = total_mins % target_sprints
             session_time = completed_at or datetime.now().isoformat()
-            for i in range(current_count, target_sprints):
-                dur = base_dur + (1 if i < rem_dur else 0)
+            for _ in range(current_count, target_sprints):
                 cursor.execute(
                     """
                     INSERT INTO pomodoro_sessions (task_id, duration_minutes, session_type, completed_at)
-                    VALUES (?, ?, 'work', ?)
+                    VALUES (?, 25, 'work', ?)
                     """,
-                    (task_id, dur, session_time),
+                    (task_id, session_time),
                 )
     else:
-        # If no estimate was set and no sessions exist yet, record 1 default sprint
+        # If no estimate was set and no sessions exist yet, record 1 default sprint (25 minutes)
         if current_count == 0:
             session_time = completed_at or datetime.now().isoformat()
             cursor.execute(
                 """
                 INSERT INTO pomodoro_sessions (task_id, duration_minutes, session_type, completed_at)
-                VALUES (?, ?, 'work', ?)
+                VALUES (?, 25, 'work', ?)
                 """,
-                (task_id, total_mins, session_time),
+                (task_id, session_time),
             )
 
 

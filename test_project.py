@@ -882,11 +882,11 @@ def test_marking_task_completed_directly_populates_analytics_sessions(tmp_path):
 
     stats1 = database.get_daily_pomodoro_stats(db_path=db_file)
     assert stats1["sprints_count"] == 2
-    assert stats1["total_focus_minutes"] == 60
+    assert stats1["total_focus_minutes"] == 50  # 2 sprints * 25m = 50m
 
     q_dist = database.get_pomodoro_quadrant_distribution(db_path=db_file)
     assert q_dist["Q1_DO"]["sprints_count"] == 2
-    assert q_dist["Q1_DO"]["focus_minutes"] == 60
+    assert q_dist["Q1_DO"]["focus_minutes"] == 50
 
     # 2. Uncheck task -> clears data
     database.toggle_task_completion(t1_id, db_path=db_file)
@@ -894,12 +894,19 @@ def test_marking_task_completed_directly_populates_analytics_sessions(tmp_path):
     assert stats_cleared["sprints_count"] == 0
     assert stats_cleared["total_focus_minutes"] == 0
 
-    # 3. Task with 0 duration defaults to 1 sprint (25m)
+    # 3. 2-hour task (120m) yields 4 sprints * 25m = 100m (1h 40m)
+    t_2h = database.add_task("Chem Lab", "", "Q1_DO", estimated_duration=120, db_path=db_file)
+    database.toggle_task_completion(t_2h, db_path=db_file)
+    stats_2h = database.get_daily_pomodoro_stats(db_path=db_file)
+    assert stats_2h["sprints_count"] == 4
+    assert stats_2h["total_focus_minutes"] == 100  # 4 * 25m = 100m (1h 40m)
+
+    # 4. Task with 0 duration defaults to 1 sprint (25m)
     t2_id = database.add_task("Quick Chore", "", "Q1_DO", estimated_duration=0, db_path=db_file)
     database.toggle_task_completion(t2_id, db_path=db_file)
     stats2 = database.get_daily_pomodoro_stats(db_path=db_file)
-    assert stats2["sprints_count"] == 1
-    assert stats2["total_focus_minutes"] == 25
+    assert stats2["sprints_count"] == 5  # 4 from t_2h + 1 from t2_id
+    assert stats2["total_focus_minutes"] == 125  # 100 + 25
 
 
 def test_no_duplicate_sessions_on_repeated_timer_or_mark_completed(tmp_path):
