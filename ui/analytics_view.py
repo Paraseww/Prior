@@ -106,9 +106,10 @@ class AnalyticsView(DottedScrollableFrame):
         quadrant_keys = ["Q1_DO", "Q2_SCHEDULE", "Q3_DELEGATE", "Q4_ELIMINATE"]
         for q_key in quadrant_keys:
             info = theme.QUADRANTS[q_key]
-            count = stats["quadrant_counts"].get(q_key, 0)
-            pending_total = stats["pending_tasks"]
-            pct = round((count / pending_total) * 100.0, 1) if pending_total > 0 else 0.0
+            active_count = stats["quadrant_counts"].get(q_key, 0)
+            completed_count = stats.get("quadrant_completed", {}).get(q_key, 0)
+            total_in_q = active_count + completed_count
+            comp_pct = round((completed_count / total_in_q) * 100.0, 1) if total_in_q > 0 else 0.0
 
             q_card = ctk.CTkFrame(
                 q_grid,
@@ -141,11 +142,29 @@ class AnalyticsView(DottedScrollableFrame):
             )
             lbl_q_sub.pack(side="left", padx=(6, 0))
 
+            # Dynamic text badge accounting for both active and completed tasks
+            if total_in_q == 0:
+                count_text = "0 tasks"
+                text_col = theme.TEXT_MUTED
+                bar_val = 0.0
+            elif active_count == 0 and completed_count > 0:
+                count_text = f"✓ All {completed_count} completed (100%)"
+                text_col = ("#065F46", "#34D399")
+                bar_val = 1.0
+            elif active_count > 0 and completed_count > 0:
+                count_text = f"{active_count} active • {completed_count} done ({comp_pct}%)"
+                text_col = info["text"][0] if ctk.get_appearance_mode() == "Light" else info["text"][1]
+                bar_val = comp_pct / 100.0
+            else:
+                count_text = f"{active_count} active tasks"
+                text_col = info["text"][0] if ctk.get_appearance_mode() == "Light" else info["text"][1]
+                bar_val = 0.0
+
             lbl_q_count = ctk.CTkLabel(
                 q_inner,
-                text=f"{count} active tasks ({pct}%)",
+                text=count_text,
                 font=(theme.FONT_FAMILY, 13, "bold"),
-                text_color=info["text"][0] if ctk.get_appearance_mode() == "Light" else info["text"][1],
+                text_color=text_col,
             )
             lbl_q_count.pack(side="right")
 
@@ -155,10 +174,10 @@ class AnalyticsView(DottedScrollableFrame):
                 height=4,
                 corner_radius=2,
                 fg_color=("#E5E0D8", "#222222"),
-                progress_color=info["color"],
+                progress_color="#10B981" if (active_count == 0 and completed_count > 0) else info["color"],
             )
             bar_track.pack(fill="x", padx=16, pady=(0, 8))
-            bar_track.set(pct / 100.0 if pct > 0 else 0.0)
+            bar_track.set(bar_val)
 
         # ========================================================================
         # Section 2: Deep Work & Pomodoro Focus (Chunk 4 Elevation)

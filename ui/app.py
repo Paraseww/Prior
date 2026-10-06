@@ -383,6 +383,9 @@ class PriorApp(ctk.CTk):
         self.current_tab = tab_id
         self._highlight_nav_button(tab_id)
 
+        # Always retrieve latest tasks from SQLite for instant freshness
+        self.all_tasks = database.get_all_tasks()
+
         # Hide all other cached views safely
         for vid, vwidget in list(self.views.items()):
             if vid != tab_id:

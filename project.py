@@ -172,6 +172,12 @@ def calculate_matrix_stats(tasks: Optional[List[Dict[str, Any]]]) -> Dict[str, A
             "Q3_DELEGATE": 0,
             "Q4_ELIMINATE": 0,
         },
+        "quadrant_completed": {
+            "Q1_DO": 0,
+            "Q2_SCHEDULE": 0,
+            "Q3_DELEGATE": 0,
+            "Q4_ELIMINATE": 0,
+        },
         "focus_score": 0.0,
     }
 
@@ -186,12 +192,20 @@ def calculate_matrix_stats(tasks: Optional[List[Dict[str, Any]]]) -> Dict[str, A
         "Q3_DELEGATE": 0,
         "Q4_ELIMINATE": 0,
     }
+    quadrant_completed = {
+        "Q1_DO": 0,
+        "Q2_SCHEDULE": 0,
+        "Q3_DELEGATE": 0,
+        "Q4_ELIMINATE": 0,
+    }
 
     for task in tasks:
+        q = str(task.get("quadrant", "")).upper()
         if bool(task.get("is_completed", 0)):
             completed += 1
+            if q in quadrant_completed:
+                quadrant_completed[q] += 1
         else:
-            q = str(task.get("quadrant", "")).upper()
             if q in quadrant_counts:
                 quadrant_counts[q] += 1
 
@@ -211,6 +225,7 @@ def calculate_matrix_stats(tasks: Optional[List[Dict[str, Any]]]) -> Dict[str, A
         "pending_tasks": pending,
         "completion_rate": completion_rate,
         "quadrant_counts": quadrant_counts,
+        "quadrant_completed": quadrant_completed,
         "focus_score": focus_score,
     }
 
