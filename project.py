@@ -315,6 +315,69 @@ def format_timer_display(seconds: int) -> str:
     return f"{mins:02d}:{secs:02d}"
 
 
+def calculate_pomodoro_stage(
+    completed_sprints: int,
+    current_mode: str = "work",
+    set_size: int = 4,
+) -> Dict[str, Any]:
+    """
+    Computes the next stage, sprint number, and cycle state for the Pomodoro workflow.
+
+    :param completed_sprints: Non-negative integer count of completed sprints in current set.
+    :param current_mode: Current stage ('work', 'short_break', or 'long_break').
+    :param set_size: Positive integer representing sprints per full set (default 4).
+    :return: Dictionary containing:
+             - 'next_mode': 'work', 'short_break', or 'long_break'
+             - 'next_sprint': Target sprint index (1 to set_size)
+             - 'is_set_completed': Boolean indicating if a full set was just concluded
+             - 'stage_title': Human-readable stage name
+    :raises TypeError: If inputs have invalid types.
+    :raises ValueError: If numbers are negative, set_size <= 0, or current_mode is invalid.
+    """
+    if not isinstance(completed_sprints, int) or isinstance(completed_sprints, bool):
+        raise TypeError("completed_sprints must be an integer.")
+    if not isinstance(set_size, int) or isinstance(set_size, bool):
+        raise TypeError("set_size must be an integer.")
+    if completed_sprints < 0:
+        raise ValueError("completed_sprints cannot be negative.")
+    if set_size <= 0:
+        raise ValueError("set_size must be greater than zero.")
+    if current_mode not in ("work", "short_break", "long_break"):
+        raise ValueError("current_mode must be 'work', 'short_break', or 'long_break'.")
+
+    if current_mode == "work":
+        new_completed = completed_sprints + 1
+        if new_completed >= set_size:
+            return {
+                "next_mode": "long_break",
+                "next_sprint": 1,
+                "is_set_completed": True,
+                "stage_title": "Long Break",
+            }
+        else:
+            return {
+                "next_mode": "short_break",
+                "next_sprint": new_completed + 1,
+                "is_set_completed": False,
+                "stage_title": "Short Break",
+            }
+    elif current_mode == "short_break":
+        next_sprint = (completed_sprints % set_size) + 1
+        return {
+            "next_mode": "work",
+            "next_sprint": next_sprint,
+            "is_set_completed": False,
+            "stage_title": f"Sprint {next_sprint}",
+        }
+    else:  # long_break
+        return {
+            "next_mode": "work",
+            "next_sprint": 1,
+            "is_set_completed": False,
+            "stage_title": "Sprint 1",
+        }
+
+
 def get_task_notifications(
     tasks: Optional[List[Dict[str, Any]]],
     current_date_str: Optional[str] = None,

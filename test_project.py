@@ -14,6 +14,7 @@ from project import (
     filter_tasks,
     format_due_status,
     format_timer_display,
+    calculate_pomodoro_stage,
     get_task_notifications,
     validate_schedule_time,
 )
@@ -256,6 +257,64 @@ def test_format_timer_display_invalid():
 
     with pytest.raises(ValueError):
         format_timer_display(-10)
+
+
+def test_calculate_pomodoro_stage_progression():
+    """Verify 4-sprint cycle transitions, short breaks, and long breaks."""
+    # 1. First sprint finished -> goes to Short Break (stage 2 prep)
+    s1 = calculate_pomodoro_stage(completed_sprints=0, current_mode="work", set_size=4)
+    assert s1["next_mode"] == "short_break"
+    assert s1["next_sprint"] == 2
+    assert s1["is_set_completed"] is False
+    assert s1["stage_title"] == "Short Break"
+
+    # 2. Short break finished -> moves to Sprint 2
+    b1 = calculate_pomodoro_stage(completed_sprints=1, current_mode="short_break", set_size=4)
+    assert b1["next_mode"] == "work"
+    assert b1["next_sprint"] == 2
+    assert b1["is_set_completed"] is False
+    assert b1["stage_title"] == "Sprint 2"
+
+    # 3. Third sprint finished -> goes to Short Break (stage 4 prep)
+    s3 = calculate_pomodoro_stage(completed_sprints=2, current_mode="work", set_size=4)
+    assert s3["next_mode"] == "short_break"
+    assert s3["next_sprint"] == 4
+    assert s3["is_set_completed"] is False
+
+    # 4. Fourth sprint finished -> completes set, triggers Long Break
+    s4 = calculate_pomodoro_stage(completed_sprints=3, current_mode="work", set_size=4)
+    assert s4["next_mode"] == "long_break"
+    assert s4["next_sprint"] == 1
+    assert s4["is_set_completed"] is True
+    assert s4["stage_title"] == "Long Break"
+
+    # 5. Long break finished -> resets set and returns to Sprint 1
+    lb = calculate_pomodoro_stage(completed_sprints=4, current_mode="long_break", set_size=4)
+    assert lb["next_mode"] == "work"
+    assert lb["next_sprint"] == 1
+    assert lb["is_set_completed"] is False
+    assert lb["stage_title"] == "Sprint 1"
+
+
+def test_calculate_pomodoro_stage_invalid():
+    """Verify error handling on invalid types and negative arguments."""
+    with pytest.raises(TypeError):
+        calculate_pomodoro_stage("0", "work")  # type: ignore
+
+    with pytest.raises(TypeError):
+        calculate_pomodoro_stage(True, "work")  # type: ignore
+
+    with pytest.raises(TypeError):
+        calculate_pomodoro_stage(1, "work", set_size="4")  # type: ignore
+
+    with pytest.raises(ValueError):
+        calculate_pomodoro_stage(-1, "work")
+
+    with pytest.raises(ValueError):
+        calculate_pomodoro_stage(1, "work", set_size=0)
+
+    with pytest.raises(ValueError):
+        calculate_pomodoro_stage(1, "invalid_mode")
 
 
 # ============================================================================

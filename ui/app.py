@@ -81,6 +81,7 @@ class PriorApp(ctk.CTk):
         self.dismissed_notification_ids: Set[int] = set()
         self.notified_reminder_keys: Set[str] = set()
         self.active_notification_modal: Optional[Any] = None
+        self.active_pomodoro_modal: Optional[Any] = None
         self.notification_queue: List[Tuple[str, str]] = []
         self._is_processing_notification_queue: bool = False
         self.task_last_notified: Dict[int, datetime] = {}
@@ -1022,7 +1023,16 @@ class PriorApp(ctk.CTk):
 
     def open_pomodoro_modal(self, task: Dict[str, Any]) -> None:
         """Opens the Pomodoro Focus timer modal for the selected task."""
-        PomodoroModal(
+        if hasattr(self, "active_pomodoro_modal") and self.active_pomodoro_modal is not None:
+            try:
+                if self.active_pomodoro_modal.winfo_exists():
+                    self.active_pomodoro_modal.lift()
+                    self.active_pomodoro_modal.focus_force()
+                    return
+            except Exception:
+                self.active_pomodoro_modal = None
+
+        self.active_pomodoro_modal = PomodoroModal(
             self,
             task=task,
             on_complete_task=self.toggle_task,
