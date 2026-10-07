@@ -151,12 +151,18 @@ def filter_tasks(
 def calculate_matrix_stats(
     tasks: Optional[List[Dict[str, Any]]],
     current_date_str: Optional[str] = None,
+    target_proactive_tasks: int = 4,
 ) -> Dict[str, Any]:
     """
     Calculates productivity statistics, completion rates, and quadrant distribution metrics.
 
+    Evaluates the Proactive Pipeline Health (Focus Score) based on a weekly buffer target
+    of scheduled, forward-looking Q2 tasks (default: 4 tasks). Overdue/delayed tasks are
+    excluded from the proactive count.
+
     :param tasks: List of task dictionaries.
     :param current_date_str: Optional reference date in 'YYYY-MM-DD' format (defaults to today).
+    :param target_proactive_tasks: Target count of active upcoming Q2 tasks for 100% health (default: 4).
     :return: Dictionary with metrics:
              - 'total_tasks': Total number of tasks
              - 'completed_tasks': Number of completed tasks
@@ -165,7 +171,8 @@ def calculate_matrix_stats(
              - 'quadrant_counts': Dict of active task counts per quadrant
              - 'quadrant_completed': Dict of completed task counts per quadrant
              - 'proactive_q2_tasks': Count of active Q2 tasks scheduled for today, upcoming, or unscheduled (not overdue)
-             - 'focus_score': Float percentage of pending tasks residing in Q2_SCHEDULE that are proactive (not overdue)
+             - 'target_q2_tasks': Target number of proactive Q2 tasks (default: 4)
+             - 'focus_score': Float percentage (0.0 to 100.0) representing proactive pipeline health against target
     """
     default_stats: Dict[str, Any] = {
         "total_tasks": 0,
@@ -185,6 +192,7 @@ def calculate_matrix_stats(
             "Q4_ELIMINATE": 0,
         },
         "proactive_q2_tasks": 0,
+        "target_q2_tasks": target_proactive_tasks,
         "focus_score": 0.0,
     }
 
@@ -252,11 +260,11 @@ def calculate_matrix_stats(
     pending = total - completed
     completion_rate = round((completed / total) * 100.0, 1) if total > 0 else 0.0
 
-    # Focus Score: Measures proactive planning index
-    # Only active, non-overdue (on-schedule / upcoming) Q2 tasks contribute to the score
+    # Focus Score: Solution 2 — Proactive Pipeline Health Target
+    # Measures how well-stocked your upcoming Q2 schedule is against a target buffer (default: 4 tasks)
     focus_score = (
-        round((proactive_q2 / pending) * 100.0, 1)
-        if pending > 0
+        min(100.0, round((proactive_q2 / target_proactive_tasks) * 100.0, 1))
+        if target_proactive_tasks > 0
         else 0.0
     )
 
@@ -268,6 +276,7 @@ def calculate_matrix_stats(
         "quadrant_counts": quadrant_counts,
         "quadrant_completed": quadrant_completed,
         "proactive_q2_tasks": proactive_q2,
+        "target_q2_tasks": target_proactive_tasks,
         "focus_score": focus_score,
     }
 

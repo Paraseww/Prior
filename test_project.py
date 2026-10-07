@@ -223,6 +223,41 @@ def test_calculate_matrix_stats_all_q2_overdue():
     assert stats["focus_score"] == 0.0
 
 
+def test_calculate_matrix_stats_pipeline_target_progression():
+    """Verify Solution 2 pipeline health scaling against target buffer (25% per task up to 100%)."""
+    tasks_1 = [{"id": 1, "quadrant": "Q2_SCHEDULE", "is_completed": 0}]
+    assert calculate_matrix_stats(tasks_1)["focus_score"] == 25.0
+
+    tasks_2 = [
+        {"id": 1, "quadrant": "Q2_SCHEDULE", "is_completed": 0},
+        {"id": 2, "quadrant": "Q2_SCHEDULE", "is_completed": 0},
+    ]
+    assert calculate_matrix_stats(tasks_2)["focus_score"] == 50.0
+
+    tasks_3 = [
+        {"id": 1, "quadrant": "Q2_SCHEDULE", "is_completed": 0},
+        {"id": 2, "quadrant": "Q2_SCHEDULE", "is_completed": 0},
+        {"id": 3, "quadrant": "Q2_SCHEDULE", "is_completed": 0},
+    ]
+    assert calculate_matrix_stats(tasks_3)["focus_score"] == 75.0
+
+    tasks_4 = [
+        {"id": 1, "quadrant": "Q2_SCHEDULE", "is_completed": 0},
+        {"id": 2, "quadrant": "Q2_SCHEDULE", "is_completed": 0},
+        {"id": 3, "quadrant": "Q2_SCHEDULE", "is_completed": 0},
+        {"id": 4, "quadrant": "Q2_SCHEDULE", "is_completed": 0},
+    ]
+    assert calculate_matrix_stats(tasks_4)["focus_score"] == 100.0
+
+    # 5 tasks is capped at 100.0%
+    tasks_5 = tasks_4 + [{"id": 5, "quadrant": "Q2_SCHEDULE", "is_completed": 0}]
+    assert calculate_matrix_stats(tasks_5)["focus_score"] == 100.0
+
+    # Custom target parameter
+    assert calculate_matrix_stats(tasks_1, target_proactive_tasks=2)["focus_score"] == 50.0
+    assert calculate_matrix_stats(tasks_2, target_proactive_tasks=2)["focus_score"] == 100.0
+
+
 # ============================================================================
 # 4. Tests for format_due_status()
 # ============================================================================

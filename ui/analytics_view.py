@@ -89,13 +89,33 @@ class AnalyticsView(DottedScrollableFrame):
         )
         card_comp.pack(side="left", fill="both", expand=True, padx=(0, 10))
 
-        # 3. Proactive Focus Score Card
+        # 3. Proactive Focus Score Card (Weekly Pipeline Health Target)
+        proactive_q2 = stats.get("proactive_q2_tasks", 0)
+        target_q2 = stats.get("target_q2_tasks", 4)
+        focus_score = stats.get("focus_score", 0.0)
+
+        if proactive_q2 == 0:
+            focus_sub = f"0/{target_q2} upcoming • Schedule next goals"
+            focus_accent = "#94A3B8"
+        elif proactive_q2 == 1:
+            focus_sub = f"1/{target_q2} upcoming • Getting started"
+            focus_accent = "#3B82F6"
+        elif proactive_q2 == 2:
+            focus_sub = f"2/{target_q2} upcoming • Building momentum"
+            focus_accent = "#3B82F6"
+        elif proactive_q2 == 3:
+            focus_sub = f"3/{target_q2} upcoming • Solid weekly plan"
+            focus_accent = "#3B82F6"
+        else:
+            focus_sub = f"{proactive_q2}/{target_q2} upcoming • Optimal pipeline 🎯"
+            focus_accent = "#10B981"
+
         card_focus = self._create_metric_card(
             cards_row,
             title="Focus Score (Q2 Schedule)",
-            value=f"{stats['focus_score']}%",
-            subtitle="Proactive planning index",
-            accent_color="#3B82F6",
+            value=f"{focus_score}%",
+            subtitle=focus_sub,
+            accent_color=focus_accent,
         )
         card_focus.pack(side="left", fill="both", expand=True)
 
