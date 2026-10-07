@@ -390,7 +390,7 @@ class NotificationModal(ctk.CTkToplevel):
             fg_color=("#F1F5F9", "#1E293B") if is_delayed else quadrant_info["bg_header"],
             corner_radius=6,
             border_width=1 if is_delayed else 0,
-            border_color=theme.BORDER_COLOR if is_delayed else "transparent",
+            border_color=theme.BORDER_COLOR if is_delayed else None,
         )
         q_badge_frame.pack(side="left", padx=(0, 8))
         lbl_q_badge = ctk.CTkLabel(
@@ -454,7 +454,7 @@ class NotificationModal(ctk.CTkToplevel):
                 fg_color=status_fg,
                 corner_radius=6,
                 border_width=1 if is_delayed else 0,
-                border_color=theme.BORDER_COLOR if is_delayed else "transparent",
+                border_color=theme.BORDER_COLOR if is_delayed else None,
             )
             status_badge_frame.pack(side="left")
             lbl_status_badge = ctk.CTkLabel(
