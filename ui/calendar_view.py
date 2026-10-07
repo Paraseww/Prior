@@ -29,6 +29,7 @@ class CalendarView(ctk.CTkFrame):
         on_move: Callable[[int, str], None],
         on_delete: Callable[[int], None],
         on_quick_add: Callable[[str, Optional[str]], None],
+        on_archive: Optional[Callable[[int], None]] = None,
         on_pomodoro: Optional[Callable[[Dict[str, Any]], None]] = None,
         on_schedule: Optional[Callable[[Dict[str, Any]], None]] = None,
         **kwargs,
@@ -39,6 +40,7 @@ class CalendarView(ctk.CTkFrame):
         self.on_edit = on_edit
         self.on_move = on_move
         self.on_delete = on_delete
+        self.on_archive = on_archive or on_delete
         self.on_quick_add = on_quick_add
         self.on_pomodoro = on_pomodoro
         self.on_schedule = on_schedule
@@ -414,6 +416,7 @@ class CalendarView(ctk.CTkFrame):
                     on_edit=self.on_edit,
                     on_move=self.on_move,
                     on_delete=self.on_delete,
+                    on_archive=self.on_archive,
                     on_pomodoro=self.on_pomodoro,
                     on_schedule=self.on_schedule,
                 )

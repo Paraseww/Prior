@@ -6,7 +6,7 @@ Chronological and filterable List View for Prior tasks.
 from typing import Any, Callable, Dict, List, Optional
 import customtkinter as ctk
 
-from project import filter_tasks
+from project import filter_tasks, is_task_delayed
 from ui import theme
 from ui.dot_pattern import DottedScrollableFrame
 from ui.scrollable_dropdown import ScrollableOptionMenu
@@ -27,6 +27,7 @@ class ListView(ctk.CTkFrame):
         on_move: Callable[[int, str], None],
         on_delete: Callable[[int], None],
         on_clear_completed: Callable[[], None],
+        on_archive: Optional[Callable[[int], None]] = None,
         on_pomodoro: Optional[Callable[[Dict[str, Any]], None]] = None,
         on_schedule: Optional[Callable[[Dict[str, Any]], None]] = None,
         **kwargs,
@@ -37,12 +38,19 @@ class ListView(ctk.CTkFrame):
         self.on_edit = on_edit
         self.on_move = on_move
         self.on_delete = on_delete
+        self.on_archive = on_archive or on_delete
         self.on_clear_completed = on_clear_completed
         self.on_pomodoro = on_pomodoro
         self.on_schedule = on_schedule
 
         self.filter_quadrant = "ALL"
         self.filter_status = "ALL"
+
+        # Card reconciliation cache to avoid recreating untouched cards
+        self.cards: Dict[int, TaskCard] = {}
+        self.card_signatures: Dict[int, Any] = {}
+        self.card_order: List[int] = []
+        self.empty_lbl: Optional[ctk.CTkLabel] = None
 
         self._build_ui()
 
@@ -133,8 +141,13 @@ class ListView(ctk.CTkFrame):
         self._render_tasks()
 
     def _render_tasks(self) -> None:
-        for child in self.scroll_frame.winfo_children():
-            child.destroy()
+        # Preserve scroll position if already scrolled
+        yview_pos = 0.0
+        try:
+            if hasattr(self.scroll_frame, "_parent_canvas"):
+                yview_pos = self.scroll_frame._parent_canvas.yview()[0]
+        except Exception:
+            pass
 
         # Apply filtering
         show_completed = self.filter_status != "Active Only"
@@ -148,28 +161,92 @@ class ListView(ctk.CTkFrame):
             filtered = [t for t in filtered if bool(t.get("is_completed", 0))]
 
         if not filtered:
-            empty_lbl = ctk.CTkLabel(
-                self.scroll_frame,
-                text="No matching tasks found.",
-                font=(theme.FONT_FAMILY, 13),
-                text_color=theme.TEXT_MUTED,
-            )
-            empty_lbl.pack(pady=50)
+            # Clear any existing task cards
+            for card in self.cards.values():
+                try:
+                    card.destroy()
+                except Exception:
+                    pass
+            self.cards.clear()
+            self.card_signatures.clear()
+            self.card_order.clear()
+
+            if not self.empty_lbl or not self.empty_lbl.winfo_exists():
+                self.empty_lbl = ctk.CTkLabel(
+                    self.scroll_frame,
+                    text="No matching tasks found.",
+                    font=(theme.FONT_FAMILY, 13),
+                    text_color=theme.TEXT_MUTED,
+                )
+                self.empty_lbl.pack(pady=50)
             return
 
+        # If there are tasks, remove empty label if present
+        if self.empty_lbl and self.empty_lbl.winfo_exists():
+            self.empty_lbl.destroy()
+            self.empty_lbl = None
+
+        current_task_ids = [t["id"] for t in filtered]
+
+        # 1. Remove deleted or filtered-out cards
+        for t_id in list(self.cards.keys()):
+            if t_id not in current_task_ids:
+                try:
+                    self.cards[t_id].destroy()
+                except Exception:
+                    pass
+                del self.cards[t_id]
+                self.card_signatures.pop(t_id, None)
+
+        # 2. Check each task: if modified, destroy only that card so it gets recreated
         for task in filtered:
-            card = TaskCard(
-                self.scroll_frame,
-                task=task,
-                on_toggle=self.on_toggle,
-                on_edit=self.on_edit,
-                on_move=self.on_move,
-                on_delete=self.on_delete,
-                on_pomodoro=self.on_pomodoro,
-                on_schedule=self.on_schedule,
-                show_quadrant_indicator=True,
-            )
-            card.pack(fill="x", pady=4, padx=4)
+            t_id = task["id"]
+            sig = (dict(task), is_task_delayed(task))
+            if t_id in self.cards:
+                if self.card_signatures.get(t_id) != sig:
+                    try:
+                        self.cards[t_id].destroy()
+                    except Exception:
+                        pass
+                    del self.cards[t_id]
+                    self.card_signatures.pop(t_id, None)
+
+        # 3. Create any missing / updated cards
+        cards_changed = False
+        for task in filtered:
+            t_id = task["id"]
+            if t_id not in self.cards:
+                sig = (dict(task), is_task_delayed(task))
+                card = TaskCard(
+                    self.scroll_frame,
+                    task=task,
+                    on_toggle=self.on_toggle,
+                    on_edit=self.on_edit,
+                    on_move=self.on_move,
+                    on_delete=self.on_delete,
+                    on_archive=self.on_archive,
+                    on_pomodoro=self.on_pomodoro,
+                    on_schedule=self.on_schedule,
+                    show_quadrant_indicator=True,
+                )
+                self.cards[t_id] = card
+                self.card_signatures[t_id] = sig
+                cards_changed = True
+
+        # 4. If cards were added/updated or order changed, pack them in exact sequence
+        if cards_changed or self.card_order != current_task_ids:
+            for t_id in current_task_ids:
+                if t_id in self.cards:
+                    self.cards[t_id].pack_forget()
+                    self.cards[t_id].pack(fill="x", pady=4, padx=4)
+            self.card_order = list(current_task_ids)
+
+        # 5. Restore scroll position
+        if yview_pos > 0.0:
+            try:
+                self.scroll_frame._parent_canvas.yview_moveto(yview_pos)
+            except Exception:
+                pass
 
     def refresh_tasks(self, tasks: List[Dict[str, Any]]) -> None:
         self.all_tasks = tasks

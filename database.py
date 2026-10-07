@@ -62,6 +62,7 @@ def init_db(db_path: Optional[str] = None) -> None:
             due_date TEXT,
             reminder_time TEXT,
             is_completed INTEGER NOT NULL DEFAULT 0,
+            is_archived INTEGER NOT NULL DEFAULT 0,
             position INTEGER NOT NULL DEFAULT 0,
             created_at TEXT NOT NULL,
             completed_at TEXT
@@ -115,6 +116,16 @@ def init_db(db_path: Optional[str] = None) -> None:
 
     try:
         cursor.execute("ALTER TABLE profile ADD COLUMN zoom_scale REAL NOT NULL DEFAULT 1.0")
+    except sqlite3.OperationalError:
+        pass
+
+    try:
+        cursor.execute("ALTER TABLE tasks ADD COLUMN is_archived INTEGER NOT NULL DEFAULT 0")
+    except sqlite3.OperationalError:
+        pass
+
+    try:
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_tasks_archived ON tasks(is_archived)")
     except sqlite3.OperationalError:
         pass
 
@@ -281,6 +292,7 @@ def update_task(
     reminder_time: Any = _UNSET,
     estimated_duration: Any = _UNSET,
     is_completed: Any = _UNSET,
+    is_archived: Any = _UNSET,
     position: Any = _UNSET,
     db_path: Optional[str] = None,
 ) -> bool:
@@ -340,6 +352,11 @@ def update_task(
         else:
             fields.append("completed_at = ?")
             values.append(None)
+
+    if is_archived is not _UNSET:
+        val_arch = 1 if is_archived else 0
+        fields.append("is_archived = ?")
+        values.append(val_arch)
 
     if position is not _UNSET:
         fields.append("position = ?")
@@ -509,6 +526,25 @@ def delete_task(task_id: int, db_path: Optional[str] = None) -> bool:
     return True
 
 
+def archive_task(task_id: int, db_path: Optional[str] = None) -> bool:
+    """
+    Archives a completed task without deleting it or its associated pomodoro focus sessions.
+    Preserves 100% of the task's analytics metrics while clearing it from active boards.
+    """
+    conn = get_connection(db_path)
+    cursor = conn.cursor()
+    cursor.execute("SELECT COUNT(*) FROM tasks WHERE id = ?", (task_id,))
+    if cursor.fetchone()[0] == 0:
+        conn.close()
+        return False
+
+    cursor.execute("UPDATE tasks SET is_archived = 1 WHERE id = ?", (task_id,))
+    affected = cursor.rowcount > 0
+    conn.commit()
+    conn.close()
+    return affected
+
+
 def clear_completed_tasks(db_path: Optional[str] = None) -> int:
     """Deletes all completed tasks and their pomodoro sessions, returning number of deleted tasks."""
     conn = get_connection(db_path)
@@ -541,6 +577,17 @@ def clear_all_pomodoro_sessions(db_path: Optional[str] = None) -> int:
     conn = get_connection(db_path)
     cursor = conn.cursor()
     cursor.execute("DELETE FROM pomodoro_sessions")
+    deleted_count = cursor.rowcount
+    conn.commit()
+    conn.close()
+    return deleted_count
+
+
+def delete_pomodoro_sessions_for_task(task_id: int, db_path: Optional[str] = None) -> int:
+    """Deletes all pomodoro sessions linked to a specific task and returns the number of deleted rows."""
+    conn = get_connection(db_path)
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM pomodoro_sessions WHERE task_id = ?", (task_id,))
     deleted_count = cursor.rowcount
     conn.commit()
     conn.close()

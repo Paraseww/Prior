@@ -1192,6 +1192,90 @@ def test_focus_metrics_strictly_limited_to_red_section_tasks(tmp_path):
     assert stats_after_move["total_focus_minutes"] == 0
 
 
+def test_delete_pomodoro_sessions_for_task(tmp_path):
+    """Verify that delete_pomodoro_sessions_for_task deletes only the specified task's sessions."""
+    db_file = str(tmp_path / "test_pomodoro_cleanup.db")
+    database.init_db(db_file)
+
+    t1 = database.add_task("Task 1", "", "Q1_DO", estimated_duration=60, db_path=db_file)
+    t2 = database.add_task("Task 2", "", "Q1_DO", estimated_duration=60, db_path=db_file)
+
+    database.log_pomodoro_session(t1, 25, "work", db_path=db_file)
+    database.log_pomodoro_session(t1, 25, "work", db_path=db_file)
+    database.log_pomodoro_session(t2, 25, "work", db_path=db_file)
+
+    assert len(database.get_pomodoro_sessions(task_id=t1, db_path=db_file)) == 2
+    assert len(database.get_pomodoro_sessions(task_id=t2, db_path=db_file)) == 1
+
+    deleted = database.delete_pomodoro_sessions_for_task(t1, db_path=db_file)
+    assert deleted == 2
+
+    assert len(database.get_pomodoro_sessions(task_id=t1, db_path=db_file)) == 0
+    assert len(database.get_pomodoro_sessions(task_id=t2, db_path=db_file)) == 1
+
+
+# ============================================================================
+# 16. Tests for Task Archiving and Analytics Preservation
+# ============================================================================
+
+def test_filter_tasks_archived():
+    """Verify that filter_tasks excludes archived tasks by default and includes them when requested."""
+    sample = [
+        {"id": 1, "title": "Active Task", "quadrant": "Q1_DO", "is_completed": 0, "is_archived": 0},
+        {"id": 2, "title": "Completed Task", "quadrant": "Q1_DO", "is_completed": 1, "is_archived": 0},
+        {"id": 3, "title": "Archived Task", "quadrant": "Q1_DO", "is_completed": 1, "is_archived": 1},
+    ]
+
+    # Default (include_archived=False) excludes archived task
+    res_default = filter_tasks(sample)
+    assert len(res_default) == 2
+    assert [t["id"] for t in res_default] == [1, 2]
+
+    # Explicit include_archived=True includes all
+    res_with_arch = filter_tasks(sample, include_archived=True)
+    assert len(res_with_arch) == 3
+    assert [t["id"] for t in res_with_arch] == [1, 2, 3]
+
+
+def test_archive_task_preserves_analytics_and_sessions(tmp_path):
+    """
+    Verify that archive_task marks the task as archived while preserving the task record
+    and its linked pomodoro focus sessions for analytics.
+    """
+    db_file = str(tmp_path / "test_archive.db")
+    database.init_db(db_file)
+
+    task_id = database.add_task("High Priority Work", "", "Q1_DO", estimated_duration=60, db_path=db_file)
+    database.log_pomodoro_session(task_id, 25, "work", db_path=db_file)
+    database.log_pomodoro_session(task_id, 25, "work", db_path=db_file)
+    database.update_task(task_id, is_completed=True, db_path=db_file)
+
+    # Initial state: 1 task, 2 sessions
+    t_before = database.get_task_by_id(task_id, db_path=db_file)
+    assert t_before is not None
+    assert t_before["is_archived"] == 0
+    assert len(database.get_pomodoro_sessions(task_id=task_id, db_path=db_file)) == 2
+
+    # Archive the task
+    assert database.archive_task(task_id, db_path=db_file) is True
+
+    # Verification: Task still exists with is_archived = 1
+    t_after = database.get_task_by_id(task_id, db_path=db_file)
+    assert t_after is not None
+    assert t_after["is_archived"] == 1
+
+    # Verification: Pomodoro focus sessions are 100% PRESERVED
+    sessions_after = database.get_pomodoro_sessions(task_id=task_id, db_path=db_file)
+    assert len(sessions_after) == 2
+
+    # Verification: Daily pomodoro stats still count the focus minutes
+    stats = database.get_daily_pomodoro_stats(quadrant="Q1_DO", db_path=db_file)
+    assert stats["sprints_count"] == 2
+    assert stats["total_focus_minutes"] == 50
+
+
+
+
 
 
 

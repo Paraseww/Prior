@@ -437,6 +437,7 @@ class PriorApp(ctk.CTk):
                     on_move=self.move_task_quadrant,
                     on_reorder=self.move_or_reorder_task,
                     on_delete=self.delete_task,
+                    on_archive=self.archive_task,
                     on_quick_add=self.open_quick_add,
                     on_pomodoro=self.open_pomodoro_modal,
                     on_schedule=self.open_schedule_modal,
@@ -449,6 +450,7 @@ class PriorApp(ctk.CTk):
                     on_edit=self.open_task_modal,
                     on_move=self.move_task_quadrant,
                     on_delete=self.delete_task,
+                    on_archive=self.archive_task,
                     on_clear_completed=self.clear_completed,
                     on_pomodoro=self.open_pomodoro_modal,
                     on_schedule=self.open_schedule_modal,
@@ -461,6 +463,7 @@ class PriorApp(ctk.CTk):
                     on_edit=self.open_task_modal,
                     on_move=self.move_task_quadrant,
                     on_delete=self.delete_task,
+                    on_archive=self.archive_task,
                     on_quick_add=self.open_quick_add_with_date,
                     on_pomodoro=self.open_pomodoro_modal,
                     on_schedule=self.open_schedule_modal,
@@ -1059,6 +1062,15 @@ class PriorApp(ctk.CTk):
     def delete_task(self, task_id: int) -> None:
         """Deletes a task."""
         database.delete_task(task_id)
+        self.dismissed_notification_ids.discard(task_id)
+        self.notified_reminder_keys = {k for k in self.notified_reminder_keys if f"_{task_id}_" not in k}
+        self.task_last_notified.pop(task_id, None)
+        self.task_renudge_counts.pop(task_id, None)
+        self._load_and_refresh()
+
+    def archive_task(self, task_id: int) -> None:
+        """Archives a completed task without deleting it or its analytics data."""
+        database.archive_task(task_id)
         self.dismissed_notification_ids.discard(task_id)
         self.notified_reminder_keys = {k for k in self.notified_reminder_keys if f"_{task_id}_" not in k}
         self.task_last_notified.pop(task_id, None)

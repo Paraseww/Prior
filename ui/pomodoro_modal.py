@@ -51,6 +51,11 @@ class PomodoroModal(ctk.CTkToplevel):
         # Apply Prior application icon
         theme.apply_prior_icon(self)
 
+        # Window protocol handlers and completion state tracking
+        self.protocol("WM_DELETE_WINDOW", self._on_window_close)
+        self._marked_completed = False
+        self._sessions_cleaned_up = False
+
         # Determine target sprints based on estimated duration (accounting for 130m cycle with 15m long break)
         est_duration = int(self.task.get("estimated_duration") or 0)
         if est_duration > 0:
@@ -68,6 +73,18 @@ class PomodoroModal(ctk.CTkToplevel):
         if t_id:
             try:
                 task_sessions = database.get_pomodoro_sessions(task_id=t_id, session_type="work")
+                # If target sprints were already reached previously, but task remains uncompleted,
+                # the previous session was dismissed/canceled without marking complete.
+                # Reset sessions for this task so it opens with a fresh start window (Sprint 1).
+                if len(task_sessions) >= self.total_target_sprints and not bool(self.task.get("is_completed", 0)):
+                    database.delete_pomodoro_sessions_for_task(t_id)
+                    task_sessions = []
+                    if hasattr(self.master, "_load_and_refresh"):
+                        try:
+                            self.master._load_and_refresh()
+                        except Exception:
+                            pass
+
                 self.completed_sprints_in_set = min(len(task_sessions), self.total_target_sprints)
                 if self.completed_sprints_in_set >= self.total_target_sprints:
                     self.sprint_count = self.total_target_sprints
@@ -929,6 +946,7 @@ class PomodoroModal(ctk.CTkToplevel):
             edit_callback(task_data)
 
     def _on_mark_completed(self) -> None:
+        self._marked_completed = True
         self._stop_timer_loop()
         if self.on_complete_task and "id" in self.task:
             self.on_complete_task(self.task["id"])
@@ -942,8 +960,38 @@ class PomodoroModal(ctk.CTkToplevel):
         if delete_callback and task_id:
             delete_callback(task_id)
 
+    def _on_window_close(self) -> None:
+        """Handler for window close button (✕ / Alt+F4)."""
+        self._cleanup_uncompleted_target_sessions()
+        self.destroy()
+
+    def _cleanup_uncompleted_target_sessions(self) -> None:
+        """
+        If the modal is closed without marking the task completed after reaching
+        the target sprint count, reset this task's logged sessions in SQLite so
+        subsequent opens start cleanly at Sprint 1 instead of showing congratulations again.
+        """
+        if getattr(self, "_sessions_cleaned_up", False):
+            return
+        self._sessions_cleaned_up = True
+        t_id = self.task.get("id")
+        if t_id and not getattr(self, "_marked_completed", False):
+            if self.completed_sprints_in_set >= self.total_target_sprints:
+                try:
+                    current_task = database.get_task_by_id(t_id)
+                    if not current_task or not bool(current_task.get("is_completed", 0)):
+                        database.delete_pomodoro_sessions_for_task(t_id)
+                except Exception:
+                    pass
+                if hasattr(self.master, "_load_and_refresh"):
+                    try:
+                        self.master._load_and_refresh()
+                    except Exception:
+                        pass
+
     def destroy(self) -> None:
         self._stop_timer_loop()
+        self._cleanup_uncompleted_target_sessions()
         try:
             if hasattr(self.master, "active_pomodoro_modal") and self.master.active_pomodoro_modal is self:
                 self.master.active_pomodoro_modal = None

@@ -28,6 +28,7 @@ class TaskCard(ctk.CTkFrame):
         on_edit: Callable[[Dict[str, Any]], None],
         on_move: Callable[[int, str], None],
         on_delete: Callable[[int], None],
+        on_archive: Optional[Callable[[int], None]] = None,
         on_reorder: Optional[Callable[[int, str, int], None]] = None,
         on_pomodoro: Optional[Callable[[Dict[str, Any]], None]] = None,
         on_schedule: Optional[Callable[[Dict[str, Any]], None]] = None,
@@ -50,6 +51,7 @@ class TaskCard(ctk.CTkFrame):
         self.on_edit = on_edit
         self.on_move = on_move
         self.on_delete = on_delete
+        self.on_archive = on_archive or on_delete
         self.on_reorder = on_reorder
         self.on_pomodoro = on_pomodoro
         self.on_schedule = on_schedule
@@ -135,14 +137,30 @@ class TaskCard(ctk.CTkFrame):
         self.cb.pack(side="top", pady=(2, 0))
 
         # 2. Right Section: Action buttons anchored to top-right
-        # Completed tasks in all quadrants (including Q1 and Q2) show the delete cross button (✕).
-        # Edit button (✎) is only shown for uncompleted tasks in Q3 and Q4.
-        show_delete = (self.q_key not in ("Q1_DO", "Q2_SCHEDULE")) or self.is_completed
+        # Completed tasks in all quadrants show the archive button (📥).
+        # Uncompleted tasks in Q3 and Q4 show the delete cross button (✕) and edit button (✎).
+        show_archive = self.is_completed
+        show_delete = (self.q_key not in ("Q1_DO", "Q2_SCHEDULE")) and not self.is_completed
         show_edit = (self.q_key not in ("Q1_DO", "Q2_SCHEDULE")) and not self.is_completed
 
-        if show_delete or show_edit:
+        if show_archive or show_delete or show_edit:
             right_box = ctk.CTkFrame(self.normal_frame, fg_color="transparent")
             right_box.pack(side="right", fill="y", anchor="n", padx=(4, 0))
+
+            if show_archive:
+                btn_archive = ctk.CTkButton(
+                    right_box,
+                    text="📥",
+                    width=22,
+                    height=22,
+                    corner_radius=5,
+                    fg_color="transparent",
+                    hover_color=theme.BG_CARD_HOVER,
+                    text_color=theme.TEXT_SECONDARY,
+                    font=(theme.FONT_FAMILY, 12),
+                    command=lambda: self.on_archive(self.task["id"]),
+                )
+                btn_archive.pack(side="right", padx=(2, 0))
 
             if show_delete:
                 btn_del = ctk.CTkButton(

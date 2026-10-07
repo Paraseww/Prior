@@ -107,14 +107,16 @@ def filter_tasks(
     search_query: str = "",
     quadrant_filter: str = "ALL",
     show_completed: bool = True,
+    include_archived: bool = False,
 ) -> List[Dict[str, Any]]:
     """
-    Filters a collection of tasks based on a search term, quadrant category, and completion state.
+    Filters a collection of tasks based on a search term, quadrant category, completion state, and archive state.
 
     :param tasks: List of task dictionaries (each containing 'title', 'description', 'quadrant', 'is_completed').
     :param search_query: Search string to match against title or description (case-insensitive).
     :param quadrant_filter: 'ALL' or a specific quadrant ('Q1_DO', 'Q2_SCHEDULE', 'Q3_DELEGATE', 'Q4_ELIMINATE').
     :param show_completed: Whether to include completed tasks in the output.
+    :param include_archived: Whether to include archived tasks in the output (default False).
     :return: Filtered list of task dictionaries.
     """
     if not tasks:
@@ -126,6 +128,11 @@ def filter_tasks(
     filtered: List[Dict[str, Any]] = []
 
     for task in tasks:
+        # Check archived filter
+        is_archived = bool(task.get("is_archived", 0))
+        if not include_archived and is_archived:
+            continue
+
         # Check completion filter
         is_completed = bool(task.get("is_completed", 0))
         if not show_completed and is_completed:
@@ -824,8 +831,8 @@ def get_task_notifications(
     upcoming_list: List[Dict[str, Any]] = []
 
     for task in tasks:
-        # Ignore completed tasks
-        if bool(task.get("is_completed", 0)):
+        # Ignore completed and archived tasks
+        if bool(task.get("is_completed", 0)) or bool(task.get("is_archived", 0)):
             continue
 
         due_date_str = task.get("due_date")

@@ -241,12 +241,12 @@ class NotificationModal(ctk.CTkToplevel):
                     category_type="tomorrow",
                 )
 
-            # 🗓️ Section 4: Upcoming Deadlines (Next 2-3 Days)
+            # 🗓 Section 4: Upcoming Deadlines (Next 2-3 Days)
             if notifications["upcoming_count"] > 0:
                 self._render_section(
                     parent=scroll_frame,
                     title="Upcoming Deadlines",
-                    icon="🗓️",
+                    icon="🗓",
                     count=notifications["upcoming_count"],
                     title_color=theme.TEXT_PRIMARY,
                     tasks=notifications["upcoming"],
@@ -326,9 +326,11 @@ class NotificationModal(ctk.CTkToplevel):
         title_box = ctk.CTkFrame(header_row, fg_color="transparent")
         title_box.pack(side="left")
 
+        clean_icon = icon.replace("\ufe0f", "") if isinstance(icon, str) else icon
+
         lbl_icon = ctk.CTkLabel(
             title_box,
-            text=icon,
+            text=clean_icon,
             font=(theme.FONT_FAMILY, 13),
         )
         lbl_icon.pack(side="left", padx=(0, 6))

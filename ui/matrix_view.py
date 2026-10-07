@@ -7,6 +7,7 @@ Displays tasks categorized into Do First, Schedule, Delegate, and Eliminate.
 from typing import Any, Callable, Dict, List, Optional
 import customtkinter as ctk
 
+from project import is_task_delayed
 from ui import theme
 from ui.dot_pattern import DottedCardFrame, DottedScrollableFrame
 from ui.task_card import TaskCard
@@ -26,6 +27,7 @@ class MatrixView(ctk.CTkFrame):
         on_move: Callable[[int, str], None],
         on_delete: Callable[[int], None],
         on_quick_add: Callable[[str], None],
+        on_archive: Optional[Callable[[int], None]] = None,
         on_reorder: Optional[Callable[[int, str, int], None]] = None,
         on_pomodoro: Optional[Callable[[Dict[str, Any]], None]] = None,
         on_schedule: Optional[Callable[[Dict[str, Any]], None]] = None,
@@ -37,10 +39,28 @@ class MatrixView(ctk.CTkFrame):
         self.on_edit = on_edit
         self.on_move = on_move
         self.on_delete = on_delete
+        self.on_archive = on_archive or on_delete
         self.on_quick_add = on_quick_add
         self.on_reorder = on_reorder
         self.on_pomodoro = on_pomodoro
         self.on_schedule = on_schedule
+
+        # Track collapsed/expanded state of completed tasks per quadrant
+        self.completed_expanded: Dict[str, bool] = {
+            "Q1_DO": False,
+            "Q2_SCHEDULE": False,
+            "Q3_DELEGATE": False,
+            "Q4_ELIMINATE": False,
+        }
+
+        # Cache of current task signatures per quadrant to prevent unnecessary re-rendering
+        self.current_quadrant_signatures: Dict[str, Any] = {}
+        self.current_quadrant_tasks: Dict[str, List[Dict[str, Any]]] = {
+            "Q1_DO": [],
+            "Q2_SCHEDULE": [],
+            "Q3_DELEGATE": [],
+            "Q4_ELIMINATE": [],
+        }
 
         self._build_ui()
 
@@ -59,7 +79,7 @@ class MatrixView(ctk.CTkFrame):
             "Q4_ELIMINATE": self._create_quadrant_pane("Q4_ELIMINATE", row=1, col=1),
         }
 
-        self._populate_tasks()
+        self._populate_tasks(force=True)
 
     def _create_quadrant_pane(self, q_key: str, row: int, col: int) -> Dict[str, Any]:
         info = theme.QUADRANTS[q_key]
@@ -111,6 +131,21 @@ class MatrixView(ctk.CTkFrame):
         )
         lbl_count.pack(side="left", pady=13)
 
+        # Info / Guide button (ⓘ)
+        btn_info = ctk.CTkButton(
+            header_left,
+            text="ⓘ",
+            width=22,
+            height=22,
+            corner_radius=11,
+            fg_color="transparent",
+            hover_color=theme.BG_CARD_HOVER,
+            text_color=info["color"],
+            font=(theme.FONT_FAMILY, 12, "bold"),
+            command=lambda k=q_key: self._show_quadrant_guide(k),
+        )
+        btn_info.pack(side="left", padx=(6, 0), pady=12)
+
         # Right: Quick Add Button (+)
         btn_add = ctk.CTkButton(
             header,
@@ -140,8 +175,8 @@ class MatrixView(ctk.CTkFrame):
             "info": info,
         }
 
-    def _populate_tasks(self) -> None:
-        # Group tasks by quadrant
+    def _populate_tasks(self, force: bool = False) -> None:
+        """Groups tasks and populates quadrants, only updating those that changed."""
         grouped: Dict[str, List[Dict[str, Any]]] = {
             "Q1_DO": [],
             "Q2_SCHEDULE": [],
@@ -154,29 +189,57 @@ class MatrixView(ctk.CTkFrame):
             if q in grouped:
                 grouped[q].append(task)
 
-        # Render tasks in each quadrant
-        for q_key, pane in self.panes.items():
-            scroll_frame = pane["scroll_frame"]
-            q_tasks = grouped[q_key]
+        for q_key in ("Q1_DO", "Q2_SCHEDULE", "Q3_DELEGATE", "Q4_ELIMINATE"):
+            self._populate_quadrant(q_key, grouped[q_key], force=force)
 
-            # Update count pill
-            pane["count_label"].configure(text=str(len(q_tasks)))
+    def _populate_quadrant(self, q_key: str, q_tasks: List[Dict[str, Any]], force: bool = False) -> None:
+        """Populates a single quadrant, skipping if its tasks and states have not changed."""
+        signature = [(dict(t), is_task_delayed(t)) for t in q_tasks]
+        if not force and self.current_quadrant_signatures.get(q_key) == signature:
+            return  # No changes in this quadrant! Do NOT touch it!
 
-            # Clear previous widgets
-            for child in scroll_frame.winfo_children():
-                child.destroy()
+        self.current_quadrant_signatures[q_key] = signature
+        self.current_quadrant_tasks[q_key] = [dict(t) for t in q_tasks]
 
-            if not q_tasks:
-                empty_lbl = ctk.CTkLabel(
-                    scroll_frame,
-                    text="No tasks in this quadrant.\nClick '+ Add' to create one.",
-                    font=(theme.FONT_FAMILY, 12),
-                    text_color=theme.TEXT_MUTED,
-                    justify="center",
-                )
-                empty_lbl.pack(pady=40, fill="x")
-            else:
-                for task in q_tasks:
+        pane = self.panes[q_key]
+        scroll_frame = pane["scroll_frame"]
+
+        # Preserve scroll position if scrolled
+        yview_pos = 0.0
+        try:
+            if hasattr(scroll_frame, "_parent_canvas"):
+                yview_pos = scroll_frame._parent_canvas.yview()[0]
+        except Exception:
+            pass
+
+        active_tasks = [t for t in q_tasks if not bool(t.get("is_completed", 0))]
+        completed_tasks = [t for t in q_tasks if bool(t.get("is_completed", 0))]
+
+        # Update count pill (show active count; if 0 active and some completed, show ✓)
+        if len(active_tasks) > 0:
+            pane["count_label"].configure(text=str(len(active_tasks)))
+        elif len(completed_tasks) > 0:
+            pane["count_label"].configure(text="✓")
+        else:
+            pane["count_label"].configure(text="0")
+
+        # Clear previous widgets in this quadrant only
+        for child in scroll_frame.winfo_children():
+            child.destroy()
+
+        if not q_tasks:
+            empty_lbl = ctk.CTkLabel(
+                scroll_frame,
+                text="No tasks in this quadrant.\nClick '+ Add' to create one.",
+                font=(theme.FONT_FAMILY, 12),
+                text_color=theme.TEXT_MUTED,
+                justify="center",
+            )
+            empty_lbl.pack(pady=40, fill="x")
+        else:
+            # 1. Render active tasks at top
+            if active_tasks:
+                for task in active_tasks:
                     card = TaskCard(
                         scroll_frame,
                         task=task,
@@ -185,6 +248,7 @@ class MatrixView(ctk.CTkFrame):
                         on_move=self.on_move,
                         on_reorder=self.on_reorder,
                         on_delete=self.on_delete,
+                        on_archive=self.on_archive,
                         on_pomodoro=self.on_pomodoro,
                         on_schedule=self.on_schedule,
                         find_target_quadrant=self.get_quadrant_at_pointer,
@@ -192,6 +256,76 @@ class MatrixView(ctk.CTkFrame):
                         highlight_target_quadrant=self.highlight_quadrant,
                     )
                     card.pack(fill="x", pady=4, padx=2)
+            elif completed_tasks:
+                all_done_lbl = ctk.CTkLabel(
+                    scroll_frame,
+                    text="All tasks completed! 🎉",
+                    font=(theme.FONT_FAMILY, 12, "bold"),
+                    text_color=theme.TEXT_MUTED,
+                    justify="center",
+                )
+                all_done_lbl.pack(pady=(24, 8), fill="x")
+
+            # 2. Render collapsible completed section at the bottom if completed tasks exist
+            if completed_tasks:
+                is_expanded = self.completed_expanded.get(q_key, False)
+                num_completed = len(completed_tasks)
+
+                toggle_frame = ctk.CTkFrame(scroll_frame, fg_color="transparent")
+                toggle_frame.pack(fill="x", pady=(12, 4), padx=2)
+
+                arrow = "▾" if is_expanded else "▸"
+                btn_toggle = ctk.CTkButton(
+                    toggle_frame,
+                    text=f"{arrow} Completed ({num_completed})",
+                    font=(theme.FONT_FAMILY, 11, "bold"),
+                    height=28,
+                    corner_radius=6,
+                    fg_color="transparent",
+                    hover_color=theme.BG_CARD_HOVER,
+                    text_color=theme.TEXT_MUTED,
+                    anchor="w",
+                    command=lambda k=q_key: self._toggle_completed(k),
+                )
+                btn_toggle.pack(fill="x")
+
+                if is_expanded:
+                    completed_box = ctk.CTkFrame(scroll_frame, fg_color="transparent")
+                    completed_box.pack(fill="x", pady=(0, 4))
+                    for c_task in completed_tasks:
+                        card = TaskCard(
+                            completed_box,
+                            task=c_task,
+                            on_toggle=self.on_toggle,
+                            on_edit=self.on_edit,
+                            on_move=self.on_move,
+                            on_reorder=self.on_reorder,
+                            on_delete=self.on_delete,
+                            on_archive=self.on_archive,
+                            on_pomodoro=self.on_pomodoro,
+                            on_schedule=self.on_schedule,
+                            find_target_quadrant=self.get_quadrant_at_pointer,
+                            find_drop_target=self.get_drop_target,
+                            highlight_target_quadrant=self.highlight_quadrant,
+                        )
+                        card.pack(fill="x", pady=4, padx=2)
+
+        # Restore scroll position if previously scrolled
+        if yview_pos > 0.0:
+            try:
+                scroll_frame._parent_canvas.yview_moveto(yview_pos)
+            except Exception:
+                pass
+
+    def _toggle_completed(self, q_key: str) -> None:
+        """Toggles the visibility of the completed tasks section for a quadrant without touching other quadrants."""
+        self.completed_expanded[q_key] = not self.completed_expanded.get(q_key, False)
+        self._populate_quadrant(q_key, self.current_quadrant_tasks.get(q_key, []), force=True)
+
+    def _show_quadrant_guide(self, q_key: str) -> None:
+        """Opens the quadrant guide and analytics explanation modal."""
+        from ui.quadrant_guide_modal import QuadrantGuideModal
+        QuadrantGuideModal(self.winfo_toplevel(), q_key=q_key)
 
     def get_drop_target(self, root_x: int, root_y: int) -> tuple[Optional[str], int]:
         """
@@ -241,6 +375,6 @@ class MatrixView(ctk.CTkFrame):
                 container.configure(border_width=1, border_color=info["border"])
 
     def refresh_tasks(self, tasks: List[Dict[str, Any]]) -> None:
-        """Refreshes the matrix with an updated task list."""
+        """Refreshes the matrix with an updated task list, updating only affected quadrants."""
         self.tasks = tasks
-        self._populate_tasks()
+        self._populate_tasks(force=False)
