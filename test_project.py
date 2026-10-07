@@ -182,6 +182,47 @@ def test_calculate_matrix_stats_all_completed():
     assert stats["focus_score"] == 0.0
 
 
+def test_calculate_matrix_stats_overdue_q2_excluded_from_focus_score():
+    """Verify that overdue tasks in Q2_SCHEDULE do not inflate the focus score."""
+    ref_date = "2026-10-15"
+    sample_tasks = [
+        {"id": 1, "title": "T1 (Q1 pending)", "quadrant": "Q1_DO", "is_completed": 0},
+        # Overdue Q2 task (scheduled for 2026-10-10, reference is 2026-10-15 -> delayed/overdue)
+        {"id": 2, "title": "T2 (Q2 overdue)", "quadrant": "Q2_SCHEDULE", "due_date": "2026-10-10", "is_completed": 0},
+        # Due today Q2 task (on schedule)
+        {"id": 3, "title": "T3 (Q2 today)", "quadrant": "Q2_SCHEDULE", "due_date": "2026-10-15", "is_completed": 0},
+        # Upcoming Q2 task (on schedule)
+        {"id": 4, "title": "T4 (Q2 upcoming)", "quadrant": "Q2_SCHEDULE", "due_date": "2026-10-20", "is_completed": 0},
+    ]
+
+    stats = calculate_matrix_stats(sample_tasks, current_date_str=ref_date)
+    assert stats["total_tasks"] == 4
+    assert stats["completed_tasks"] == 0
+    assert stats["pending_tasks"] == 4
+    # All 3 pending Q2 tasks are reflected in quadrant_counts
+    assert stats["quadrant_counts"]["Q2_SCHEDULE"] == 3
+    # Only the 2 on-schedule tasks (today and future) count towards proactive planning
+    assert stats["proactive_q2_tasks"] == 2
+    # Focus score = (2 / 4) * 100.0 = 50.0% (instead of 3 / 4 = 75.0%)
+    assert stats["focus_score"] == 50.0
+
+
+def test_calculate_matrix_stats_all_q2_overdue():
+    """Verify focus score drops to 0.0% if all pending Q2 tasks are overdue."""
+    ref_date = "2026-10-15"
+    sample_tasks = [
+        {"id": 1, "title": "T1 (Q1)", "quadrant": "Q1_DO", "is_completed": 0},
+        {"id": 2, "title": "T2 (Q2 overdue)", "quadrant": "Q2_SCHEDULE", "due_date": "2026-10-01", "is_completed": 0},
+    ]
+
+    stats = calculate_matrix_stats(sample_tasks, current_date_str=ref_date)
+    assert stats["total_tasks"] == 2
+    assert stats["pending_tasks"] == 2
+    assert stats["quadrant_counts"]["Q2_SCHEDULE"] == 1
+    assert stats["proactive_q2_tasks"] == 0
+    assert stats["focus_score"] == 0.0
+
+
 # ============================================================================
 # 4. Tests for format_due_status()
 # ============================================================================

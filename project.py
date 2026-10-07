@@ -148,18 +148,24 @@ def filter_tasks(
     return filtered
 
 
-def calculate_matrix_stats(tasks: Optional[List[Dict[str, Any]]]) -> Dict[str, Any]:
+def calculate_matrix_stats(
+    tasks: Optional[List[Dict[str, Any]]],
+    current_date_str: Optional[str] = None,
+) -> Dict[str, Any]:
     """
     Calculates productivity statistics, completion rates, and quadrant distribution metrics.
 
     :param tasks: List of task dictionaries.
+    :param current_date_str: Optional reference date in 'YYYY-MM-DD' format (defaults to today).
     :return: Dictionary with metrics:
              - 'total_tasks': Total number of tasks
              - 'completed_tasks': Number of completed tasks
              - 'pending_tasks': Number of active/pending tasks
              - 'completion_rate': Float percentage (0.0 to 100.0) rounded to 1 decimal place
              - 'quadrant_counts': Dict of active task counts per quadrant
-             - 'focus_score': Float percentage of pending tasks residing in Q2_SCHEDULE
+             - 'quadrant_completed': Dict of completed task counts per quadrant
+             - 'proactive_q2_tasks': Count of active Q2 tasks scheduled for today, upcoming, or unscheduled (not overdue)
+             - 'focus_score': Float percentage of pending tasks residing in Q2_SCHEDULE that are proactive (not overdue)
     """
     default_stats: Dict[str, Any] = {
         "total_tasks": 0,
@@ -178,14 +184,25 @@ def calculate_matrix_stats(tasks: Optional[List[Dict[str, Any]]]) -> Dict[str, A
             "Q3_DELEGATE": 0,
             "Q4_ELIMINATE": 0,
         },
+        "proactive_q2_tasks": 0,
         "focus_score": 0.0,
     }
 
     if not tasks:
         return default_stats
 
+    # Determine reference date for evaluating overdue status
+    if current_date_str and isinstance(current_date_str, str):
+        try:
+            today = datetime.strptime(current_date_str.strip(), "%Y-%m-%d").date()
+        except ValueError:
+            today = date.today()
+    else:
+        today = date.today()
+
     total = len(tasks)
     completed = 0
+    proactive_q2 = 0
     quadrant_counts = {
         "Q1_DO": 0,
         "Q2_SCHEDULE": 0,
@@ -209,12 +226,36 @@ def calculate_matrix_stats(tasks: Optional[List[Dict[str, Any]]]) -> Dict[str, A
             if q in quadrant_counts:
                 quadrant_counts[q] += 1
 
+            if q == "Q2_SCHEDULE":
+                # Check whether the task is overdue / delayed
+                due_val = task.get("due_date")
+                is_overdue = False
+                if due_val:
+                    if isinstance(due_val, date) and not isinstance(due_val, datetime):
+                        if due_val < today:
+                            is_overdue = True
+                    elif isinstance(due_val, datetime):
+                        if due_val.date() < today:
+                            is_overdue = True
+                    elif isinstance(due_val, str) and due_val.strip():
+                        clean_due = due_val.strip()
+                        if re.match(r"^\d{4}-\d{2}-\d{2}$", clean_due):
+                            try:
+                                due_date_obj = datetime.strptime(clean_due[:10], "%Y-%m-%d").date()
+                                if due_date_obj < today:
+                                    is_overdue = True
+                            except ValueError:
+                                pass
+                if not is_overdue:
+                    proactive_q2 += 1
+
     pending = total - completed
     completion_rate = round((completed / total) * 100.0, 1) if total > 0 else 0.0
 
-    # Focus Score: Measures effectiveness in proactive planning (Q2 tasks out of all pending tasks)
+    # Focus Score: Measures proactive planning index
+    # Only active, non-overdue (on-schedule / upcoming) Q2 tasks contribute to the score
     focus_score = (
-        round((quadrant_counts["Q2_SCHEDULE"] / pending) * 100.0, 1)
+        round((proactive_q2 / pending) * 100.0, 1)
         if pending > 0
         else 0.0
     )
@@ -226,6 +267,7 @@ def calculate_matrix_stats(tasks: Optional[List[Dict[str, Any]]]) -> Dict[str, A
         "completion_rate": completion_rate,
         "quadrant_counts": quadrant_counts,
         "quadrant_completed": quadrant_completed,
+        "proactive_q2_tasks": proactive_q2,
         "focus_score": focus_score,
     }
 
