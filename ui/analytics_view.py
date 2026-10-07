@@ -356,108 +356,12 @@ class AnalyticsView(DottedScrollableFrame):
             lbl_date.pack()
 
         # ========================================================================
-        # Section 4: Focus by Quadrant & Most Focused Tasks Leaderboard
+        # Section 4: Most Focused Tasks Leaderboard
         # ========================================================================
         split_row = ctk.CTkFrame(container, fg_color="transparent")
         split_row.pack(fill="x", pady=(0, 20))
 
-        # --- LEFT: Focus Time by Quadrant ---
-        card_q_focus = ctk.CTkFrame(
-            split_row,
-            fg_color=theme.BG_CARD,
-            corner_radius=14,
-            border_width=1,
-            border_color=theme.BORDER_COLOR,
-        )
-        card_q_focus.pack(side="left", fill="both", expand=True, padx=(0, 10))
-
-        q_focus_header = ctk.CTkFrame(card_q_focus, fg_color="transparent")
-        q_focus_header.pack(fill="x", padx=16, pady=(16, 4))
-
-        ctk.CTkLabel(
-            q_focus_header,
-            text="⏱️ Focus by Quadrant",
-            font=(theme.FONT_FAMILY, 15, "bold"),
-            text_color=theme.TEXT_PRIMARY,
-        ).pack(side="left")
-
-        q_dist = database.get_pomodoro_quadrant_distribution()
-        total_q_mins = sum(v["focus_minutes"] for v in q_dist.values())
-        proactive_mins = q_dist["Q1_DO"]["focus_minutes"] + q_dist["Q2_SCHEDULE"]["focus_minutes"]
-        proactive_ratio = round((proactive_mins / total_q_mins) * 100.0, 1) if total_q_mins > 0 else 0.0
-
-        if total_q_mins > 0:
-            badge_proactive = ctk.CTkLabel(
-                q_focus_header,
-                text=f"{proactive_ratio}% High-Value",
-                font=(theme.FONT_FAMILY, 11, "bold"),
-                text_color=("#065F46", "#34D399"),
-            )
-            badge_proactive.pack(side="right")
-
-        ctk.CTkLabel(
-            card_q_focus,
-            text="Deep work invested across Eisenhower matrix priorities.",
-            font=(theme.FONT_FAMILY, 12),
-            text_color=theme.TEXT_MUTED,
-            anchor="w",
-        ).pack(fill="x", padx=16, pady=(0, 12))
-
-        q_inner_box = ctk.CTkFrame(card_q_focus, fg_color="transparent")
-        q_inner_box.pack(fill="x", padx=16, pady=(0, 16))
-
-        if total_q_mins == 0:
-            lbl_empty_q = ctk.CTkLabel(
-                q_inner_box,
-                text="No focus sessions logged yet.\nStart a Pomodoro sprint on any task to see quadrant time distribution.",
-                font=(theme.FONT_FAMILY, 12),
-                text_color=theme.TEXT_MUTED,
-                justify="center",
-            )
-            lbl_empty_q.pack(pady=28)
-        else:
-            for q_key in ["Q1_DO", "Q2_SCHEDULE", "Q3_DELEGATE", "Q4_ELIMINATE"]:
-                info = theme.QUADRANTS[q_key]
-                q_mins = q_dist[q_key]["focus_minutes"]
-                q_sprints = q_dist[q_key]["sprints_count"]
-                pct = round((q_mins / total_q_mins) * 100.0, 1)
-
-                item = ctk.CTkFrame(q_inner_box, fg_color="transparent")
-                item.pack(fill="x", pady=5)
-
-                top_line = ctk.CTkFrame(item, fg_color="transparent")
-                top_line.pack(fill="x")
-
-                dot = ctk.CTkFrame(top_line, width=10, height=10, corner_radius=5, fg_color=info["color"])
-                dot.pack(side="left", padx=(0, 8), pady=2)
-
-                lbl_name = ctk.CTkLabel(
-                    top_line,
-                    text=info["title"],
-                    font=(theme.FONT_FAMILY, 13, "bold"),
-                    text_color=theme.TEXT_PRIMARY,
-                )
-                lbl_name.pack(side="left")
-
-                lbl_stat = ctk.CTkLabel(
-                    top_line,
-                    text=f"{format_focus_duration(q_mins)} ({q_sprints} 🍅) • {pct}%",
-                    font=(theme.FONT_FAMILY, 12, "bold"),
-                    text_color=info["text"][0] if ctk.get_appearance_mode() == "Light" else info["text"][1],
-                )
-                lbl_stat.pack(side="right")
-
-                bar_q = ctk.CTkProgressBar(
-                    item,
-                    height=6,
-                    corner_radius=3,
-                    fg_color=("#E5E0D8", "#222222"),
-                    progress_color=info["color"],
-                )
-                bar_q.pack(fill="x", pady=(4, 0))
-                bar_q.set(pct / 100.0 if pct > 0 else 0.0)
-
-        # --- RIGHT: Most Focused Tasks Leaderboard ---
+        # --- Most Focused Tasks Leaderboard ---
         card_top = ctk.CTkFrame(
             split_row,
             fg_color=theme.BG_CARD,
