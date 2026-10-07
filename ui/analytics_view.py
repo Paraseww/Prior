@@ -411,8 +411,7 @@ class AnalyticsView(DottedScrollableFrame):
             )
             lbl_empty_t.pack(pady=28)
         else:
-            rank_badges = ["🥇", "🥈", "🥉", "#4", "#5"]
-            for idx, task in enumerate(top_tasks):
+            for task in top_tasks:
                 row_item = ctk.CTkFrame(
                     top_inner_box,
                     fg_color=theme.BG_CARD_HOVER,
@@ -425,21 +424,9 @@ class AnalyticsView(DottedScrollableFrame):
                 inner_r = ctk.CTkFrame(row_item, fg_color="transparent")
                 inner_r.pack(fill="x", padx=12, pady=8)
 
-                # Medal or rank
-                rank_str = rank_badges[idx] if idx < len(rank_badges) else f"#{idx+1}"
-                lbl_rank = ctk.CTkLabel(
-                    inner_r,
-                    text=rank_str,
-                    font=(theme.FONT_FAMILY, 12, "bold"),
-                    text_color=theme.TEXT_PRIMARY,
-                    width=28,
-                    anchor="w",
-                )
-                lbl_rank.pack(side="left")
-
                 # Task title (truncated)
                 raw_title = task.get("title", "Untitled Task")
-                title_display = raw_title if len(raw_title) <= 24 else f"{raw_title[:22]}..."
+                title_display = raw_title if len(raw_title) <= 40 else f"{raw_title[:38]}..."
                 is_done = task.get("is_completed", 0) == 1
                 if is_done:
                     title_display = f"✓ {title_display}"
@@ -452,21 +439,6 @@ class AnalyticsView(DottedScrollableFrame):
                     anchor="w",
                 )
                 lbl_t_name.pack(side="left", padx=(4, 8))
-
-                # Quadrant badge
-                quad_key = task.get("quadrant", "Q1_DO")
-                q_info = theme.QUADRANTS.get(quad_key, theme.QUADRANTS["Q1_DO"])
-                badge_lbl = ctk.CTkLabel(
-                    inner_r,
-                    text=q_info["badge"],
-                    font=(theme.FONT_FAMILY, 10, "bold"),
-                    text_color=q_info["text"][0] if ctk.get_appearance_mode() == "Light" else q_info["text"][1],
-                    fg_color=q_info["bg_header"],
-                    corner_radius=4,
-                    padx=6,
-                    pady=2,
-                )
-                badge_lbl.pack(side="left")
 
                 # Stats on right: Sprints & Duration
                 t_mins = task.get("focus_minutes", 0)
