@@ -108,6 +108,25 @@ class PriorApp(ctk.CTk):
 
         self._check_onboarding_and_render()
 
+        # Pre-seed delayed tasks on startup so zero old/delayed alerts pop up
+        try:
+            boot_now = datetime.now()
+            boot_today = boot_now.strftime("%Y-%m-%d")
+            all_boot_tasks = database.get_all_tasks()
+            for t in all_boot_tasks:
+                if is_task_delayed(t, current_dt=boot_now):
+                    t_id = t.get("id")
+                    rem_str = str(t.get("reminder_time") or "").strip()
+                    self.notified_reminder_keys.add(f"q1_runway_warn_{t_id}_{boot_today}_{rem_str}")
+                    self.notified_reminder_keys.add(f"q1_runway_start_{t_id}_{boot_today}_{rem_str}")
+                    self.notified_reminder_keys.add(f"q1_runway_renudge_{t_id}_{boot_today}_{rem_str}")
+                    self.notified_reminder_keys.add(f"q1_deadline_{t_id}_{boot_today}_{rem_str}")
+                    self.notified_reminder_keys.add(f"headsup_{t_id}_{boot_today}_{rem_str}")
+                    self.notified_reminder_keys.add(f"time_{t_id}_{boot_today}_{rem_str}")
+                    self.notified_reminder_keys.add(f"overdue_{t_id}_{boot_today}")
+        except Exception:
+            pass
+
         # Start periodic reminder checker for scheduled tasks
         self.after(3000, self._check_reminders)
 
@@ -659,6 +678,16 @@ class PriorApp(ctk.CTk):
                     est_duration = int(task.get("estimated_duration") or 0)
                     title = task.get("title", "Task")
 
+                    # STRICTLY DO NOT ALERT FOR DELAYED TASKS
+                    if is_task_delayed(task, current_dt=now):
+                        self.notified_reminder_keys.add(f"q1_runway_warn_{task_id}_{today_str}_{rem_str}")
+                        self.notified_reminder_keys.add(f"q1_runway_start_{task_id}_{today_str}_{rem_str}")
+                        self.notified_reminder_keys.add(f"q1_runway_renudge_{task_id}_{today_str}_{rem_str}")
+                        self.notified_reminder_keys.add(f"q1_deadline_{task_id}_{today_str}_{rem_str}")
+                        self.notified_reminder_keys.add(f"headsup_{task_id}_{today_str}_{rem_str}")
+                        self.notified_reminder_keys.add(f"time_{task_id}_{today_str}_{rem_str}")
+                        continue
+
                     # Special Runway Logic for Q1 (Do First / Critical Deadlines) with estimated duration
                     if quadrant == "Q1_DO" and est_duration > 0:
                         drop_info = calculate_drop_dead_time(rem_str, est_duration, today_str, reference_dt=now)
@@ -669,29 +698,29 @@ class PriorApp(ctk.CTk):
                             dur_text = drop_info["duration_text"]
                             sprints = drop_info["pomodoro_sprints"]
 
-                            # Milestone 1: 15-Minute Warning before Drop-Dead Start Time
+                            if est_duration < 60:
+                                dur_phrase = f"{est_duration} minutes"
+                            elif est_duration == 60:
+                                dur_phrase = "1 hour"
+                            elif est_duration % 60 == 0:
+                                dur_phrase = f"{est_duration // 60} hours"
+                            else:
+                                dur_phrase = f"{est_duration // 60} hours {est_duration % 60} minutes"
+
+                            # Milestone 1: 15-Minute Runway Heads-Up before Drop-Dead Start Time
                             if 0 < mins_to_start <= 15:
                                 warn_key = f"q1_runway_warn_{task_id}_{today_str}_{rem_str}"
                                 if warn_key not in self.notified_reminder_keys:
                                     self.notified_reminder_keys.add(warn_key)
                                     mins_int = max(1, int(round(mins_to_start)))
-                                    if est_duration < 60:
-                                        dur_phrase = f"{est_duration} minutes"
-                                    elif est_duration == 60:
-                                        dur_phrase = "1 hour"
-                                    elif est_duration % 60 == 0:
-                                        dur_phrase = f"{est_duration // 60} hours"
-                                    else:
-                                        dur_phrase = f"{est_duration // 60} hours {est_duration % 60} minutes"
-
-                                    title_text = f"⚠️ 15 Mins Until Point of No Return: {title}" if mins_int >= 13 else f"⚠️ {mins_int} Mins Until Point of No Return: {title}"
+                                    time_label = "15m" if mins_int >= 13 else f"{mins_int}m"
                                     self._queue_desktop_notification(
-                                        title=title_text,
-                                        message=f"Due at {rem_str} and takes {dur_phrase}. Wrap up your tabs now so you can start at {drop_dead_str}!",
+                                        title=f"☕ Heads up, friend! {time_label} until {title}",
+                                        message=f"Due at {rem_str} and needs about {dur_phrase}. Grab some water, close your extra tabs, and get set to start at {drop_dead_str}! 🚀",
                                     )
 
-                            # Milestone 2: Point of No Return (The Drop-Dead Start Time reached)
-                            if mins_to_start <= 0 and mins_to_deadline > 0:
+                            # Milestone 2: Drop-Dead Start Time Reached (only when occurring right now)
+                            if -2.0 <= mins_to_start <= 0 and mins_to_deadline > 0:
                                 start_key = f"q1_runway_start_{task_id}_{today_str}_{rem_str}"
                                 if start_key not in self.notified_reminder_keys:
                                     self.notified_reminder_keys.add(start_key)
@@ -699,12 +728,12 @@ class PriorApp(ctk.CTk):
                                     self.dismissed_notification_ids.discard(task_id)
                                     self._update_notification_badge()
                                     self._queue_desktop_notification(
-                                        title=f"🚨 Point of No Return: {title}",
-                                        message=f"You MUST start now to finish before your {rem_str} deadline!",
+                                        title=f"🎯 Game time! Let's start {title}",
+                                        message=f"It's {drop_dead_str}! Starting now gets it finished before your {rem_str} deadline. You've got this, ready for a focus sprint? 🍅",
                                     )
 
-                            # Milestone 2.5: Anti-Procrastination Re-Nudge (running out of runway)
-                            if mins_to_start <= -45 and mins_to_deadline > 15:
+                            # Milestone 2.5: Anti-Procrastination Friendly Re-Nudge (around 45m of inaction, well before deadline)
+                            if -47.0 <= mins_to_start <= -45.0 and mins_to_deadline > 15:
                                 renudge_key = f"q1_runway_renudge_{task_id}_{today_str}_{rem_str}"
                                 if renudge_key not in self.notified_reminder_keys:
                                     self.notified_reminder_keys.add(renudge_key)
@@ -712,12 +741,12 @@ class PriorApp(ctk.CTk):
                                     self.dismissed_notification_ids.discard(task_id)
                                     self._update_notification_badge()
                                     self._queue_desktop_notification(
-                                        title=f"🚨 Running Out of Runway: {title}",
-                                        message="You are cutting into your buffer before the deadline! Start a focus sprint now.",
+                                        title=f"👀 Checking in on you: {title}",
+                                        message=f"Don't let this turn into late night stress! We're dipping into your buffer before {rem_str}. Let's jump into a 25 min sprint together! 💪",
                                     )
 
-                            # Milestone 3: Critical Deadline reached
-                            if mins_to_deadline <= 0:
+                            # Milestone 3: Critical Deadline Reached (only when arriving right now)
+                            if -1.5 <= mins_to_deadline <= 0:
                                 deadline_key = f"q1_deadline_{task_id}_{today_str}_{rem_str}"
                                 if deadline_key not in self.notified_reminder_keys:
                                     self.notified_reminder_keys.add(deadline_key)
@@ -725,8 +754,8 @@ class PriorApp(ctk.CTk):
                                     self.dismissed_notification_ids.discard(task_id)
                                     self._update_notification_badge()
                                     self._queue_desktop_notification(
-                                        title=f"🚨 Critical Deadline: {title}",
-                                        message=f"The {rem_str} deadline has arrived! Finalize and submit your work.",
+                                        title=f"🏁 Finish line: {title}!",
+                                        message=f"It's {rem_str}! That's the deadline, wrap up your final touches and let's cross this off your list! 🎉",
                                     )
                     else:
                         # Standard Scheduled Task Logic
@@ -745,8 +774,8 @@ class PriorApp(ctk.CTk):
                                     message=f"Scheduled for {rem_str}. Wrap up your current work to focus.",
                                 )
 
-                        # Milestone 2: Exact Scheduled Time (at or past reminder time)
-                        if mins_diff <= 0:
+                        # Milestone 2: Exact Scheduled Time (only when arriving right now)
+                        if -2.0 <= mins_diff <= 0:
                             reminder_key = f"time_{task_id}_{today_str}_{rem_str}"
                             if reminder_key not in self.notified_reminder_keys:
                                 self.notified_reminder_keys.add(reminder_key)
@@ -756,33 +785,20 @@ class PriorApp(ctk.CTk):
                                 title = task.get("title", "Task Reminder")
                                 self._queue_desktop_notification(
                                     title=f"⏰ Scheduled Now: {title}",
-                                    message=f"It's {rem_str}! Ready for a 25-min focus sprint? Click to begin.",
+                                    message=f"It's {rem_str}! Ready for a 25 min focus sprint? Click to begin.",
                                 )
 
             # 2. Categorized deadline notifications for active tasks
             active_tasks = [t for t in self.all_tasks if t.get("id") not in getattr(self, "dismissed_notification_ids", set())]
             notifs = get_task_notifications(active_tasks, current_date_str=today_str)
 
-            # A. Overdue Tasks (Carried over from past days, notified once per day)
+            # A. Overdue Tasks (Carried over from past days) - Strictly DO NOT send desktop alerts for delayed tasks!
             overdue_pending = [
                 t for t in notifs.get("overdue", [])
                 if f"overdue_{t.get('id')}_{today_str}" not in self.notified_reminder_keys
             ]
-            if overdue_pending:
-                for t in overdue_pending[:2]:
-                    t_id = t.get("id")
-                    self.notified_reminder_keys.add(f"overdue_{t_id}_{today_str}")
-                    if t_id:
-                        self.task_last_notified[t_id] = now
-                    title = t.get("title", "Task")
-                    days_ago = abs(t.get("days_diff", 1))
-                    day_text = "yesterday" if days_ago == 1 else f"{days_ago} days ago"
-                    self._queue_desktop_notification(
-                        title=f"⚠️ Overdue: {title}",
-                        message=f"Was due {day_text}. Knock it out with a quick 15-min sprint!",
-                    )
-                for t in overdue_pending[2:]:
-                    self.notified_reminder_keys.add(f"overdue_{t.get('id')}_{today_str}")
+            for t in overdue_pending:
+                self.notified_reminder_keys.add(f"overdue_{t.get('id')}_{today_str}")
 
             # B. Untimed Tasks Due Today (Natural Checkpoints: Midday 12:30-14:00 & Evening 18:00-20:00)
             untimed_today = [
@@ -836,6 +852,10 @@ class PriorApp(ctk.CTk):
                     continue
                 t_id = task.get("id")
                 if not t_id or t_id in getattr(self, "dismissed_notification_ids", set()):
+                    continue
+
+                # NEVER alert or re-nudge for delayed tasks!
+                if is_task_delayed(task, current_dt=now):
                     continue
 
                 is_q1 = task.get("quadrant") == "Q1_DO"

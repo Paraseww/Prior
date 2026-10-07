@@ -86,8 +86,8 @@ class TaskCard(ctk.CTkFrame):
         if self.is_delayed:
             self.hover_text = "⚠️ Task Passed — Reschedule"
             self.hover_icon = "📅"
-            self.hover_bg = ("#F1F5F9", "#1E293B")
-            self.hover_text_color = theme.TEXT_MUTED
+            self.hover_bg = theme.DELAYED_BG
+            self.hover_text_color = theme.DELAYED_TEXT
             self.hover_action = self._on_schedule_click
         elif self.q_key == "Q1_DO":
             self.hover_text = "Focus with Pomodoro"
@@ -127,8 +127,8 @@ class TaskCard(ctk.CTkFrame):
             height=20,
             corner_radius=5,
             state="disabled" if self.is_delayed else "normal",
-            fg_color=("#94A3B8", "#64748B") if self.is_delayed else self.q_color,
-            border_color=("#CBD5E1", "#475569") if self.is_delayed else None,
+            fg_color=theme.DELAYED_CHECKBOX_BG if self.is_delayed else self.q_color,
+            border_color=theme.DELAYED_CHECKBOX_BORDER if self.is_delayed else None,
             hover_color=self.q_info["color_dark"],
             command=self._on_check_toggle,
         )
@@ -196,7 +196,7 @@ class TaskCard(ctk.CTkFrame):
 
         # Title
         title_text = self.task.get("title", "Untitled Task")
-        title_color = theme.TEXT_MUTED if self.is_delayed else theme.TEXT_PRIMARY
+        title_color = theme.DELAYED_TITLE if self.is_delayed else theme.TEXT_PRIMARY
 
         self.lbl_title = ctk.CTkLabel(
             self.title_row,
@@ -217,7 +217,7 @@ class TaskCard(ctk.CTkFrame):
                 self.center_box,
                 text=description,
                 font=(theme.FONT_FAMILY, 11),
-                text_color=theme.TEXT_MUTED if self.is_delayed else theme.TEXT_SECONDARY,
+                text_color=theme.DELAYED_DESC if self.is_delayed else theme.TEXT_SECONDARY,
                 anchor="w",
                 justify="left",
                 wraplength=220,
@@ -247,9 +247,9 @@ class TaskCard(ctk.CTkFrame):
             badges_row = ctk.CTkFrame(self.center_box, fg_color="transparent")
             badges_row.pack(anchor="w", pady=(4, 0))
 
-            badge_bg = ("#F1F5F9", "#1E293B") if self.is_delayed else self.q_info["bg_header"]
-            badge_border = ("#CBD5E1", "#334155") if self.is_delayed else self.q_info["border"]
-            badge_text_col = theme.TEXT_MUTED if self.is_delayed else self.q_info["text"]
+            badge_bg = theme.DELAYED_BG if self.is_delayed else self.q_info["bg_header"]
+            badge_border = theme.DELAYED_BORDER if self.is_delayed else self.q_info["border"]
+            badge_text_col = theme.DELAYED_TEXT if self.is_delayed else self.q_info["text"]
 
             if has_due and due_info:
                 due_badge = ctk.CTkFrame(

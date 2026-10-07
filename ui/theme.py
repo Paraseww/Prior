@@ -27,6 +27,15 @@ TEXT_MUTED: Tuple[str, str] = ("#9E9891", "#737373")      # Warm Muted Gray / Di
 ACCENT_PRIMARY: Tuple[str, str] = ("#6366F1", "#818CF8")  # Indigo 500 / Indigo 400
 ACCENT_HOVER: Tuple[str, str] = ("#4F46E5", "#6366F1")    # Indigo 600 / Indigo 500
 
+# Delayed / passed task styling (cohesive sleek warm charcoal / graphite palette)
+DELAYED_BG: Tuple[str, str] = ("#F4EFE6", "#1E1E1E")       # Prior warm cream / Elevated dark surface
+DELAYED_BORDER: Tuple[str, str] = ("#D6D0C7", "#3A3A3C")   # Warm subtle border / Refined dark charcoal border
+DELAYED_TEXT: Tuple[str, str] = ("#57534E", "#E2E8F0")     # Deep stone text / Crisp silver-white text
+DELAYED_TITLE: Tuple[str, str] = ("#44403C", "#E2E8F0")    # High-legibility title in dark mode
+DELAYED_DESC: Tuple[str, str] = ("#78716C", "#A8A29E")     # Warm readable subtitle in dark mode
+DELAYED_CHECKBOX_BG: Tuple[str, str] = ("#D6D0C7", "#3A3A3C")
+DELAYED_CHECKBOX_BORDER: Tuple[str, str] = ("#A8A29E", "#52525B")
+
 # ============================================================================
 # Eisenhower Quadrant Themes
 # ============================================================================

@@ -35,6 +35,12 @@ class TaskModal(ctk.CTkToplevel):
         self.current_quadrant = task.get("quadrant", default_quadrant) if task else default_quadrant
         self.default_due_date = default_due_date
 
+        # Quadrant Theme Details
+        self.q_info = theme.QUADRANTS.get(self.current_quadrant, theme.QUADRANTS["Q1_DO"])
+        self.q_color = self.q_info["color"]
+        self.q_color_dark = self.q_info["color_dark"]
+        self.q_bg_header = self.q_info.get("bg_header", ("#FEF2F2", "#2A0A0A"))
+
         # Initial schedule state
         today = date.today()
         self.selected_date: Optional[date] = None
@@ -190,10 +196,16 @@ class TaskModal(ctk.CTkToplevel):
             self.txt_desc.insert("1.0", self.task["description"])
 
         # Urgency & Importance Switches (Live determination)
-        matrix_box = ctk.CTkFrame(scroll_frame, fg_color=theme.BG_INPUT, corner_radius=10, border_width=1, border_color=theme.BORDER_COLOR)
-        matrix_box.pack(fill="x", pady=(0, 8))
+        self.matrix_box = ctk.CTkFrame(
+            scroll_frame,
+            fg_color=theme.BG_INPUT,
+            corner_radius=10,
+            border_width=1,
+            border_color=("#FCA5A5", "#7F1D1D") if self.current_quadrant == "Q1_DO" else theme.BORDER_COLOR,
+        )
+        self.matrix_box.pack(fill="x", pady=(0, 8))
 
-        inner_box = ctk.CTkFrame(matrix_box, fg_color="transparent")
+        inner_box = ctk.CTkFrame(self.matrix_box, fg_color="transparent")
         inner_box.pack(fill="x", padx=14, pady=8)
 
         initial_urgent = self.current_quadrant in ("Q1_DO", "Q3_DELEGATE")
@@ -204,6 +216,8 @@ class TaskModal(ctk.CTkToplevel):
             text="🚨 Urgent (Immediate Deadline)",
             font=(theme.FONT_FAMILY, 12, "bold"),
             text_color=theme.TEXT_PRIMARY,
+            progress_color=self.q_color,
+            button_hover_color=self.q_color_dark,
             command=self._on_switch_toggle,
         )
         self.switch_urgent.pack(side="left", fill="x", expand=True)
@@ -215,6 +229,8 @@ class TaskModal(ctk.CTkToplevel):
             text="⭐ Important (High Value)",
             font=(theme.FONT_FAMILY, 12, "bold"),
             text_color=theme.TEXT_PRIMARY,
+            progress_color=self.q_color,
+            button_hover_color=self.q_color_dark,
             command=self._on_switch_toggle,
         )
         self.switch_important.pack(side="right", fill="x", expand=True)
@@ -371,6 +387,8 @@ class TaskModal(ctk.CTkToplevel):
             text="Enable",
             font=(theme.FONT_FAMILY, 11, "bold"),
             text_color=theme.TEXT_SECONDARY,
+            progress_color=self.q_color,
+            button_hover_color=self.q_color_dark,
             command=self._on_reminder_switch_toggle,
         )
         self.switch_reminder.pack(side="right")
@@ -611,8 +629,8 @@ class TaskModal(ctk.CTkToplevel):
             height=28,
             corner_radius=6,
             font=(theme.FONT_FAMILY, 11, "bold"),
-            fg_color=theme.ACCENT_PRIMARY,
-            hover_color=theme.ACCENT_HOVER,
+            fg_color=self.q_color,
+            hover_color=self.q_color_dark,
             command=self._apply_custom_duration,
         )
         self.btn_apply_custom_dur.pack(side="right")
@@ -669,8 +687,8 @@ class TaskModal(ctk.CTkToplevel):
             font=(theme.FONT_FAMILY, 13, "bold"),
             height=38,
             corner_radius=8,
-            fg_color=theme.ACCENT_PRIMARY,
-            hover_color=theme.ACCENT_HOVER,
+            fg_color=self.q_color,
+            hover_color=self.q_color_dark,
             text_color="#FFFFFF",
             command=self._on_save_clicked,
         )
@@ -707,11 +725,11 @@ class TaskModal(ctk.CTkToplevel):
                 is_today = (cell_date == today)
 
                 if is_selected:
-                    btn_fg = theme.ACCENT_PRIMARY
+                    btn_fg = self.q_color
                     text_color = "#FFFFFF"
                 elif is_today:
-                    btn_fg = ("#EEF2FF", "#1E1B4B")
-                    text_color = theme.ACCENT_PRIMARY
+                    btn_fg = self.q_bg_header
+                    text_color = self.q_color_dark
                 elif is_curr_month:
                     btn_fg = theme.BG_CARD
                     text_color = theme.TEXT_PRIMARY
@@ -730,7 +748,7 @@ class TaskModal(ctk.CTkToplevel):
                     height=24,
                     corner_radius=5,
                     fg_color=btn_fg,
-                    hover_color=theme.ACCENT_HOVER if is_selected else theme.BG_CARD_HOVER,
+                    hover_color=self.q_color_dark if is_selected else theme.BG_CARD_HOVER,
                     text_color=text_color,
                     command=_make_handler(cell_date),
                 )
@@ -800,8 +818,8 @@ class TaskModal(ctk.CTkToplevel):
         for key, btn in self.preset_buttons.items():
             if key == active_key:
                 btn.configure(
-                    fg_color=theme.ACCENT_PRIMARY,
-                    hover_color=theme.ACCENT_HOVER,
+                    fg_color=self.q_color,
+                    hover_color=self.q_color_dark,
                     text_color="#FFFFFF",
                 )
             else:
@@ -899,8 +917,8 @@ class TaskModal(ctk.CTkToplevel):
         if not hasattr(self, "dur_preset_buttons"):
             return
         is_q1 = self.current_quadrant == "Q1_DO"
-        active_color = "#EF4444" if is_q1 else theme.ACCENT_PRIMARY
-        active_hover = "#DC2626" if is_q1 else theme.ACCENT_HOVER
+        active_color = self.q_color
+        active_hover = self.q_color_dark
 
         if hasattr(self, "duration_box"):
             if is_q1 and self.estimated_duration > 0:
@@ -981,7 +999,7 @@ class TaskModal(ctk.CTkToplevel):
                 return
 
             if hasattr(self, "btn_save"):
-                self.btn_save.configure(state="normal", fg_color=theme.ACCENT_PRIMARY)
+                self.btn_save.configure(state="normal", fg_color=self.q_color, hover_color=self.q_color_dark)
 
             # Drop-Dead Runway Calculation ONLY for Q1 (Red Box) when estimated duration is set
             if self.current_quadrant == "Q1_DO" and rem_str and self.estimated_duration > 0:
@@ -1035,7 +1053,7 @@ class TaskModal(ctk.CTkToplevel):
                 border_color=("#A7F3D0", "#064E3B"),
             )
             if hasattr(self, "btn_save"):
-                self.btn_save.configure(state="normal", fg_color=theme.ACCENT_PRIMARY)
+                self.btn_save.configure(state="normal", fg_color=self.q_color, hover_color=self.q_color_dark)
             self.lbl_sched_summary.configure(
                 text="⚠️ No due date set (Task will be unscheduled)",
                 text_color=theme.TEXT_MUTED,
@@ -1045,9 +1063,30 @@ class TaskModal(ctk.CTkToplevel):
         urgent = bool(self.switch_urgent.get())
         important = bool(self.switch_important.get())
         self.current_quadrant = determine_quadrant(urgent, important)
+        self.q_info = theme.QUADRANTS.get(self.current_quadrant, theme.QUADRANTS["Q1_DO"])
+        self.q_color = self.q_info["color"]
+        self.q_color_dark = self.q_info["color_dark"]
+        self.q_bg_header = self.q_info.get("bg_header", ("#FEF2F2", "#2A0A0A"))
+
+        # Update dynamic accents to match new quadrant
+        if hasattr(self, "switch_urgent"):
+            self.switch_urgent.configure(progress_color=self.q_color, button_hover_color=self.q_color_dark)
+        if hasattr(self, "switch_important"):
+            self.switch_important.configure(progress_color=self.q_color, button_hover_color=self.q_color_dark)
+        if hasattr(self, "switch_reminder"):
+            self.switch_reminder.configure(progress_color=self.q_color, button_hover_color=self.q_color_dark)
+        if hasattr(self, "matrix_box"):
+            self.matrix_box.configure(border_color=("#FCA5A5", "#7F1D1D") if self.current_quadrant == "Q1_DO" else theme.BORDER_COLOR)
+        if hasattr(self, "btn_save"):
+            self.btn_save.configure(fg_color=self.q_color, hover_color=self.q_color_dark)
+        if hasattr(self, "btn_apply_custom_dur"):
+            self.btn_apply_custom_dur.configure(fg_color=self.q_color, hover_color=self.q_color_dark)
+
         self._update_quadrant_badge()
         self._toggle_q1_duration_box()
         self._update_duration_buttons()
+        self._render_mini_calendar()
+        self._update_date_preset_buttons()
         self._update_schedule_summary()
 
     def _toggle_q1_duration_box(self) -> None:

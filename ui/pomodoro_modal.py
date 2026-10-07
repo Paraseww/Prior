@@ -201,43 +201,36 @@ class PomodoroModal(ctk.CTkToplevel):
         )
         lbl_title.pack(side="left", fill="x", expand=True)
 
-        # Right badges container: Sprints done & Cycles done
+        # Right stats container: Sprints done | Cycles done (clean inline presentation)
         stats_box = ctk.CTkFrame(title_row, fg_color="transparent")
         stats_box.pack(side="right")
 
-        self.badge_sprints = ctk.CTkFrame(
-            stats_box,
-            fg_color=theme.BG_CARD,
-            corner_radius=6,
-            border_width=1,
-            border_color=theme.BORDER_COLOR,
-        )
-        self.badge_sprints.pack(side="left", padx=(0, 6))
+        self.badge_sprints = None
+        self.badge_cycles = None
 
         self.lbl_sprints_done = ctk.CTkLabel(
-            self.badge_sprints,
+            stats_box,
             text=f"Sprints done: {self.completed_sprints_in_set}",
-            font=(theme.FONT_FAMILY, 10, "bold"),
+            font=(theme.FONT_FAMILY, 11, "bold"),
             text_color=theme.TEXT_SECONDARY,
         )
-        self.lbl_sprints_done.pack(padx=8, pady=2)
+        self.lbl_sprints_done.pack(side="left")
 
-        self.badge_cycles = ctk.CTkFrame(
+        self.lbl_stats_divider = ctk.CTkLabel(
             stats_box,
-            fg_color=theme.BG_CARD,
-            corner_radius=6,
-            border_width=1,
-            border_color=theme.BORDER_COLOR,
+            text="|",
+            font=(theme.FONT_FAMILY, 11),
+            text_color=theme.TEXT_MUTED,
         )
-        self.badge_cycles.pack(side="left")
+        self.lbl_stats_divider.pack(side="left", padx=6)
 
         self.lbl_cycles_done = ctk.CTkLabel(
-            self.badge_cycles,
+            stats_box,
             text=f"Cycles done: {self.completed_sprints_in_set // 4}",
-            font=(theme.FONT_FAMILY, 10, "bold"),
+            font=(theme.FONT_FAMILY, 11, "bold"),
             text_color=theme.TEXT_SECONDARY,
         )
-        self.lbl_cycles_done.pack(padx=8, pady=2)
+        self.lbl_cycles_done.pack(side="left")
 
         # Description / Notes (if present)
         task_notes = (self.task.get("description") or self.task.get("notes") or "").strip()
@@ -253,9 +246,10 @@ class PomodoroModal(ctk.CTkToplevel):
             )
             lbl_notes.pack(fill="x", pady=(3, 0))
 
-        # Estimated Runway / Focus Sprint Recommendation
+        # Estimated Runway / Focus Sprint Recommendation - STRICTLY ONLY FOR RED (Q1_DO) TASKS
+        is_q1 = self.task.get("quadrant") == "Q1_DO"
         est_duration = int(self.task.get("estimated_duration") or 0)
-        if est_duration > 0:
+        if is_q1 and est_duration > 0:
             if est_duration < 60:
                 dur_phrase = f"{est_duration} mins"
             elif est_duration == 60:
@@ -264,58 +258,42 @@ class PomodoroModal(ctk.CTkToplevel):
                 dur_phrase = f"{est_duration // 60} hours"
             else:
                 dur_phrase = f"{est_duration // 60}h {est_duration % 60}m"
-            sprints = self.total_target_sprints
-            sprint_word = "sprint" if sprints == 1 else "sprints"
 
+            sprints = self.total_target_sprints
             cycles = sprints // 4
             extra = sprints % 4
+
             if cycles > 0 and extra > 0:
-                cycle_str = "1 full 130 min cycle" if cycles == 1 else f"{cycles} full 130 min cycles"
+                cycle_str = "1 cycle" if cycles == 1 else f"{cycles} cycles"
                 extra_str = "1 extra sprint" if extra == 1 else f"{extra} extra sprints"
-                break_clause = f"({cycle_str} + {extra_str})"
+                sprint_str = "1 sprint" if sprints == 1 else f"{sprints} sprints"
+                sentence = f"⏱️ Estimated {dur_phrase}: You'll need {cycle_str} and {extra_str}, for a total of {sprint_str}."
             elif cycles > 0 and extra == 0:
-                cycle_str = "1 full 130 min cycle" if cycles == 1 else f"{cycles} full 130 min cycles"
-                break_clause = f"({cycle_str})"
+                cycle_str = "1 cycle" if cycles == 1 else f"{cycles} cycles"
+                sprint_str = "1 sprint" if sprints == 1 else f"{sprints} sprints"
+                if cycles == 1:
+                    sentence = f"⏱️ Estimated {dur_phrase}: You'll need 1 cycle of 4 sprints."
+                else:
+                    sentence = f"⏱️ Estimated {dur_phrase}: You'll need {cycle_str}, for a total of {sprint_str}."
             else:
-                break_clause = ""
+                sprint_str = "1 sprint" if sprints == 1 else f"{sprints} sprints"
+                sentence = f"⏱️ Estimated {dur_phrase}: You'll need {sprint_str}."
 
-            self.runway_badge = ctk.CTkFrame(
+            self._runway_dur_phrase = dur_phrase
+            self._runway_sentence = sentence
+            self.runway_badge = None
+
+            self.lbl_runway_main = ctk.CTkLabel(
                 inner_task,
-                fg_color=("#FEF2F2", "#2B0B0B"),
-                corner_radius=8,
-                border_width=1,
-                border_color=("#FCA5A5", "#7F1D1D"),
+                text=sentence,
+                font=(theme.FONT_FAMILY, 12),
+                text_color=("#DC2626", "#F87171"),
+                anchor="w",
+                wraplength=460,
+                justify="left",
             )
-            self.runway_badge.pack(fill="x", pady=(6, 2))
-
-            if break_clause:
-                self.lbl_runway_main = ctk.CTkLabel(
-                    self.runway_badge,
-                    text=f"⏱️ Estimated {dur_phrase}: With breaks, you get {sprints} {sprint_word}",
-                    font=(theme.FONT_FAMILY, 11, "bold"),
-                    text_color=("#DC2626", "#F87171"),
-                    anchor="w",
-                )
-                self.lbl_runway_main.pack(anchor="w", padx=12, pady=(6, 1))
-
-                self.lbl_runway_sub = ctk.CTkLabel(
-                    self.runway_badge,
-                    text=break_clause,
-                    font=(theme.FONT_FAMILY, 10),
-                    text_color=("#DC2626", "#FCA5A5"),
-                    anchor="w",
-                )
-                self.lbl_runway_sub.pack(anchor="w", padx=(34, 12), pady=(0, 6))
-            else:
-                self.lbl_runway_main = ctk.CTkLabel(
-                    self.runway_badge,
-                    text=f"⏱️ Estimated {dur_phrase}: With breaks, you get {sprints} {sprint_word}.",
-                    font=(theme.FONT_FAMILY, 11, "bold"),
-                    text_color=("#DC2626", "#F87171"),
-                    anchor="w",
-                )
-                self.lbl_runway_main.pack(anchor="w", padx=12, pady=6)
-                self.lbl_runway_sub = None
+            self.lbl_runway_main.pack(fill="x", pady=(4, 0))
+            self.lbl_runway_sub = None
 
         # 2. Mode Selector: Focus (25m) / Short Break (5m) / Long Break (15m)
         self.mode_segment = ctk.CTkSegmentedButton(
@@ -468,43 +446,31 @@ class PomodoroModal(ctk.CTkToplevel):
                 text=f"Sprints done: {sprints_done}",
                 text_color=sprints_color,
             )
-        if hasattr(self, "badge_sprints") and self.badge_sprints:
-            self.badge_sprints.configure(
-                border_color=pill_border,
-                fg_color=pill_bg,
-            )
 
         if hasattr(self, "lbl_cycles_done") and self.lbl_cycles_done:
             self.lbl_cycles_done.configure(
                 text=f"Cycles done: {cycles_done}",
                 text_color=cycles_color,
             )
-        if hasattr(self, "badge_cycles") and self.badge_cycles:
-            self.badge_cycles.configure(
-                border_color=pill_border,
-                fg_color=pill_bg,
-            )
 
-        # Update runway banner text and background to green when target completed
-        if hasattr(self, "runway_badge") and self.runway_badge:
+        # Update runway sentence text color when target completed
+        if hasattr(self, "lbl_runway_main") and self.lbl_runway_main:
             if is_target_completed:
-                self.runway_badge.configure(
-                    fg_color=("#ECFDF5", "#06281E"),
-                    border_color=("#6EE7B7", "#065F46"),
-                )
-                if hasattr(self, "lbl_runway_main") and self.lbl_runway_main:
+                dur_txt = getattr(self, "_runway_dur_phrase", "")
+                sprints_txt = "1 sprint" if self.total_target_sprints == 1 else f"{self.total_target_sprints} sprints"
+                if dur_txt:
+                    self.lbl_runway_main.configure(
+                        text=f"🎉 Estimated {dur_txt} completed: All {sprints_txt} finished! Outstanding focus!",
+                        text_color=("#059669", "#34D399"),
+                    )
+                else:
                     self.lbl_runway_main.configure(text_color=("#059669", "#34D399"))
-                if hasattr(self, "lbl_runway_sub") and self.lbl_runway_sub and self.lbl_runway_sub is not None:
-                    self.lbl_runway_sub.configure(text_color=("#059669", "#6EE7B7"))
             else:
-                self.runway_badge.configure(
-                    fg_color=("#FEF2F2", "#2B0B0B"),
-                    border_color=("#FCA5A5", "#7F1D1D"),
-                )
-                if hasattr(self, "lbl_runway_main") and self.lbl_runway_main:
+                orig_sentence = getattr(self, "_runway_sentence", None)
+                if orig_sentence:
+                    self.lbl_runway_main.configure(text=orig_sentence, text_color=("#DC2626", "#F87171"))
+                else:
                     self.lbl_runway_main.configure(text_color=("#DC2626", "#F87171"))
-                if hasattr(self, "lbl_runway_sub") and self.lbl_runway_sub and self.lbl_runway_sub is not None:
-                    self.lbl_runway_sub.configure(text_color=("#DC2626", "#FCA5A5"))
 
         if hasattr(self, "btn_skip") and self.btn_skip:
             if self.completed_sprints_in_set >= self.total_target_sprints:

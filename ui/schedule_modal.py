@@ -825,11 +825,11 @@ class ScheduleModal(ctk.CTkToplevel):
             corner_radius=8,
             state="normal" if not self.is_delayed else "disabled",
             hover=not self.is_delayed,
-            fg_color="transparent",
-            hover_color=self.q_info["bg_header"],
-            text_color=self.q_info["text"] if not self.is_delayed else theme.TEXT_MUTED,
+            fg_color="transparent" if not self.is_delayed else theme.DELAYED_BG,
+            hover_color=self.q_info["bg_header"] if not self.is_delayed else theme.DELAYED_BG,
+            text_color=self.q_info["text"] if not self.is_delayed else theme.DELAYED_TEXT,
             border_width=1,
-            border_color=self.q_info["border"] if not self.is_delayed else theme.BORDER_COLOR,
+            border_color=self.q_info["border"] if not self.is_delayed else theme.DELAYED_BORDER,
             command=self._on_mark_completed,
         )
         btn_complete.pack(fill="x")
