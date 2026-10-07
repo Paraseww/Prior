@@ -205,19 +205,7 @@ class NotificationModal(ctk.CTkToplevel):
             )
             scroll_frame.pack(fill="both", expand=True, pady=(0, 10))
 
-            # 🔴 Section 1: Delayed / Overdue Tasks
-            if notifications["overdue_count"] > 0:
-                self._render_section(
-                    parent=scroll_frame,
-                    title="⚠️ Delayed & Overdue Tasks",
-                    count=notifications["overdue_count"],
-                    header_bg=("#F1F5F9", "#1E293B"),
-                    header_text_color=theme.TEXT_SECONDARY,
-                    tasks=notifications["overdue"],
-                    category_type="overdue",
-                )
-
-            # 💠 Section 2: Due Today (Distinct Cyan / Aqua Theme)
+            # ⏰ Section 1: Due Today
             if notifications["today_count"] > 0:
                 self._render_section(
                     parent=scroll_frame,
@@ -229,7 +217,7 @@ class NotificationModal(ctk.CTkToplevel):
                     category_type="today",
                 )
 
-            # 🟡 Section 3: Due Tomorrow
+            # ⏳ Section 2: Due Tomorrow
             if notifications["tomorrow_count"] > 0:
                 self._render_section(
                     parent=scroll_frame,
@@ -241,7 +229,7 @@ class NotificationModal(ctk.CTkToplevel):
                     category_type="tomorrow",
                 )
 
-            # 🟢 Section 4: Upcoming in 2-3 Days
+            # 🗓️ Section 3: Upcoming Deadlines (2-3 Days)
             if notifications["upcoming_count"] > 0:
                 self._render_section(
                     parent=scroll_frame,
@@ -251,6 +239,18 @@ class NotificationModal(ctk.CTkToplevel):
                     header_text_color=("#6D28D9", "#C4B5FD"),
                     tasks=notifications["upcoming"],
                     category_type="upcoming",
+                )
+
+            # ⚠️ Section 4: Delayed & Overdue Tasks
+            if notifications["overdue_count"] > 0:
+                self._render_section(
+                    parent=scroll_frame,
+                    title="⚠️ Delayed & Overdue Tasks",
+                    count=notifications["overdue_count"],
+                    header_bg=("#F1F5F9", "#1E293B"),
+                    header_text_color=theme.TEXT_SECONDARY,
+                    tasks=notifications["overdue"],
+                    category_type="overdue",
                 )
 
         # ====================================================================
