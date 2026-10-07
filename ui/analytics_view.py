@@ -411,7 +411,7 @@ class AnalyticsView(DottedScrollableFrame):
             )
             lbl_empty_t.pack(pady=28)
         else:
-            for task in top_tasks:
+            for idx, task in enumerate(top_tasks, 1):
                 row_item = ctk.CTkFrame(
                     top_inner_box,
                     fg_color=theme.BG_CARD_HOVER,
@@ -424,12 +424,21 @@ class AnalyticsView(DottedScrollableFrame):
                 inner_r = ctk.CTkFrame(row_item, fg_color="transparent")
                 inner_r.pack(fill="x", padx=12, pady=8)
 
+                # Rank indicator (#1, #2, #3, ...)
+                lbl_rank = ctk.CTkLabel(
+                    inner_r,
+                    text=f"#{idx}",
+                    font=(theme.FONT_FAMILY, 12, "bold"),
+                    text_color=theme.TEXT_SECONDARY,
+                    width=28,
+                    anchor="w",
+                )
+                lbl_rank.pack(side="left")
+
                 # Task title (truncated)
                 raw_title = task.get("title", "Untitled Task")
                 title_display = raw_title if len(raw_title) <= 40 else f"{raw_title[:38]}..."
                 is_done = task.get("is_completed", 0) == 1
-                if is_done:
-                    title_display = f"✓ {title_display}"
 
                 lbl_t_name = ctk.CTkLabel(
                     inner_r,
