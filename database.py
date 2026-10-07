@@ -318,6 +318,9 @@ def update_task(
         fields.append("estimated_duration = ?")
         values.append(int(estimated_duration) if estimated_duration is not None else 0)
 
+    conn = get_connection(db_path)
+    cursor = conn.cursor()
+
     comp_time = None
     if is_completed is not _UNSET:
         val = 1 if is_completed else 0
@@ -325,7 +328,11 @@ def update_task(
         values.append(val)
         if val == 1:
             fields.append("completed_at = ?")
-            comp_time = datetime.now().isoformat()
+            cursor.execute("SELECT due_date FROM tasks WHERE id = ?", (task_id,))
+            chk_row = cursor.fetchone()
+            chk_due = str(chk_row["due_date"]).strip() if chk_row and chk_row["due_date"] else ""
+            time_part = datetime.now().strftime("%H:%M:%S.%f")
+            comp_time = f"{chk_due}T{time_part}" if len(chk_due) == 10 else datetime.now().isoformat()
             values.append(comp_time)
         else:
             fields.append("completed_at = ?")
@@ -336,13 +343,11 @@ def update_task(
         values.append(int(position) if position is not None else 0)
 
     if not fields:
+        conn.close()
         return False
 
     values.append(task_id)
     query = f"UPDATE tasks SET {', '.join(fields)} WHERE id = ?"
-
-    conn = get_connection(db_path)
-    cursor = conn.cursor()
     cursor.execute(query, tuple(values))
     affected = cursor.rowcount > 0
     if is_completed is not _UNSET:
@@ -365,7 +370,7 @@ def _ensure_completed_task_sessions(cursor: sqlite3.Cursor, task_id: int, comple
     Guarantees no duplicate sessions are recorded beyond the task's required sprint target.
     Prunes any excess sessions if the task was already completed or repeated.
     """
-    cursor.execute("SELECT estimated_duration, quadrant FROM tasks WHERE id = ?", (task_id,))
+    cursor.execute("SELECT estimated_duration, quadrant, due_date FROM tasks WHERE id = ?", (task_id,))
     t_row = cursor.fetchone()
     if not t_row:
         return
@@ -386,6 +391,14 @@ def _ensure_completed_task_sessions(cursor: sqlite3.Cursor, task_id: int, comple
     existing_sessions = cursor.fetchall()
     current_count = len(existing_sessions)
 
+    base_time = completed_at or datetime.now().isoformat()
+    due_str = str(t_row["due_date"]).strip() if t_row["due_date"] else ""
+    if due_str and len(due_str) == 10:
+        time_part = base_time[10:] if len(base_time) > 10 else f"T{datetime.now().strftime('%H:%M:%S.%f')}"
+        session_time = f"{due_str}{time_part}"
+    else:
+        session_time = base_time
+
     if est_duration > 0:
         # If duplicate / excess sessions exist beyond target_sprints, prune the extras
         if current_count > target_sprints:
@@ -394,12 +407,14 @@ def _ensure_completed_task_sessions(cursor: sqlite3.Cursor, task_id: int, comple
             cursor.execute(f"DELETE FROM pomodoro_sessions WHERE id IN ({placeholders})", tuple(excess_ids))
             current_count = target_sprints
 
-        # Standardize all existing work sessions for this task to 25m
-        cursor.execute("UPDATE pomodoro_sessions SET duration_minutes = 25 WHERE task_id = ? AND session_type = 'work'", (task_id,))
+        # Standardize all existing work sessions for this task to 25m and align completed_at timestamp
+        cursor.execute(
+            "UPDATE pomodoro_sessions SET duration_minutes = 25, completed_at = ? WHERE task_id = ? AND session_type = 'work'",
+            (session_time, task_id),
+        )
 
         # If sessions are missing, add only the remaining needed sprints (each 25 minutes)
         if current_count < target_sprints:
-            session_time = completed_at or datetime.now().isoformat()
             for _ in range(current_count, target_sprints):
                 cursor.execute(
                     """
@@ -411,7 +426,6 @@ def _ensure_completed_task_sessions(cursor: sqlite3.Cursor, task_id: int, comple
     else:
         # If no estimate was set and no sessions exist yet, record 1 default sprint (25 minutes)
         if current_count == 0:
-            session_time = completed_at or datetime.now().isoformat()
             cursor.execute(
                 """
                 INSERT INTO pomodoro_sessions (task_id, duration_minutes, session_type, completed_at)
@@ -445,7 +459,12 @@ def toggle_task_completion(task_id: int, db_path: Optional[str] = None) -> bool:
         return False
 
     new_state = 0 if task["is_completed"] == 1 else 1
-    completed_at = datetime.now().isoformat() if new_state == 1 else None
+    if new_state == 1:
+        due_str = str(task.get("due_date") or "").strip()
+        time_part = datetime.now().strftime("%H:%M:%S.%f")
+        completed_at = f"{due_str}T{time_part}" if len(due_str) == 10 else datetime.now().isoformat()
+    else:
+        completed_at = None
 
     conn = get_connection(db_path)
     cursor = conn.cursor()
@@ -548,7 +567,22 @@ def log_pomodoro_session(
     if session_type not in ("work", "short_break", "long_break"):
         raise ValueError("session_type must be 'work', 'short_break', or 'long_break'.")
 
-    timestamp = completed_at if completed_at is not None else datetime.now().isoformat()
+    if completed_at is not None:
+        timestamp = completed_at
+    elif task_id is not None:
+        conn_chk = get_connection(db_path)
+        cur_chk = conn_chk.cursor()
+        cur_chk.execute("SELECT due_date FROM tasks WHERE id = ?", (task_id,))
+        td_row = cur_chk.fetchone()
+        t_due = str(td_row["due_date"]).strip() if td_row and td_row["due_date"] else ""
+        conn_chk.close()
+        if len(t_due) == 10:
+            time_part = datetime.now().strftime("%H:%M:%S.%f")
+            timestamp = f"{t_due}T{time_part}"
+        else:
+            timestamp = datetime.now().isoformat()
+    else:
+        timestamp = datetime.now().isoformat()
 
     conn = get_connection(db_path)
     cursor = conn.cursor()
@@ -645,22 +679,30 @@ def get_daily_pomodoro_stats(
 ) -> Dict[str, Any]:
     """
     Calculates total sprints and focus minutes for a given date.
+    Attributes task focus to the task's scheduled due_date (if present),
+    or to the session's completion date if unscheduled/standalone.
 
     :param target_date: Target date 'YYYY-MM-DD' (defaults to today).
     :param db_path: Optional database path.
     :return: Dictionary containing 'date', 'sprints_count', and 'total_focus_minutes'.
     """
-    day_str = target_date if target_date is not None else datetime.now().strftime("%Y-%m-%d")
+    day_str = target_date.strip() if target_date else datetime.now().strftime("%Y-%m-%d")
 
     conn = get_connection(db_path)
     cursor = conn.cursor()
     cursor.execute(
         """
-        SELECT COUNT(*) as sprints_count, COALESCE(SUM(duration_minutes), 0) as total_focus_minutes
-        FROM pomodoro_sessions
-        WHERE session_type = 'work' AND completed_at LIKE ?
+        SELECT COUNT(p.id) as sprints_count, COALESCE(SUM(p.duration_minutes), 0) as total_focus_minutes
+        FROM pomodoro_sessions p
+        LEFT JOIN tasks t ON p.task_id = t.id
+        WHERE p.session_type = 'work'
+          AND (
+            (t.due_date IS NOT NULL AND TRIM(t.due_date) != '' AND t.due_date = ?)
+            OR
+            ((t.due_date IS NULL OR TRIM(t.due_date) = '') AND p.completed_at LIKE ?)
+          )
         """,
-        (f"{day_str}%",),
+        (day_str, f"{day_str}%"),
     )
     row = cursor.fetchone()
     stats = {
@@ -685,11 +727,15 @@ def get_all_time_pomodoro_summary(db_path: Optional[str] = None) -> Dict[str, An
     cursor.execute(
         """
         SELECT 
-            COUNT(*) as total_sprints,
-            COALESCE(SUM(duration_minutes), 0) as total_focus_minutes,
-            COUNT(DISTINCT SUBSTR(completed_at, 1, 10)) as active_days_count
-        FROM pomodoro_sessions
-        WHERE session_type = 'work'
+            COUNT(p.id) as total_sprints,
+            COALESCE(SUM(p.duration_minutes), 0) as total_focus_minutes,
+            COUNT(DISTINCT CASE 
+                WHEN t.due_date IS NOT NULL AND TRIM(t.due_date) != '' THEN TRIM(t.due_date)
+                ELSE SUBSTR(p.completed_at, 1, 10)
+            END) as active_days_count
+        FROM pomodoro_sessions p
+        LEFT JOIN tasks t ON p.task_id = t.id
+        WHERE p.session_type = 'work'
         """
     )
     row = cursor.fetchone()
@@ -728,16 +774,30 @@ def get_weekly_pomodoro_breakdown(
     cursor.execute(
         """
         SELECT 
-            SUBSTR(completed_at, 1, 10) as day_date,
-            COUNT(*) as sprints_count,
-            COALESCE(SUM(duration_minutes), 0) as focus_minutes
-        FROM pomodoro_sessions
-        WHERE session_type = 'work'
-          AND completed_at >= ?
-          AND completed_at <= ?
-        GROUP BY SUBSTR(completed_at, 1, 10)
+            CASE 
+                WHEN t.due_date IS NOT NULL AND TRIM(t.due_date) != '' THEN TRIM(t.due_date)
+                ELSE SUBSTR(p.completed_at, 1, 10)
+            END as day_date,
+            COUNT(p.id) as sprints_count,
+            COALESCE(SUM(p.duration_minutes), 0) as focus_minutes
+        FROM pomodoro_sessions p
+        LEFT JOIN tasks t ON p.task_id = t.id
+        WHERE p.session_type = 'work'
+          AND (
+            CASE 
+                WHEN t.due_date IS NOT NULL AND TRIM(t.due_date) != '' THEN TRIM(t.due_date)
+                ELSE SUBSTR(p.completed_at, 1, 10)
+            END
+          ) >= ?
+          AND (
+            CASE 
+                WHEN t.due_date IS NOT NULL AND TRIM(t.due_date) != '' THEN TRIM(t.due_date)
+                ELSE SUBSTR(p.completed_at, 1, 10)
+            END
+          ) <= ?
+        GROUP BY day_date
         """,
-        (f"{start_str}T00:00:00", f"{end_str}T23:59:59"),
+        (start_str, end_str),
     )
     data_by_date = {row["day_date"]: dict(row) for row in cursor.fetchall()}
     conn.close()

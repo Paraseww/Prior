@@ -942,6 +942,65 @@ def test_no_duplicate_sessions_on_repeated_timer_or_mark_completed(tmp_path):
     assert stats["sprints_count"] == 4
 
 
+def test_daily_focus_only_counts_scheduled_date_tasks(tmp_path):
+    """
+    Verify that Today's Focus only counts focus sprints and minutes for tasks scheduled
+    for that specific date (e.g. 7th October), and excludes tasks scheduled for other days
+    (e.g. 8th October, 9th October).
+    """
+    db_file = str(tmp_path / "test_date_isolation.db")
+    database.init_db(db_file)
+
+    # 1. Task scheduled for Oct 7 (2 hours = 4 sprints)
+    t_oct7 = database.add_task(
+        "Chem Lab", "", "Q1_DO",
+        due_date="2026-10-07",
+        estimated_duration=120,
+        db_path=db_file,
+    )
+    database.toggle_task_completion(t_oct7, db_path=db_file)
+
+    # 2. Task scheduled for Oct 8 (2 hours = 4 sprints)
+    t_oct8 = database.add_task(
+        "Bio Study", "", "Q1_DO",
+        due_date="2026-10-08",
+        estimated_duration=120,
+        db_path=db_file,
+    )
+    database.toggle_task_completion(t_oct8, db_path=db_file)
+
+    # 3. Task scheduled for Oct 9 (3 hours = 6 sprints)
+    t_oct9 = database.add_task(
+        "Physics Revision", "", "Q1_DO",
+        due_date="2026-10-09",
+        estimated_duration=180,
+        db_path=db_file,
+    )
+    database.toggle_task_completion(t_oct9, db_path=db_file)
+
+    # Today's focus for Oct 7 must ONLY count Oct 7 task (4 sprints, 100m)
+    stats_oct7 = database.get_daily_pomodoro_stats("2026-10-07", db_path=db_file)
+    assert stats_oct7["sprints_count"] == 4
+    assert stats_oct7["total_focus_minutes"] == 100
+
+    # Stats for Oct 8 must ONLY count Oct 8 task (4 sprints, 100m)
+    stats_oct8 = database.get_daily_pomodoro_stats("2026-10-08", db_path=db_file)
+    assert stats_oct8["sprints_count"] == 4
+    assert stats_oct8["total_focus_minutes"] == 100
+
+    # Stats for Oct 9 must ONLY count Oct 9 task (6 sprints, 150m)
+    stats_oct9 = database.get_daily_pomodoro_stats("2026-10-09", db_path=db_file)
+    assert stats_oct9["sprints_count"] == 6
+    assert stats_oct9["total_focus_minutes"] == 150
+
+    # Lifetime deep work across all 3 days is 14 sprints (350m = 5h 50m)
+    lifetime = database.get_all_time_pomodoro_summary(db_path=db_file)
+    assert lifetime["total_sprints"] == 14
+    assert lifetime["total_focus_minutes"] == 350
+    assert lifetime["active_days_count"] == 3
+
+
+
 
 
 
