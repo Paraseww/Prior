@@ -1000,6 +1000,61 @@ def test_daily_focus_only_counts_scheduled_date_tasks(tmp_path):
     assert lifetime["active_days_count"] == 3
 
 
+def test_focus_metrics_strictly_limited_to_red_section_tasks(tmp_path):
+    """
+    Verify that Deep Work & Pomodoro Focus metrics ONLY collect data for tasks in the red
+    section (Q1_DO), and completely ignore tasks in the green (Q2), orange (Q3), and blue (Q4) sections.
+    """
+    db_file = str(tmp_path / "test_red_only.db")
+    database.init_db(db_file)
+
+    # 1. Add and complete a green section task (Q2_SCHEDULE)
+    t_green = database.add_task("Doctor Appointment", "", "Q2_SCHEDULE", estimated_duration=120, db_path=db_file)
+    database.toggle_task_completion(t_green, db_path=db_file)
+
+    # 2. Add and complete an orange section task (Q3_DELEGATE)
+    t_orange = database.add_task("Forward email", "", "Q3_DELEGATE", estimated_duration=60, db_path=db_file)
+    database.toggle_task_completion(t_orange, db_path=db_file)
+
+    # 3. Add and complete a blue section task (Q4_ELIMINATE)
+    t_blue = database.add_task("Sort old files", "", "Q4_ELIMINATE", estimated_duration=90, db_path=db_file)
+    database.toggle_task_completion(t_blue, db_path=db_file)
+
+    # Deep work metrics must be completely 0
+    stats = database.get_daily_pomodoro_stats(quadrant="Q1_DO", db_path=db_file)
+    assert stats["sprints_count"] == 0
+    assert stats["total_focus_minutes"] == 0
+
+    lifetime = database.get_all_time_pomodoro_summary(quadrant="Q1_DO", db_path=db_file)
+    assert lifetime["total_sprints"] == 0
+    assert lifetime["total_focus_minutes"] == 0
+
+    # Ensure no pomodoro sessions were inserted for non-Q1 tasks
+    assert len(database.get_pomodoro_sessions(task_id=t_green, db_path=db_file)) == 0
+    assert len(database.get_pomodoro_sessions(task_id=t_orange, db_path=db_file)) == 0
+    assert len(database.get_pomodoro_sessions(task_id=t_blue, db_path=db_file)) == 0
+
+    # 4. Now add and complete a red section task (Q1_DO)
+    t_red = database.add_task("Math Exam Prep", "", "Q1_DO", estimated_duration=120, db_path=db_file)
+    database.toggle_task_completion(t_red, db_path=db_file)
+
+    # Red task data must now be present in Deep Work metrics (4 sprints, 100m)
+    stats_red = database.get_daily_pomodoro_stats(quadrant="Q1_DO", db_path=db_file)
+    assert stats_red["sprints_count"] == 4
+    assert stats_red["total_focus_minutes"] == 100
+
+    lifetime_red = database.get_all_time_pomodoro_summary(quadrant="Q1_DO", db_path=db_file)
+    assert lifetime_red["total_sprints"] == 4
+    assert lifetime_red["total_focus_minutes"] == 100
+
+    # 5. Moving the red task to green clears its pomodoro sessions
+    database.update_task(t_red, quadrant="Q2_SCHEDULE", db_path=db_file)
+    stats_after_move = database.get_daily_pomodoro_stats(quadrant="Q1_DO", db_path=db_file)
+    assert stats_after_move["sprints_count"] == 0
+    assert stats_after_move["total_focus_minutes"] == 0
+
+
+
 
 
 

@@ -204,8 +204,8 @@ class AnalyticsView(DottedScrollableFrame):
         lbl_focus_sub.pack(fill="x", pady=(0, 16))
 
         # Focus Metric Cards Row
-        today_stats = database.get_daily_pomodoro_stats()
-        lifetime_stats = database.get_all_time_pomodoro_summary()
+        today_stats = database.get_daily_pomodoro_stats(quadrant="Q1_DO")
+        lifetime_stats = database.get_all_time_pomodoro_summary(quadrant="Q1_DO")
 
         focus_cards_row = ctk.CTkFrame(container, fg_color="transparent")
         focus_cards_row.pack(fill="x", pady=(0, 20))
@@ -248,7 +248,7 @@ class AnalyticsView(DottedScrollableFrame):
         # ========================================================================
         # Section 3: 7-Day Focus Velocity (Bar Chart Card)
         # ========================================================================
-        weekly_data = database.get_weekly_pomodoro_breakdown()
+        weekly_data = database.get_weekly_pomodoro_breakdown(quadrant="Q1_DO")
         week_total_mins = sum(d["focus_minutes"] for d in weekly_data)
         week_total_sprints = sum(d["sprints_count"] for d in weekly_data)
 
@@ -381,7 +381,7 @@ class AnalyticsView(DottedScrollableFrame):
             text_color=theme.TEXT_PRIMARY,
         ).pack(side="left")
 
-        top_tasks = database.get_top_focused_tasks(limit=5)
+        top_tasks = database.get_top_focused_tasks(limit=5, quadrant="Q1_DO")
         if top_tasks:
             ctk.CTkLabel(
                 top_header,

@@ -288,9 +288,13 @@ def update_task(
     fields = []
     values = []
 
+    conn = get_connection(db_path)
+    cursor = conn.cursor()
+
     if title is not _UNSET:
         clean_title = title.strip() if title else ""
         if not clean_title:
+            conn.close()
             raise ValueError("Task title cannot be empty.")
         fields.append("title = ?")
         values.append(clean_title)
@@ -305,6 +309,8 @@ def update_task(
         if norm_quadrant in valid_quadrants:
             fields.append("quadrant = ?")
             values.append(norm_quadrant)
+            if norm_quadrant != "Q1_DO":
+                cursor.execute("DELETE FROM pomodoro_sessions WHERE task_id = ?", (task_id,))
 
     if due_date is not _UNSET:
         fields.append("due_date = ?")
@@ -317,9 +323,6 @@ def update_task(
     if estimated_duration is not _UNSET:
         fields.append("estimated_duration = ?")
         values.append(int(estimated_duration) if estimated_duration is not None else 0)
-
-    conn = get_connection(db_path)
-    cursor = conn.cursor()
 
     comp_time = None
     if is_completed is not _UNSET:
@@ -373,6 +376,10 @@ def _ensure_completed_task_sessions(cursor: sqlite3.Cursor, task_id: int, comple
     cursor.execute("SELECT estimated_duration, quadrant, due_date FROM tasks WHERE id = ?", (task_id,))
     t_row = cursor.fetchone()
     if not t_row:
+        return
+
+    # Deep Work & Pomodoro Focus strictly tracks red section tasks (Q1_DO)
+    if t_row["quadrant"] != "Q1_DO":
         return
 
     est_duration = max(0, int(t_row["estimated_duration"] or 0))
@@ -675,14 +682,17 @@ def get_pomodoro_sessions(
 
 def get_daily_pomodoro_stats(
     target_date: Optional[str] = None,
+    quadrant: Optional[str] = "Q1_DO",
     db_path: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     Calculates total sprints and focus minutes for a given date.
     Attributes task focus to the task's scheduled due_date (if present),
     or to the session's completion date if unscheduled/standalone.
+    Filters strictly for red section tasks (Q1_DO) by default.
 
     :param target_date: Target date 'YYYY-MM-DD' (defaults to today).
+    :param quadrant: Quadrant code to filter ('Q1_DO' by default).
     :param db_path: Optional database path.
     :return: Dictionary containing 'date', 'sprints_count', and 'total_focus_minutes'.
     """
@@ -690,19 +700,25 @@ def get_daily_pomodoro_stats(
 
     conn = get_connection(db_path)
     cursor = conn.cursor()
+    q_cond = "AND (t.id IS NULL OR t.quadrant = ?)" if quadrant else ""
+    params = [day_str, f"{day_str}%"]
+    if quadrant:
+        params.insert(0, quadrant)
+
     cursor.execute(
-        """
+        f"""
         SELECT COUNT(p.id) as sprints_count, COALESCE(SUM(p.duration_minutes), 0) as total_focus_minutes
         FROM pomodoro_sessions p
         LEFT JOIN tasks t ON p.task_id = t.id
         WHERE p.session_type = 'work'
+          {q_cond}
           AND (
             (t.due_date IS NOT NULL AND TRIM(t.due_date) != '' AND t.due_date = ?)
             OR
             ((t.due_date IS NULL OR TRIM(t.due_date) = '') AND p.completed_at LIKE ?)
           )
         """,
-        (day_str, f"{day_str}%"),
+        tuple(params),
     )
     row = cursor.fetchone()
     stats = {
@@ -715,17 +731,25 @@ def get_daily_pomodoro_stats(
     return stats
 
 
-def get_all_time_pomodoro_summary(db_path: Optional[str] = None) -> Dict[str, Any]:
+def get_all_time_pomodoro_summary(
+    quadrant: Optional[str] = "Q1_DO",
+    db_path: Optional[str] = None,
+) -> Dict[str, Any]:
     """
     Calculates all-time lifetime focus statistics.
+    Filters strictly for red section tasks (Q1_DO) by default.
 
+    :param quadrant: Quadrant code to filter ('Q1_DO' by default).
     :param db_path: Optional database path.
     :return: Dictionary containing 'total_sprints', 'total_focus_minutes', and 'active_days_count'.
     """
     conn = get_connection(db_path)
     cursor = conn.cursor()
+    q_cond = "AND (t.id IS NULL OR t.quadrant = ?)" if quadrant else ""
+    params = (quadrant,) if quadrant else ()
+
     cursor.execute(
-        """
+        f"""
         SELECT 
             COUNT(p.id) as total_sprints,
             COALESCE(SUM(p.duration_minutes), 0) as total_focus_minutes,
@@ -736,7 +760,9 @@ def get_all_time_pomodoro_summary(db_path: Optional[str] = None) -> Dict[str, An
         FROM pomodoro_sessions p
         LEFT JOIN tasks t ON p.task_id = t.id
         WHERE p.session_type = 'work'
-        """
+          {q_cond}
+        """,
+        params,
     )
     row = cursor.fetchone()
     summary = {
@@ -750,12 +776,14 @@ def get_all_time_pomodoro_summary(db_path: Optional[str] = None) -> Dict[str, An
 
 def get_weekly_pomodoro_breakdown(
     reference_date: Optional[str] = None,
+    quadrant: Optional[str] = None,
     db_path: Optional[str] = None,
 ) -> List[Dict[str, Any]]:
     """
     Computes daily focus minutes and sprint counts for the 7-day period ending on reference_date.
 
     :param reference_date: ISO date string 'YYYY-MM-DD' (defaults to today).
+    :param quadrant: Optional quadrant code to filter (e.g. 'Q1_DO').
     :param db_path: Optional database path.
     :return: List of 7 dictionaries ordered oldest to newest, each with:
              'date', 'day_name' (e.g. 'Mon'), 'sprints_count', 'focus_minutes', 'is_today'
@@ -771,8 +799,13 @@ def get_weekly_pomodoro_breakdown(
 
     conn = get_connection(db_path)
     cursor = conn.cursor()
+    q_cond = "AND (t.id IS NULL OR t.quadrant = ?)" if quadrant else ""
+    params = [start_str, end_str]
+    if quadrant:
+        params.insert(0, quadrant)
+
     cursor.execute(
-        """
+        f"""
         SELECT 
             CASE 
                 WHEN t.due_date IS NOT NULL AND TRIM(t.due_date) != '' THEN TRIM(t.due_date)
@@ -783,6 +816,7 @@ def get_weekly_pomodoro_breakdown(
         FROM pomodoro_sessions p
         LEFT JOIN tasks t ON p.task_id = t.id
         WHERE p.session_type = 'work'
+          {q_cond}
           AND (
             CASE 
                 WHEN t.due_date IS NOT NULL AND TRIM(t.due_date) != '' THEN TRIM(t.due_date)
@@ -797,7 +831,7 @@ def get_weekly_pomodoro_breakdown(
           ) <= ?
         GROUP BY day_date
         """,
-        (start_str, end_str),
+        tuple(params),
     )
     data_by_date = {row["day_date"]: dict(row) for row in cursor.fetchall()}
     conn.close()
@@ -861,19 +895,26 @@ def get_pomodoro_quadrant_distribution(
 
 def get_top_focused_tasks(
     limit: int = 5,
+    quadrant: Optional[str] = None,
     db_path: Optional[str] = None,
 ) -> List[Dict[str, Any]]:
     """
     Retrieves the most focused tasks ranked by total pomodoro time and sprints.
 
     :param limit: Maximum number of tasks to return (default 5).
+    :param quadrant: Optional quadrant code to filter (e.g. 'Q1_DO').
     :param db_path: Optional database path.
     :return: List of dictionaries with task details and focus statistics.
     """
     conn = get_connection(db_path)
     cursor = conn.cursor()
+    q_cond = "AND t.quadrant = ?" if quadrant else ""
+    params: List[Any] = [max(1, limit)]
+    if quadrant:
+        params.insert(0, quadrant)
+
     cursor.execute(
-        """
+        f"""
         SELECT 
             t.id,
             t.title,
@@ -884,11 +925,12 @@ def get_top_focused_tasks(
         FROM pomodoro_sessions p
         JOIN tasks t ON p.task_id = t.id
         WHERE p.session_type = 'work'
+          {q_cond}
         GROUP BY t.id
         ORDER BY focus_minutes DESC, sprints_count DESC
         LIMIT ?
         """,
-        (max(1, limit),),
+        tuple(params),
     )
     rows = [dict(row) for row in cursor.fetchall()]
     conn.close()
