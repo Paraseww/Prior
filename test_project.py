@@ -332,6 +332,28 @@ def test_format_due_status_passed_reminder_time():
     assert res_future["color_tag"] == "amber"
 
 
+def test_format_due_status_completed():
+    """Verify that completed tasks are never marked as delayed or overdue."""
+    ref_dt = datetime(2026, 10, 7, 15, 0)
+    # Past date but completed -> COMPLETED, not delayed
+    res_past = format_due_status("2026-10-06", current_dt=ref_dt, is_completed=True)
+    assert res_past["status"] == "COMPLETED"
+    assert res_past["is_delayed"] is False
+    assert res_past["label"] == "Due: Oct 06"
+
+    # Today with passed time but completed -> COMPLETED, not delayed
+    res_today = format_due_status("2026-10-07", reminder_time_str="06:00 AM", current_dt=ref_dt, is_completed=True)
+    assert res_today["status"] == "COMPLETED"
+    assert res_today["is_delayed"] is False
+    assert res_today["label"] == "Due: Oct 07"
+
+    # Future date and completed -> COMPLETED, not delayed
+    res_future = format_due_status("2026-10-09", reminder_time_str="06:00 PM", current_dt=ref_dt, is_completed=True)
+    assert res_future["status"] == "COMPLETED"
+    assert res_future["is_delayed"] is False
+    assert res_future["label"] == "Due: Oct 09"
+
+
 def test_is_task_delayed():
     """Verify is_task_delayed logic for various date/time combinations."""
     ref_dt = datetime(2026, 10, 7, 15, 0)  # 3:00 PM on Oct 7, 2026

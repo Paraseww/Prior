@@ -196,7 +196,7 @@ class TaskCard(ctk.CTkFrame):
 
         # Title
         title_text = self.task.get("title", "Untitled Task")
-        title_color = theme.TEXT_MUTED if (self.is_completed or self.is_delayed) else theme.TEXT_PRIMARY
+        title_color = theme.TEXT_MUTED if self.is_delayed else theme.TEXT_PRIMARY
 
         self.lbl_title = ctk.CTkLabel(
             self.title_row,
@@ -217,7 +217,7 @@ class TaskCard(ctk.CTkFrame):
                 self.center_box,
                 text=description,
                 font=(theme.FONT_FAMILY, 11),
-                text_color=theme.TEXT_MUTED if (self.is_completed or self.is_delayed) else theme.TEXT_SECONDARY,
+                text_color=theme.TEXT_MUTED if self.is_delayed else theme.TEXT_SECONDARY,
                 anchor="w",
                 justify="left",
                 wraplength=220,
@@ -232,7 +232,11 @@ class TaskCard(ctk.CTkFrame):
         has_due = False
         due_info = None
         if due_date_str:
-            due_info = format_due_status(due_date_str, reminder_time_str=reminder_time_str)
+            due_info = format_due_status(
+                due_date_str,
+                reminder_time_str=reminder_time_str,
+                is_completed=self.is_completed,
+            )
             if due_info.get("status") not in ("NO_DUE_DATE", "INVALID_DATE"):
                 has_due = True
 

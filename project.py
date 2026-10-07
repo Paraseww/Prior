@@ -349,6 +349,7 @@ def format_due_status(
     current_date_str: Optional[str] = None,
     reminder_time_str: Optional[str] = None,
     current_dt: Optional[datetime] = None,
+    is_completed: bool = False,
 ) -> Dict[str, Any]:
     """
     Evaluates a task's due date string (YYYY-MM-DD) and optional reminder time,
@@ -358,8 +359,9 @@ def format_due_status(
     :param current_date_str: Optional reference date in 'YYYY-MM-DD' format (defaults to today).
     :param reminder_time_str: Optional reminder time string (e.g. '06:00 AM', '14:30').
     :param current_dt: Optional reference datetime for exact timestamp evaluation.
+    :param is_completed: Optional boolean indicating whether task has been completed.
     :return: Dictionary with:
-             - 'status': 'OVERDUE', 'DUE_TODAY', 'UPCOMING', or 'NO_DUE_DATE'
+             - 'status': 'OVERDUE', 'DUE_TODAY', 'UPCOMING', 'COMPLETED', or 'NO_DUE_DATE'
              - 'days_diff': Integer difference in days (negative for overdue, 0 for today, positive for future)
              - 'label': Human-friendly badge string
              - 'color_tag': Badge color tag ('red', 'amber', 'blue', 'gray')
@@ -414,6 +416,15 @@ def format_due_status(
     diff_days = (due - today).days
 
     due_formatted = due.strftime("%b %d, %Y") if due.year != today.year else due.strftime("%b %d")
+
+    if is_completed:
+        return {
+            "status": "COMPLETED",
+            "days_diff": diff_days,
+            "label": f"Due: {due_formatted}",
+            "color_tag": "blue" if diff_days > 0 else ("amber" if diff_days == 0 else "gray"),
+            "is_delayed": False,
+        }
 
     if diff_days < 0:
         return {
