@@ -293,12 +293,7 @@ class CalendarView(ctk.CTkFrame):
                     for t in day_tasks[:max_dots]:
                         q_key = t.get("quadrant", "Q1_DO")
                         q_info = theme.QUADRANTS.get(q_key, theme.QUADRANTS["Q1_DO"])
-                        is_done = bool(t.get("is_completed", 0))
-
-                        if is_done:
-                            dot_color = ("#94A3B8", "#64748B")
-                        else:
-                            dot_color = q_info["color"]
+                        dot_color = q_info["color"]
 
                         dot = ctk.CTkFrame(
                             dots_frame,
