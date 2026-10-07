@@ -8,7 +8,7 @@ import customtkinter as ctk
 from PIL import Image
 
 import database
-from project import calculate_drop_dead_time, filter_tasks, get_task_notifications
+from project import calculate_drop_dead_time, filter_tasks, get_task_notifications, is_task_delayed
 from ui import theme
 from ui.analytics_view import AnalyticsView
 from ui.calendar_view import CalendarView
@@ -970,6 +970,10 @@ class PriorApp(ctk.CTk):
 
     def toggle_task(self, task_id: int) -> None:
         """Toggles task completion status."""
+        target_task = next((t for t in self.all_tasks if t.get("id") == task_id), None)
+        if target_task and is_task_delayed(target_task):
+            # Delayed / passed tasks cannot be completed without rescheduling
+            return
         database.toggle_task_completion(task_id)
         self.dismissed_notification_ids.discard(task_id)
         self.notified_reminder_keys = {k for k in self.notified_reminder_keys if f"_{task_id}_" not in k}

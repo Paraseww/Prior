@@ -11,7 +11,7 @@ Supports wireframe shuffle-on-hover effect:
 from typing import Any, Callable, Dict, Optional
 import customtkinter as ctk
 
-from project import format_due_status
+from project import format_due_status, is_task_delayed
 from ui import theme
 
 
@@ -61,6 +61,7 @@ class TaskCard(ctk.CTkFrame):
         # Hover state flag and timers
         self.is_hovered = False
         self.is_completed = bool(self.task.get("is_completed", 0))
+        self.is_delayed = is_task_delayed(self.task)
         self._hover_timer: Optional[str] = None
         self._hover_suppressed: bool = False
 
@@ -82,7 +83,13 @@ class TaskCard(ctk.CTkFrame):
 
     def _setup_hover_config(self) -> None:
         """Sets up the hover text, icons, and colors for Q1 (Pomodoro) and Q2 (Schedule)."""
-        if self.q_key == "Q1_DO":
+        if self.is_delayed:
+            self.hover_text = "⚠️ Task Passed — Reschedule"
+            self.hover_icon = "📅"
+            self.hover_bg = ("#F1F5F9", "#1E293B")
+            self.hover_text_color = theme.TEXT_MUTED
+            self.hover_action = self._on_schedule_click
+        elif self.q_key == "Q1_DO":
             self.hover_text = "Focus with Pomodoro"
             self.hover_icon = "🍅"
             self.hover_bg = ("#FEE2E2", "#2A0A0A")
@@ -94,6 +101,13 @@ class TaskCard(ctk.CTkFrame):
             self.hover_bg = ("#ECFDF5", "#042218")
             self.hover_text_color = ("#065F46", "#34D399")
             self.hover_action = self._on_schedule_click
+
+    def _on_check_toggle(self) -> None:
+        """Handles checkbox clicks. Prevents completing delayed / passed tasks."""
+        if self.is_delayed:
+            self.check_var.set(False)
+            return
+        self.on_toggle(self.task["id"])
 
     def _build_normal_ui(self) -> None:
         """Builds the standard task card view with clean left-aligned typography."""
@@ -112,9 +126,11 @@ class TaskCard(ctk.CTkFrame):
             width=20,
             height=20,
             corner_radius=5,
-            fg_color=self.q_color,
+            state="disabled" if self.is_delayed else "normal",
+            fg_color=("#94A3B8", "#64748B") if self.is_delayed else self.q_color,
+            border_color=("#CBD5E1", "#475569") if self.is_delayed else None,
             hover_color=self.q_info["color_dark"],
-            command=lambda: self.on_toggle(self.task["id"]),
+            command=self._on_check_toggle,
         )
         self.cb.pack(side="top", pady=(2, 0))
 
@@ -180,7 +196,7 @@ class TaskCard(ctk.CTkFrame):
 
         # Title
         title_text = self.task.get("title", "Untitled Task")
-        title_color = theme.TEXT_MUTED if self.is_completed else theme.TEXT_PRIMARY
+        title_color = theme.TEXT_MUTED if (self.is_completed or self.is_delayed) else theme.TEXT_PRIMARY
 
         self.lbl_title = ctk.CTkLabel(
             self.title_row,
@@ -190,7 +206,7 @@ class TaskCard(ctk.CTkFrame):
             anchor="w",
             justify="left",
             wraplength=220,
-            cursor="fleur" if not self.is_completed else "arrow",
+            cursor="fleur" if (not self.is_completed and not self.is_delayed) else "arrow",
         )
         self.lbl_title.pack(side="left", fill="x", expand=True)
 
@@ -201,7 +217,7 @@ class TaskCard(ctk.CTkFrame):
                 self.center_box,
                 text=description,
                 font=(theme.FONT_FAMILY, 11),
-                text_color=theme.TEXT_MUTED if self.is_completed else theme.TEXT_SECONDARY,
+                text_color=theme.TEXT_MUTED if (self.is_completed or self.is_delayed) else theme.TEXT_SECONDARY,
                 anchor="w",
                 justify="left",
                 wraplength=220,
@@ -216,7 +232,7 @@ class TaskCard(ctk.CTkFrame):
         has_due = False
         due_info = None
         if due_date_str:
-            due_info = format_due_status(due_date_str)
+            due_info = format_due_status(due_date_str, reminder_time_str=reminder_time_str)
             if due_info.get("status") not in ("NO_DUE_DATE", "INVALID_DATE"):
                 has_due = True
 
@@ -227,14 +243,18 @@ class TaskCard(ctk.CTkFrame):
             badges_row = ctk.CTkFrame(self.center_box, fg_color="transparent")
             badges_row.pack(anchor="w", pady=(4, 0))
 
+            badge_bg = ("#F1F5F9", "#1E293B") if self.is_delayed else self.q_info["bg_header"]
+            badge_border = ("#CBD5E1", "#334155") if self.is_delayed else self.q_info["border"]
+            badge_text_col = theme.TEXT_MUTED if self.is_delayed else self.q_info["text"]
+
             if has_due and due_info:
                 due_badge = ctk.CTkFrame(
                     badges_row,
-                    fg_color=self.q_info["bg_header"],
+                    fg_color=badge_bg,
                     corner_radius=6,
                     height=20,
                     border_width=1,
-                    border_color=self.q_info["border"],
+                    border_color=badge_border,
                 )
                 due_badge.pack(side="left", padx=(0, 6))
 
@@ -242,18 +262,18 @@ class TaskCard(ctk.CTkFrame):
                     due_badge,
                     text=f"📅 {due_info['label']}",
                     font=(theme.FONT_FAMILY, 10, "bold"),
-                    text_color=self.q_info["text"],
+                    text_color=badge_text_col,
                 )
                 lbl_due.pack(padx=6, pady=1)
 
             if has_reminder:
                 time_badge = ctk.CTkFrame(
                     badges_row,
-                    fg_color=self.q_info["bg_header"],
+                    fg_color=badge_bg,
                     corner_radius=6,
                     height=20,
                     border_width=1,
-                    border_color=self.q_info["border"],
+                    border_color=badge_border,
                 )
                 time_badge.pack(side="left", padx=(0, 6 if has_duration else 0))
 
@@ -261,7 +281,7 @@ class TaskCard(ctk.CTkFrame):
                     time_badge,
                     text=f"⏰ {str(reminder_time_str).strip()}",
                     font=(theme.FONT_FAMILY, 10, "bold"),
-                    text_color=self.q_info["text"],
+                    text_color=badge_text_col,
                 )
                 lbl_time.pack(padx=6, pady=1)
 
@@ -272,13 +292,18 @@ class TaskCard(ctk.CTkFrame):
                     dur_text = f"{est_duration // 60}h"
                 else:
                     dur_text = f"{est_duration // 60}h {est_duration % 60}m"
+
+                dur_bg = badge_bg if self.is_delayed else (("#FEF2F2", "#2A0A0A") if self.q_key == "Q1_DO" else self.q_info["bg_header"])
+                dur_border = badge_border if self.is_delayed else (("#FCA5A5", "#7F1D1D") if self.q_key == "Q1_DO" else self.q_info["border"])
+                dur_col = badge_text_col if self.is_delayed else (("#DC2626", "#F87171") if self.q_key == "Q1_DO" else self.q_info["text"])
+
                 dur_badge = ctk.CTkFrame(
                     badges_row,
-                    fg_color=("#FEF2F2", "#2A0A0A") if self.q_key == "Q1_DO" else self.q_info["bg_header"],
+                    fg_color=dur_bg,
                     corner_radius=6,
                     height=20,
                     border_width=1,
-                    border_color=("#FCA5A5", "#7F1D1D") if self.q_key == "Q1_DO" else self.q_info["border"],
+                    border_color=dur_border,
                 )
                 dur_badge.pack(side="left")
 
@@ -286,7 +311,7 @@ class TaskCard(ctk.CTkFrame):
                     dur_badge,
                     text=f"⏱️ {dur_text}",
                     font=(theme.FONT_FAMILY, 10, "bold"),
-                    text_color=("#DC2626", "#F87171") if self.q_key == "Q1_DO" else self.q_info["text"],
+                    text_color=dur_col,
                 )
                 lbl_dur.pack(padx=6, pady=1)
 

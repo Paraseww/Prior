@@ -20,6 +20,7 @@ from project import (
     format_focus_duration,
     format_timer_display,
     get_task_notifications,
+    is_task_delayed,
     validate_schedule_time,
 )
 import database
@@ -313,6 +314,45 @@ def test_format_due_status_comparisons():
     res_next_year = format_due_status("2027-01-10", current_date_str=ref_date)
     assert res_next_year["status"] == "UPCOMING"
     assert res_next_year["label"] == "Due: Jan 10, 2027"
+
+
+def test_format_due_status_passed_reminder_time():
+    """Verify that a task due today whose reminder time has passed is marked OVERDUE / delayed."""
+    ref_dt = datetime(2026, 10, 7, 15, 0)  # 3:00 PM on Oct 7, 2026
+    # 6:00 AM passed today -> OVERDUE / delayed
+    res_passed = format_due_status("2026-10-07", reminder_time_str="06:00 AM", current_dt=ref_dt)
+    assert res_passed["status"] == "OVERDUE"
+    assert res_passed["is_delayed"] is True
+    assert res_passed["color_tag"] == "gray"
+
+    # 6:00 PM is later today -> DUE_TODAY / not delayed
+    res_future = format_due_status("2026-10-07", reminder_time_str="06:00 PM", current_dt=ref_dt)
+    assert res_future["status"] == "DUE_TODAY"
+    assert res_future["is_delayed"] is False
+    assert res_future["color_tag"] == "amber"
+
+
+def test_is_task_delayed():
+    """Verify is_task_delayed logic for various date/time combinations."""
+    ref_dt = datetime(2026, 10, 7, 15, 0)  # 3:00 PM on Oct 7, 2026
+
+    # Past date
+    assert is_task_delayed({"due_date": "2026-10-06", "is_completed": 0}, current_dt=ref_dt) is True
+
+    # Completed task is never considered delayed
+    assert is_task_delayed({"due_date": "2026-10-06", "is_completed": 1}, current_dt=ref_dt) is False
+
+    # Due today, 6:00 AM (passed)
+    assert is_task_delayed({"due_date": "2026-10-07", "reminder_time": "06:00 AM", "is_completed": 0}, current_dt=ref_dt) is True
+
+    # Due today, 6:00 PM (future)
+    assert is_task_delayed({"due_date": "2026-10-07", "reminder_time": "06:00 PM", "is_completed": 0}, current_dt=ref_dt) is False
+
+    # Due today, no reminder time
+    assert is_task_delayed({"due_date": "2026-10-07", "is_completed": 0}, current_dt=ref_dt) is False
+
+    # Future date
+    assert is_task_delayed({"due_date": "2026-10-08", "reminder_time": "06:00 AM", "is_completed": 0}, current_dt=ref_dt) is False
 
 
 # ============================================================================

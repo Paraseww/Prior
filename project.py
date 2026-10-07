@@ -281,21 +281,89 @@ def calculate_matrix_stats(
     }
 
 
+def is_task_delayed(
+    task: Optional[Dict[str, Any]],
+    current_dt: Optional[datetime] = None,
+    current_date_str: Optional[str] = None,
+) -> bool:
+    """
+    Determines whether an active task is delayed / passed its scheduled deadline.
+    A task is considered delayed if:
+    - It is not completed, AND
+    - Its due date is strictly in the past (< today), OR
+    - Its due date is today AND its reminder_time has already passed current time.
+    """
+    if not task or not isinstance(task, dict):
+        return False
+    if bool(task.get("is_completed", 0)):
+        return False
+
+    due_date_str = task.get("due_date")
+    if not due_date_str or not isinstance(due_date_str, str) or not due_date_str.strip():
+        return False
+
+    clean_due = due_date_str.strip()
+    if not re.match(r"^\d{4}-\d{2}-\d{2}$", clean_due):
+        return False
+
+    if current_dt is not None:
+        now = current_dt
+        today = now.date()
+    elif current_date_str and isinstance(current_date_str, str):
+        try:
+            today = datetime.strptime(current_date_str.strip(), "%Y-%m-%d").date()
+        except ValueError:
+            today = date.today()
+        now = datetime.combine(today, datetime.now().time())
+    else:
+        now = datetime.now()
+        today = now.date()
+
+    try:
+        due = datetime.strptime(clean_due, "%Y-%m-%d").date()
+    except ValueError:
+        return False
+
+    if due < today:
+        return True
+
+    if due == today:
+        rem_str = task.get("reminder_time")
+        if rem_str and str(rem_str).strip():
+            rem_time = None
+            for fmt in ("%I:%M %p", "%H:%M", "%I:%M%p"):
+                try:
+                    rem_time = datetime.strptime(str(rem_str).strip(), fmt).time()
+                    break
+                except ValueError:
+                    pass
+            if rem_time is not None:
+                if (rem_time.hour, rem_time.minute) <= (now.hour, now.minute):
+                    return True
+
+    return False
+
+
 def format_due_status(
     due_date_str: Optional[str],
     current_date_str: Optional[str] = None,
+    reminder_time_str: Optional[str] = None,
+    current_dt: Optional[datetime] = None,
 ) -> Dict[str, Any]:
     """
-    Evaluates a task's due date string (YYYY-MM-DD) and generates urgency status, remaining days,
-    and formatted badge metadata.
+    Evaluates a task's due date string (YYYY-MM-DD) and optional reminder time,
+    generating urgency status, remaining days, and formatted badge metadata.
 
     :param due_date_str: Target due date in 'YYYY-MM-DD' format.
     :param current_date_str: Optional reference date in 'YYYY-MM-DD' format (defaults to today).
+    :param reminder_time_str: Optional reminder time string (e.g. '06:00 AM', '14:30').
+    :param current_dt: Optional reference datetime for exact timestamp evaluation.
     :return: Dictionary with:
              - 'status': 'OVERDUE', 'DUE_TODAY', 'UPCOMING', or 'NO_DUE_DATE'
              - 'days_diff': Integer difference in days (negative for overdue, 0 for today, positive for future)
              - 'label': Human-friendly badge string
              - 'color_tag': Badge color tag ('red', 'amber', 'blue', 'gray')
+             - 'is_delayed': Boolean flag indicating if task is past its due time
     """
     if not due_date_str or not isinstance(due_date_str, str) or not due_date_str.strip():
         return {
@@ -303,6 +371,7 @@ def format_due_status(
             "days_diff": None,
             "label": "No Due Date",
             "color_tag": "gray",
+            "is_delayed": False,
         }
 
     # Validate YYYY-MM-DD format with regex
@@ -314,6 +383,7 @@ def format_due_status(
             "days_diff": None,
             "label": "Invalid Date",
             "color_tag": "gray",
+            "is_delayed": False,
         }
 
     try:
@@ -324,16 +394,22 @@ def format_due_status(
             "days_diff": None,
             "label": "Invalid Date",
             "color_tag": "gray",
+            "is_delayed": False,
         }
 
-    # Reference current date
-    if current_date_str and isinstance(current_date_str, str):
+    # Reference current datetime & date
+    if current_dt is not None:
+        now = current_dt
+        today = now.date()
+    elif current_date_str and isinstance(current_date_str, str):
         try:
             today = datetime.strptime(current_date_str.strip(), "%Y-%m-%d").date()
         except ValueError:
             today = date.today()
+        now = datetime.combine(today, datetime.now().time())
     else:
-        today = date.today()
+        now = datetime.now()
+        today = now.date()
 
     diff_days = (due - today).days
 
@@ -345,20 +421,47 @@ def format_due_status(
             "days_diff": diff_days,
             "label": f"Overdue: {due_formatted}",
             "color_tag": "red",
+            "is_delayed": True,
         }
     elif diff_days == 0:
-        return {
-            "status": "DUE_TODAY",
-            "days_diff": 0,
-            "label": f"Due: {due_formatted}",
-            "color_tag": "amber",
-        }
+        # Check if reminder time has already passed today
+        is_passed = False
+        if reminder_time_str and str(reminder_time_str).strip():
+            rem_str = str(reminder_time_str).strip()
+            rem_time = None
+            for fmt in ("%I:%M %p", "%H:%M", "%I:%M%p"):
+                try:
+                    rem_time = datetime.strptime(rem_str, fmt).time()
+                    break
+                except ValueError:
+                    pass
+            if rem_time is not None:
+                if (rem_time.hour, rem_time.minute) <= (now.hour, now.minute):
+                    is_passed = True
+
+        if is_passed:
+            return {
+                "status": "OVERDUE",
+                "days_diff": 0,
+                "label": f"Delayed: {due_formatted}",
+                "color_tag": "gray",
+                "is_delayed": True,
+            }
+        else:
+            return {
+                "status": "DUE_TODAY",
+                "days_diff": 0,
+                "label": f"Due: {due_formatted}",
+                "color_tag": "amber",
+                "is_delayed": False,
+            }
     else:
         return {
             "status": "UPCOMING",
             "days_diff": diff_days,
             "label": f"Due: {due_formatted}",
             "color_tag": "blue",
+            "is_delayed": False,
         }
 
 
@@ -650,11 +753,12 @@ def calculate_recommended_sprints(duration_minutes: int) -> int:
 def get_task_notifications(
     tasks: Optional[List[Dict[str, Any]]],
     current_date_str: Optional[str] = None,
+    current_dt: Optional[datetime] = None,
 ) -> Dict[str, Any]:
     """
     Categorizes tasks into notification buckets based on their due date:
-    - overdue: due_date < current_date (sorted oldest first)
-    - today: due_date == current_date
+    - overdue: due_date < current_date OR due today with passed reminder_time (sorted oldest first)
+    - today: due_date == current_date (and not yet passed)
     - tomorrow: due_date == current_date + 1 day
     - upcoming: due_date is within 2 to 3 days (current_date + 2 <= due_date <= current_date + 3)
 
@@ -662,6 +766,7 @@ def get_task_notifications(
 
     :param tasks: List of task dictionaries.
     :param current_date_str: Optional reference date in 'YYYY-MM-DD' format (defaults to today).
+    :param current_dt: Optional reference datetime for exact timestamp evaluation.
     :return: Dictionary containing:
              - 'total_count': Total number of notifying tasks
              - 'overdue_count': Count of overdue tasks
@@ -688,14 +793,17 @@ def get_task_notifications(
     if not tasks:
         return empty_result
 
-    # Determine reference date
+    # Determine reference date and datetime
+    now = current_dt if current_dt is not None else datetime.now()
     if current_date_str and isinstance(current_date_str, str):
         try:
             today = datetime.strptime(current_date_str.strip(), "%Y-%m-%d").date()
         except ValueError:
-            today = date.today()
+            today = now.date()
+        if current_dt is None:
+            now = datetime.combine(today, datetime.now().time())
     else:
-        today = date.today()
+        today = now.date()
 
     date_pattern = r"^\d{4}-\d{2}-\d{2}$"
 
@@ -728,7 +836,11 @@ def get_task_notifications(
         task_item = dict(task)
         task_item["days_diff"] = diff_days
 
-        if diff_days < 0:
+        # Check if task is delayed (either past due date or due today with passed reminder_time)
+        delayed = is_task_delayed(task, current_dt=now, current_date_str=current_date_str)
+        task_item["is_delayed"] = delayed
+
+        if delayed:
             overdue_list.append(task_item)
         elif diff_days == 0:
             today_list.append(task_item)

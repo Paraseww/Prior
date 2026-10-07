@@ -211,8 +211,8 @@ class NotificationModal(ctk.CTkToplevel):
                     parent=scroll_frame,
                     title="⚠️ Delayed & Overdue Tasks",
                     count=notifications["overdue_count"],
-                    header_bg=("#FEE2E2", "#2A0A0A"),
-                    header_text_color=("#991B1B", "#F87171"),
+                    header_bg=("#F1F5F9", "#1E293B"),
+                    header_text_color=theme.TEXT_SECONDARY,
                     tasks=notifications["overdue"],
                     category_type="overdue",
                 )
@@ -366,10 +366,11 @@ class NotificationModal(ctk.CTkToplevel):
             task.get("quadrant", "Q1_DO"),
             theme.QUADRANTS["Q1_DO"],
         )
+        is_delayed = (category_type == "overdue") or bool(task.get("is_delayed", False))
 
         card = ctk.CTkFrame(
             parent,
-            fg_color=theme.BG_INPUT,
+            fg_color=theme.BG_CARD if is_delayed else theme.BG_INPUT,
             corner_radius=10,
             border_width=1,
             border_color=theme.BORDER_COLOR,
@@ -383,18 +384,20 @@ class NotificationModal(ctk.CTkToplevel):
         row_badges = ctk.CTkFrame(inner, fg_color="transparent")
         row_badges.pack(fill="x", pady=(0, 4))
 
-        # Quadrant Pill
+        # Quadrant Pill (Muted gray for delayed tasks)
         q_badge_frame = ctk.CTkFrame(
             row_badges,
-            fg_color=quadrant_info["bg_header"],
+            fg_color=("#F1F5F9", "#1E293B") if is_delayed else quadrant_info["bg_header"],
             corner_radius=6,
+            border_width=1 if is_delayed else 0,
+            border_color=theme.BORDER_COLOR if is_delayed else "transparent",
         )
         q_badge_frame.pack(side="left", padx=(0, 8))
         lbl_q_badge = ctk.CTkLabel(
             q_badge_frame,
             text=quadrant_info["badge"],
             font=(theme.FONT_FAMILY, 10, "bold"),
-            text_color=quadrant_info["text"],
+            text_color=theme.TEXT_MUTED if is_delayed else quadrant_info["text"],
         )
         lbl_q_badge.pack(padx=6, pady=1)
 
@@ -411,27 +414,31 @@ class NotificationModal(ctk.CTkToplevel):
 
             runway_pill = ctk.CTkFrame(
                 row_badges,
-                fg_color=("#FEF2F2", "#2A0A0A"),
+                fg_color=("#F1F5F9", "#1E293B") if is_delayed else ("#FEF2F2", "#2A0A0A"),
                 corner_radius=6,
                 border_width=1,
-                border_color=("#FCA5A5", "#7F1D1D"),
+                border_color=theme.BORDER_COLOR if is_delayed else ("#FCA5A5", "#7F1D1D"),
             )
             runway_pill.pack(side="left", padx=(0, 8))
             lbl_runway_pill = ctk.CTkLabel(
                 runway_pill,
                 text=f"⏱️ {dur_text} Runway",
                 font=(theme.FONT_FAMILY, 10, "bold"),
-                text_color=("#DC2626", "#F87171"),
+                text_color=theme.TEXT_MUTED if is_delayed else ("#DC2626", "#F87171"),
             )
             lbl_runway_pill.pack(padx=6, pady=1)
 
-        # Relative Status Badge (only needed for overdue and upcoming, not redundant today/tomorrow)
+        # Relative Status Badge
         days_diff = task.get("days_diff", 0)
         due_str = task.get("due_date", "")
-        if category_type == "overdue":
-            status_text = f"⚠️ Overdue by {abs(days_diff)} day{'s' if abs(days_diff) != 1 else ''}"
-            status_fg = ("#FEE2E2", "#2A0A0A")
-            status_text_col = ("#B91C1C", "#F87171")
+        if is_delayed:
+            if days_diff < 0:
+                status_text = f"⚠️ Overdue by {abs(days_diff)} day{'s' if abs(days_diff) != 1 else ''}"
+            else:
+                rem_lbl = task.get("reminder_time", "")
+                status_text = f"⚠️ Passed Today ({rem_lbl})" if rem_lbl else "⚠️ Passed Today"
+            status_fg = ("#F1F5F9", "#1E293B")
+            status_text_col = theme.TEXT_MUTED
         elif category_type == "upcoming":
             status_text = f"📌 {days_diff} days left"
             status_fg = ("#F5F3FF", "#181226")
@@ -446,6 +453,8 @@ class NotificationModal(ctk.CTkToplevel):
                 row_badges,
                 fg_color=status_fg,
                 corner_radius=6,
+                border_width=1 if is_delayed else 0,
+                border_color=theme.BORDER_COLOR if is_delayed else "transparent",
             )
             status_badge_frame.pack(side="left")
             lbl_status_badge = ctk.CTkLabel(
@@ -471,13 +480,13 @@ class NotificationModal(ctk.CTkToplevel):
         )
         btn_dismiss.pack(side="right")
 
-        # Row 2: Task Title
+        # Row 2: Task Title (Muted gray for delayed tasks)
         title_text = task.get("title", "Untitled Task")
         lbl_title = ctk.CTkLabel(
             inner,
             text=title_text,
             font=(theme.FONT_FAMILY, 13, "bold"),
-            text_color=theme.TEXT_PRIMARY,
+            text_color=theme.TEXT_MUTED if is_delayed else theme.TEXT_PRIMARY,
             anchor="w",
         )
         lbl_title.pack(fill="x", pady=(0, 2))
@@ -490,12 +499,12 @@ class NotificationModal(ctk.CTkToplevel):
                 inner,
                 text=short_desc,
                 font=(theme.FONT_FAMILY, 11),
-                text_color=theme.TEXT_SECONDARY,
+                text_color=theme.TEXT_MUTED if is_delayed else theme.TEXT_SECONDARY,
                 anchor="w",
             )
             lbl_desc.pack(fill="x", pady=(0, 6))
 
-        # Row 3: Scheduled Due Date Details (Always clearly visible)
+        # Row 3: Scheduled Due Date Details
         date_display = due_str
         if due_str:
             try:
@@ -525,72 +534,106 @@ class NotificationModal(ctk.CTkToplevel):
         btn_box = ctk.CTkFrame(row_actions, fg_color="transparent")
         btn_box.pack(side="right")
 
-        # Focus Sprint button (🍅 Focus) - STRICTLY ONLY FOR RED (Q1_DO) TASKS
-        if is_q1:
-            btn_focus = ctk.CTkButton(
+        if is_delayed:
+            # For delayed tasks: do not show Focus or Done (task is passed, must be rescheduled)
+            btn_reschedule = ctk.CTkButton(
                 btn_box,
-                text="🍅 Focus",
-                width=68,
+                text="📅 Reschedule",
+                width=95,
                 height=26,
                 corner_radius=6,
                 font=(theme.FONT_FAMILY, 11, "bold"),
-                fg_color=("#FEF2F2", "#260C0C"),
-                hover_color=("#FCA5A5", "#5C1D1D"),
-                text_color=("#DC2626", "#F87171"),
+                fg_color=theme.BG_CARD,
+                hover_color=theme.BG_CARD_HOVER,
+                text_color=theme.TEXT_PRIMARY,
                 border_width=1,
-                border_color=("#F87171", "#7F1D1D"),
-                command=lambda t=task: self._on_focus_click(t),
+                border_color=theme.BORDER_COLOR,
+                command=lambda t=task: self._on_reschedule_click(t),
             )
-            btn_focus.pack(side="left", padx=(0, 6))
+            btn_reschedule.pack(side="left", padx=(0, 6))
 
-        # Done button (✓)
-        btn_done = ctk.CTkButton(
-            btn_box,
-            text="✓ Done",
-            width=62,
-            height=26,
-            corner_radius=6,
-            font=(theme.FONT_FAMILY, 11, "bold"),
-            fg_color=("#ECFDF5", "#042218"),
-            hover_color=("#A7F3D0", "#064E3B"),
-            text_color=("#065F46", "#34D399"),
-            command=lambda t_id=task["id"]: self._on_done_click(t_id),
-        )
-        btn_done.pack(side="left", padx=(0, 6))
+            btn_edit = ctk.CTkButton(
+                btn_box,
+                text="✏️",
+                width=28,
+                height=26,
+                corner_radius=6,
+                font=(theme.FONT_FAMILY, 11),
+                fg_color=theme.BG_CARD,
+                hover_color=theme.BG_CARD_HOVER,
+                text_color=theme.TEXT_PRIMARY,
+                border_width=1,
+                border_color=theme.BORDER_COLOR,
+                command=lambda t=task: self._on_edit_click(t),
+            )
+            btn_edit.pack(side="left")
+        else:
+            # Focus Sprint button (🍅 Focus) - STRICTLY ONLY FOR RED (Q1_DO) TASKS
+            if is_q1:
+                btn_focus = ctk.CTkButton(
+                    btn_box,
+                    text="🍅 Focus",
+                    width=68,
+                    height=26,
+                    corner_radius=6,
+                    font=(theme.FONT_FAMILY, 11, "bold"),
+                    fg_color=("#FEF2F2", "#260C0C"),
+                    hover_color=("#FCA5A5", "#5C1D1D"),
+                    text_color=("#DC2626", "#F87171"),
+                    border_width=1,
+                    border_color=("#F87171", "#7F1D1D"),
+                    command=lambda t=task: self._on_focus_click(t),
+                )
+                btn_focus.pack(side="left", padx=(0, 6))
 
-        # Reschedule button (📅)
-        btn_reschedule = ctk.CTkButton(
-            btn_box,
-            text="📅 Schedule",
-            width=82,
-            height=26,
-            corner_radius=6,
-            font=(theme.FONT_FAMILY, 11, "bold"),
-            fg_color=theme.BG_CARD,
-            hover_color=theme.BG_CARD_HOVER,
-            text_color=theme.TEXT_PRIMARY,
-            border_width=1,
-            border_color=theme.BORDER_COLOR,
-            command=lambda t=task: self._on_reschedule_click(t),
-        )
-        btn_reschedule.pack(side="left", padx=(0, 6))
+            # Done button (✓)
+            btn_done = ctk.CTkButton(
+                btn_box,
+                text="✓ Done",
+                width=62,
+                height=26,
+                corner_radius=6,
+                font=(theme.FONT_FAMILY, 11, "bold"),
+                fg_color=("#ECFDF5", "#042218"),
+                hover_color=("#A7F3D0", "#064E3B"),
+                text_color=("#065F46", "#34D399"),
+                command=lambda t_id=task["id"]: self._on_done_click(t_id),
+            )
+            btn_done.pack(side="left", padx=(0, 6))
 
-        # Edit button (✏️) - explicit width with comfortable padding so it is never cut off
-        btn_edit = ctk.CTkButton(
-            btn_box,
-            text="✏️",
-            width=28,
-            height=26,
-            corner_radius=6,
-            font=(theme.FONT_FAMILY, 11),
-            fg_color=theme.BG_CARD,
-            hover_color=theme.BG_CARD_HOVER,
-            text_color=theme.TEXT_PRIMARY,
-            border_width=1,
-            border_color=theme.BORDER_COLOR,
-            command=lambda t=task: self._on_edit_click(t),
-        )
-        btn_edit.pack(side="left")
+            # Reschedule button (📅)
+            btn_reschedule = ctk.CTkButton(
+                btn_box,
+                text="📅 Schedule",
+                width=82,
+                height=26,
+                corner_radius=6,
+                font=(theme.FONT_FAMILY, 11, "bold"),
+                fg_color=theme.BG_CARD,
+                hover_color=theme.BG_CARD_HOVER,
+                text_color=theme.TEXT_PRIMARY,
+                border_width=1,
+                border_color=theme.BORDER_COLOR,
+                command=lambda t=task: self._on_reschedule_click(t),
+            )
+            btn_reschedule.pack(side="left", padx=(0, 6))
+
+            # Edit button (✏️) - explicit width with comfortable padding so it is never cut off
+            btn_edit = ctk.CTkButton(
+                btn_box,
+                text="✏️",
+                width=28,
+                height=26,
+                corner_radius=6,
+                font=(theme.FONT_FAMILY, 11),
+                fg_color=theme.BG_CARD,
+                hover_color=theme.BG_CARD_HOVER,
+                text_color=theme.TEXT_PRIMARY,
+                border_width=1,
+                border_color=theme.BORDER_COLOR,
+                command=lambda t=task: self._on_edit_click(t),
+            )
+            btn_edit.pack(side="left")
 
     def _on_done_click(self, task_id: int) -> None:
         """Handles completing a task directly from the notification modal."""
