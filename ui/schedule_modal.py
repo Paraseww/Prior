@@ -11,7 +11,7 @@ import tkinter as tk
 from typing import Any, Callable, Dict, List, Optional
 import customtkinter as ctk
 
-from project import validate_schedule_time
+from project import is_task_delayed, validate_schedule_time
 from ui import theme
 from ui.scrollable_dropdown import ScrollableOptionMenu
 
@@ -22,9 +22,20 @@ class MiniCalendarCanvas(tk.Canvas):
     Renders date cells, selection pills, and today highlights with sub-millisecond redraws.
     """
 
-    def __init__(self, master: Any, on_date_selected: Callable[[date], None], **kwargs) -> None:
+    def __init__(
+        self,
+        master: Any,
+        on_date_selected: Callable[[date], None],
+        accent_color: str = "#10B981",
+        accent_dark: str = "#059669",
+        bg_header: Optional[tuple[str, str]] = None,
+        **kwargs,
+    ) -> None:
         super().__init__(master, highlightthickness=0, **kwargs)
         self.on_date_selected = on_date_selected
+        self.accent_color = accent_color
+        self.accent_dark = accent_dark
+        self.bg_header = bg_header or ("#ECFDF5", "#042218")
         self.cal_year = date.today().year
         self.cal_month = date.today().month
         self.selected_date: Optional[date] = date.today()
@@ -138,15 +149,16 @@ class MiniCalendarCanvas(tk.Canvas):
             ]
 
             if is_selected:
-                fill_col = "#059669" if is_hover else "#10B981"
+                fill_col = self.accent_dark if is_hover else self.accent_color
                 text_col = "#FFFFFF"
                 font_weight = "bold"
                 self.create_polygon(pts, smooth=True, fill=fill_col, outline="")
             elif is_today:
-                fill_col = ("#083324" if is_dark else "#D1FAE5") if is_hover else ("#042218" if is_dark else "#ECFDF5")
-                text_col = "#10B981"
+                header_bg = self.bg_header[1] if is_dark else self.bg_header[0]
+                fill_col = header_bg if not is_hover else self.accent_dark
+                text_col = "#FFFFFF" if is_hover else self.accent_color
                 font_weight = "bold"
-                self.create_polygon(pts, smooth=True, fill=fill_col, outline="#10B981", width=1)
+                self.create_polygon(pts, smooth=True, fill=fill_col, outline=self.accent_color, width=1)
             elif is_curr_month:
                 fill_col = (theme.BG_CARD_HOVER[1] if is_dark else theme.BG_CARD_HOVER[0]) if is_hover else ""
                 text_col = prim_col
@@ -185,6 +197,13 @@ class ScheduleModal(ctk.CTkToplevel):
         self.on_complete_task = on_complete_task
         self.on_edit_task = on_edit_task
         self.on_delete_task = on_delete_task
+
+        # Quadrant Theme Details
+        self.q_key = self.task.get("quadrant", "Q2_SCHEDULE")
+        self.q_info = theme.QUADRANTS.get(self.q_key, theme.QUADRANTS["Q2_SCHEDULE"])
+        self.q_color = self.q_info["color"]
+        self.q_color_dark = self.q_info["color_dark"]
+        self.is_delayed = is_task_delayed(self.task)
 
         # Parse initial task schedule state
         today = date.today()
@@ -272,7 +291,7 @@ class ScheduleModal(ctk.CTkToplevel):
             header_row,
             text="📅 SCHEDULING TARGET",
             font=(theme.FONT_FAMILY, 10, "bold"),
-            text_color="#10B981",
+            text_color=self.q_color,
         )
         lbl_sched_tag.pack(side="left")
 
@@ -444,6 +463,9 @@ class ScheduleModal(ctk.CTkToplevel):
         self.cal_canvas = MiniCalendarCanvas(
             cal_box,
             on_date_selected=self._on_date_tile_clicked,
+            accent_color=self.q_color,
+            accent_dark=self.q_color_dark,
+            bg_header=self.q_info["bg_header"],
             height=172,
         )
         self.cal_canvas.pack(fill="x", padx=6, pady=(0, 6))
@@ -481,6 +503,7 @@ class ScheduleModal(ctk.CTkToplevel):
             text="Enable",
             font=(theme.FONT_FAMILY, 11, "bold"),
             text_color=theme.TEXT_SECONDARY,
+            progress_color=self.q_color,
             command=self._on_reminder_switch_toggle,
         )
         self.switch_reminder.pack(side="right")
@@ -736,10 +759,10 @@ class ScheduleModal(ctk.CTkToplevel):
         # ====================================================================
         self.summary_card = ctk.CTkFrame(
             scroll_frame,
-            fg_color=("#ECFDF5", "#042218"),
+            fg_color=self.q_info["bg_header"],
             corner_radius=8,
             border_width=1,
-            border_color=("#A7F3D0", "#064E3B"),
+            border_color=self.q_info["border"],
         )
         self.summary_card.pack(fill="x", pady=(0, 4))
 
@@ -747,7 +770,7 @@ class ScheduleModal(ctk.CTkToplevel):
             self.summary_card,
             text="",
             font=(theme.FONT_FAMILY, 11, "bold"),
-            text_color=("#065F46", "#34D399"),
+            text_color=self.q_info["text"],
         )
         self.lbl_sched_summary.pack(padx=10, pady=6)
 
@@ -783,25 +806,26 @@ class ScheduleModal(ctk.CTkToplevel):
             font=(theme.FONT_FAMILY, 13, "bold"),
             height=36,
             corner_radius=8,
-            fg_color="#10B981",
-            hover_color="#059669",
+            fg_color=self.q_color,
+            hover_color=self.q_color_dark,
             text_color="#FFFFFF",
             command=self._on_save_clicked,
         )
         self.btn_save.pack(side="right", fill="x", expand=True, padx=(6, 0))
 
-        # Mark Task Completed & Finish Button
+        # Mark Task Completed & Finish Button (Disabled for delayed tasks)
         btn_complete = ctk.CTkButton(
             action_container,
-            text="✓ Mark Task Completed & Finish",
-            font=(theme.FONT_FAMILY, 12, "bold"),
+            text="✓ Mark Task Completed & Finish" if not self.is_delayed else "✓ Mark Task Completed & Finish (Disabled — Task Delayed)",
+            font=(theme.FONT_FAMILY, 11 if self.is_delayed else 12, "bold"),
             height=34,
             corner_radius=8,
+            state="normal" if not self.is_delayed else "disabled",
             fg_color="transparent",
-            hover_color=("#ECFDF5", "#042218"),
-            text_color=("#10B981", "#34D399"),
+            hover_color=self.q_info["bg_header"] if not self.is_delayed else "transparent",
+            text_color=self.q_info["text"] if not self.is_delayed else theme.TEXT_MUTED,
             border_width=1,
-            border_color=("#10B981", "#059669"),
+            border_color=self.q_info["border"] if not self.is_delayed else theme.BORDER_COLOR,
             command=self._on_mark_completed,
         )
         btn_complete.pack(fill="x")
@@ -875,8 +899,8 @@ class ScheduleModal(ctk.CTkToplevel):
         for key, btn in self.preset_buttons.items():
             if key == active_key:
                 btn.configure(
-                    fg_color="#10B981",
-                    hover_color="#059669",
+                    fg_color=self.q_color,
+                    hover_color=self.q_color_dark,
                     text_color="#FFFFFF",
                 )
             else:
@@ -1042,7 +1066,7 @@ class ScheduleModal(ctk.CTkToplevel):
                 return
 
             if hasattr(self, "btn_save"):
-                self.btn_save.configure(state="normal", fg_color="#10B981")
+                self.btn_save.configure(state="normal", fg_color=self.q_color, hover_color=self.q_color_dark)
 
             # Drop-Dead Runway Calculation ONLY for Q1 (Red Box) when estimated duration is set
             is_q1 = self.task.get("quadrant") == "Q1_DO"
@@ -1077,26 +1101,26 @@ class ScheduleModal(ctk.CTkToplevel):
                     return
 
             self.summary_card.configure(
-                fg_color=("#ECFDF5", "#042218"),
-                border_color=("#A7F3D0", "#064E3B"),
+                fg_color=self.q_info["bg_header"],
+                border_color=self.q_info["border"],
             )
             if rem_str:
                 self.lbl_sched_summary.configure(
                     text=f"📌 Scheduled for: {d_str} at {rem_str}",
-                    text_color=("#065F46", "#34D399"),
+                    text_color=self.q_info["text"],
                 )
             else:
                 self.lbl_sched_summary.configure(
                     text=f"📌 Scheduled for: {d_str} (No reminder time)",
-                    text_color=("#065F46", "#34D399"),
+                    text_color=self.q_info["text"],
                 )
         else:
             self.summary_card.configure(
-                fg_color=("#ECFDF5", "#042218"),
-                border_color=("#A7F3D0", "#064E3B"),
+                fg_color=self.q_info["bg_header"],
+                border_color=self.q_info["border"],
             )
             if hasattr(self, "btn_save"):
-                self.btn_save.configure(state="normal", fg_color="#10B981")
+                self.btn_save.configure(state="normal", fg_color=self.q_color, hover_color=self.q_color_dark)
             self.lbl_sched_summary.configure(
                 text="⚠️ No due date set (Task will be unscheduled)",
                 text_color=theme.TEXT_MUTED,
@@ -1122,6 +1146,8 @@ class ScheduleModal(ctk.CTkToplevel):
         self.destroy()
 
     def _on_mark_completed(self) -> None:
+        if self.is_delayed:
+            return
         if self.on_complete_task and "id" in self.task:
             self.on_complete_task(self.task["id"])
         self.destroy()

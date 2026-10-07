@@ -983,6 +983,10 @@ class PriorApp(ctk.CTk):
 
     def mark_task_completed(self, task_id: int) -> None:
         """Explicitly marks a task as completed (idempotent, does not toggle to incomplete)."""
+        target_task = next((t for t in self.all_tasks if t.get("id") == task_id), None)
+        if target_task and is_task_delayed(target_task):
+            # Delayed / passed tasks cannot be completed without rescheduling
+            return
         database.update_task(task_id, is_completed=1)
         self.dismissed_notification_ids.discard(task_id)
         self.notified_reminder_keys = {k for k in self.notified_reminder_keys if f"_{task_id}_" not in k}
