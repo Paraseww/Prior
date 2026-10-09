@@ -12,6 +12,7 @@ import customtkinter as ctk
 
 from ui import theme
 from ui.dot_pattern import DottedCardFrame
+from ui.smooth_scroll import SmoothScrollableFrame
 from ui.task_card import TaskCard
 
 
@@ -385,7 +386,7 @@ class CalendarView(ctk.CTkFrame):
         btn_add_day.pack(fill="x", pady=(8, 0))
 
         # Scrollable Task List for selected day
-        scroll_frame = ctk.CTkScrollableFrame(
+        scroll_frame = SmoothScrollableFrame(
             self.schedule_container,
             fg_color="transparent",
             corner_radius=8,

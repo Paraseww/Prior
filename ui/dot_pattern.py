@@ -139,9 +139,12 @@ class DottedCardFrame(ctk.CTkFrame):
 DottedFrame = DottedCardFrame
 
 
-class DottedScrollableFrame(ctk.CTkScrollableFrame):
+from ui.smooth_scroll import SmoothScrollableFrame
+
+
+class DottedScrollableFrame(SmoothScrollableFrame):
     """
-    A CustomTkinter Scrollable Frame with an active dot-grid paper background.
+    A CustomTkinter Scrollable Frame with smooth scrolling and dot-grid background.
     """
 
     def __init__(self, master: any, spacing: int = 22, **kwargs) -> None:

@@ -14,6 +14,7 @@ import customtkinter as ctk
 from project import is_task_delayed, validate_schedule_time
 from ui import theme
 from ui.scrollable_dropdown import ScrollableOptionMenu
+from ui.smooth_scroll import SmoothScrollableFrame
 
 
 class MiniCalendarCanvas(tk.Canvas):
@@ -357,7 +358,7 @@ class ScheduleModal(ctk.CTkToplevel):
             lbl_notes.pack(fill="x", pady=(3, 0))
 
         # 2. Main Scrollable Content Container
-        scroll_frame = ctk.CTkScrollableFrame(self, fg_color="transparent")
+        scroll_frame = SmoothScrollableFrame(self, fg_color="transparent")
         scroll_frame.pack(fill="both", expand=True, padx=16, pady=(4, 4))
 
         # ====================================================================

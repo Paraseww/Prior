@@ -12,6 +12,7 @@ import customtkinter as ctk
 
 from project import get_task_notifications
 from ui import theme
+from ui.smooth_scroll import SmoothScrollableFrame
 
 
 class NotificationModal(ctk.CTkToplevel):
@@ -198,7 +199,7 @@ class NotificationModal(ctk.CTkToplevel):
         if total_count == 0:
             self._render_empty_state(container)
         else:
-            scroll_frame = ctk.CTkScrollableFrame(
+            scroll_frame = SmoothScrollableFrame(
                 container,
                 fg_color="transparent",
                 corner_radius=0,

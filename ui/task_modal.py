@@ -13,6 +13,7 @@ import customtkinter as ctk
 from project import determine_quadrant, validate_schedule_time
 from ui import theme
 from ui.scrollable_dropdown import ScrollableOptionMenu
+from ui.smooth_scroll import SmoothScrollableFrame
 
 
 class TaskModal(ctk.CTkToplevel):
@@ -144,7 +145,7 @@ class TaskModal(ctk.CTkToplevel):
         lbl_sub.pack(fill="x")
 
         # 2. Main Scrollable Content Container
-        scroll_frame = ctk.CTkScrollableFrame(self, fg_color="transparent")
+        scroll_frame = SmoothScrollableFrame(self, fg_color="transparent")
         scroll_frame.pack(fill="both", expand=True, padx=18, pady=(8, 8))
 
         # Task Title Field

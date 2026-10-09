@@ -7,6 +7,7 @@ keyboard dismiss, and auto-scroll to selected value.
 from typing import Any, Callable, List, Optional
 import customtkinter as ctk
 from ui import theme
+from ui.smooth_scroll import SmoothScrollableFrame
 
 
 class ScrollableOptionMenu(ctk.CTkFrame):
@@ -141,7 +142,7 @@ class ScrollableOptionMenu(ctk.CTkFrame):
         )
         border_frame.pack(fill="both", expand=True)
 
-        scroll = ctk.CTkScrollableFrame(
+        scroll = SmoothScrollableFrame(
             border_frame,
             fg_color="transparent",
             corner_radius=6,

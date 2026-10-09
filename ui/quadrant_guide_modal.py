@@ -10,6 +10,7 @@ from typing import Any, Dict, Optional
 import customtkinter as ctk
 
 from ui import theme
+from ui.smooth_scroll import SmoothScrollableFrame
 
 
 class QuadrantGuideModal(ctk.CTkToplevel):
@@ -217,7 +218,7 @@ class QuadrantGuideModal(ctk.CTkToplevel):
         divider.pack(fill="x", pady=(0, 14))
 
         # Scrollable container in case of smaller displays
-        scroll_content = ctk.CTkScrollableFrame(
+        scroll_content = SmoothScrollableFrame(
             container,
             fg_color="transparent",
             scrollbar_button_color=theme.BORDER_COLOR,
