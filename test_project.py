@@ -1003,49 +1003,44 @@ def test_unmarking_task_clears_pomodoro_sessions(tmp_path):
     assert database.get_daily_pomodoro_stats(db_path=db_file)["sprints_count"] == 0
 
 
-def test_marking_task_completed_directly_populates_analytics_sessions(tmp_path):
+def test_marking_task_completed_directly_does_not_populate_analytics_sessions(tmp_path):
     """
     Verify that completing a task directly (via checkbox / Mark Completed without pomodoro timer)
-    automatically logs focus sprint and duration data to pomodoro_sessions.
+    does NOT log focus sprint and duration data into pomodoro_sessions or analytics.
+    Focus sprints are strictly logged when using the Pomodoro timer.
     """
     db_file = str(tmp_path / "test_direct_complete.db")
     database.init_db(db_file)
 
-    # 1. Task in Q1_DO with estimated duration 60 mins (2 sprints)
+    # 1. Task in Q1_DO with estimated duration 60 mins (estimated 2 sprints)
     t1_id = database.add_task("Bio Study", "Notes", "Q1_DO", estimated_duration=60, db_path=db_file)
-    # Complete directly via toggle_task_completion
+    # Complete directly via toggle_task_completion (without timer)
     database.toggle_task_completion(t1_id, db_path=db_file)
 
     task1 = database.get_task_by_id(t1_id, db_path=db_file)
     assert task1["is_completed"] == 1
 
+    # Analytics must show 0 sprints and 0 focus minutes because timer was never run
     stats1 = database.get_daily_pomodoro_stats(db_path=db_file)
-    assert stats1["sprints_count"] == 2
-    assert stats1["total_focus_minutes"] == 50  # 2 sprints * 25m = 50m
+    assert stats1["sprints_count"] == 0
+    assert stats1["total_focus_minutes"] == 0
 
     q_dist = database.get_pomodoro_quadrant_distribution(db_path=db_file)
-    assert q_dist["Q1_DO"]["sprints_count"] == 2
-    assert q_dist["Q1_DO"]["focus_minutes"] == 50
+    assert q_dist["Q1_DO"]["sprints_count"] == 0
+    assert q_dist["Q1_DO"]["focus_minutes"] == 0
 
-    # 2. Uncheck task -> clears data
-    database.toggle_task_completion(t1_id, db_path=db_file)
-    stats_cleared = database.get_daily_pomodoro_stats(db_path=db_file)
-    assert stats_cleared["sprints_count"] == 0
-    assert stats_cleared["total_focus_minutes"] == 0
-
-    # 3. 2-hour task (120m) yields 4 sprints * 25m = 100m (1h 40m)
-    t_2h = database.add_task("Chem Lab", "", "Q1_DO", estimated_duration=120, db_path=db_file)
-    database.toggle_task_completion(t_2h, db_path=db_file)
-    stats_2h = database.get_daily_pomodoro_stats(db_path=db_file)
-    assert stats_2h["sprints_count"] == 4
-    assert stats_2h["total_focus_minutes"] == 100  # 4 * 25m = 100m (1h 40m)
-
-    # 4. Task with 0 duration defaults to 1 sprint (25m)
+    # 2. Task with 0 duration also has 0 sprints when completed directly
     t2_id = database.add_task("Quick Chore", "", "Q1_DO", estimated_duration=0, db_path=db_file)
     database.toggle_task_completion(t2_id, db_path=db_file)
     stats2 = database.get_daily_pomodoro_stats(db_path=db_file)
-    assert stats2["sprints_count"] == 5  # 4 from t_2h + 1 from t2_id
-    assert stats2["total_focus_minutes"] == 125  # 100 + 25
+    assert stats2["sprints_count"] == 0
+    assert stats2["total_focus_minutes"] == 0
+
+    # 3. If a pomodoro sprint is actually logged via timer, then it appears in analytics
+    database.log_pomodoro_session(t1_id, 25, "work", db_path=db_file)
+    stats_with_timer = database.get_daily_pomodoro_stats(db_path=db_file)
+    assert stats_with_timer["sprints_count"] == 1
+    assert stats_with_timer["total_focus_minutes"] == 25
 
 
 def test_no_duplicate_sessions_on_repeated_timer_or_mark_completed(tmp_path):
@@ -1097,6 +1092,8 @@ def test_daily_focus_only_counts_scheduled_date_tasks(tmp_path):
         estimated_duration=120,
         db_path=db_file,
     )
+    for _ in range(4):
+        database.log_pomodoro_session(t_oct7, 25, "work", completed_at="2026-10-07T10:00:00", db_path=db_file)
     database.toggle_task_completion(t_oct7, db_path=db_file)
 
     # 2. Task scheduled for Oct 8 (2 hours = 4 sprints)
@@ -1106,6 +1103,8 @@ def test_daily_focus_only_counts_scheduled_date_tasks(tmp_path):
         estimated_duration=120,
         db_path=db_file,
     )
+    for _ in range(4):
+        database.log_pomodoro_session(t_oct8, 25, "work", completed_at="2026-10-08T10:00:00", db_path=db_file)
     database.toggle_task_completion(t_oct8, db_path=db_file)
 
     # 3. Task scheduled for Oct 9 (3 hours = 6 sprints)
@@ -1115,6 +1114,8 @@ def test_daily_focus_only_counts_scheduled_date_tasks(tmp_path):
         estimated_duration=180,
         db_path=db_file,
     )
+    for _ in range(6):
+        database.log_pomodoro_session(t_oct9, 25, "work", completed_at="2026-10-09T10:00:00", db_path=db_file)
     database.toggle_task_completion(t_oct9, db_path=db_file)
 
     # Today's focus for Oct 7 must ONLY count Oct 7 task (4 sprints, 100m)
@@ -1173,8 +1174,10 @@ def test_focus_metrics_strictly_limited_to_red_section_tasks(tmp_path):
     assert len(database.get_pomodoro_sessions(task_id=t_orange, db_path=db_file)) == 0
     assert len(database.get_pomodoro_sessions(task_id=t_blue, db_path=db_file)) == 0
 
-    # 4. Now add and complete a red section task (Q1_DO)
+    # 4. Now add a red section task (Q1_DO) and log 4 sprints via timer
     t_red = database.add_task("Math Exam Prep", "", "Q1_DO", estimated_duration=120, db_path=db_file)
+    for _ in range(4):
+        database.log_pomodoro_session(t_red, 25, "work", db_path=db_file)
     database.toggle_task_completion(t_red, db_path=db_file)
 
     # Red task data must now be present in Deep Work metrics (4 sprints, 100m)

@@ -371,92 +371,11 @@ def update_task(
     cursor.execute(query, tuple(values))
     affected = cursor.rowcount > 0
     if is_completed is not _UNSET:
-        if is_completed:
-            _ensure_completed_task_sessions(cursor, task_id, comp_time)
-        else:
+        if not is_completed:
             cursor.execute("DELETE FROM pomodoro_sessions WHERE task_id = ?", (task_id,))
     conn.commit()
     conn.close()
     return affected
-
-
-def _ensure_completed_task_sessions(cursor: sqlite3.Cursor, task_id: int, completed_at: Optional[str] = None) -> None:
-    """
-    Ensures that when a task is marked as completed directly (e.g. via checkbox, Done,
-    or Mark Task Completed without using the pomodoro timer panel), its focus sprint
-    and duration data are logged into pomodoro_sessions for analytics tracking.
-    Standardizes each Pomodoro focus sprint to 25 minutes so that analytics metrics
-    are 100% consistent across both direct completion and Pomodoro timer usage.
-    Guarantees no duplicate sessions are recorded beyond the task's required sprint target.
-    Prunes any excess sessions if the task was already completed or repeated.
-    """
-    cursor.execute("SELECT estimated_duration, quadrant, due_date FROM tasks WHERE id = ?", (task_id,))
-    t_row = cursor.fetchone()
-    if not t_row:
-        return
-
-    # Deep Work & Pomodoro Focus strictly tracks red section tasks (Q1_DO)
-    if t_row["quadrant"] != "Q1_DO":
-        return
-
-    est_duration = max(0, int(t_row["estimated_duration"] or 0))
-    if est_duration > 0:
-        cycles = est_duration // 130
-        rem = est_duration % 130
-        extra_sprints = round(rem / 30)
-        target_sprints = max(1, cycles * 4 + extra_sprints)
-    else:
-        target_sprints = 1
-
-    cursor.execute(
-        "SELECT id, duration_minutes FROM pomodoro_sessions WHERE task_id = ? AND session_type = 'work' ORDER BY id ASC",
-        (task_id,),
-    )
-    existing_sessions = cursor.fetchall()
-    current_count = len(existing_sessions)
-
-    base_time = completed_at or datetime.now().isoformat()
-    due_str = str(t_row["due_date"]).strip() if t_row["due_date"] else ""
-    if due_str and len(due_str) == 10:
-        time_part = base_time[10:] if len(base_time) > 10 else f"T{datetime.now().strftime('%H:%M:%S.%f')}"
-        session_time = f"{due_str}{time_part}"
-    else:
-        session_time = base_time
-
-    if est_duration > 0:
-        # If duplicate / excess sessions exist beyond target_sprints, prune the extras
-        if current_count > target_sprints:
-            excess_ids = [row["id"] for row in existing_sessions[target_sprints:]]
-            placeholders = ",".join("?" for _ in excess_ids)
-            cursor.execute(f"DELETE FROM pomodoro_sessions WHERE id IN ({placeholders})", tuple(excess_ids))
-            current_count = target_sprints
-
-        # Standardize all existing work sessions for this task to 25m and align completed_at timestamp
-        cursor.execute(
-            "UPDATE pomodoro_sessions SET duration_minutes = 25, completed_at = ? WHERE task_id = ? AND session_type = 'work'",
-            (session_time, task_id),
-        )
-
-        # If sessions are missing, add only the remaining needed sprints (each 25 minutes)
-        if current_count < target_sprints:
-            for _ in range(current_count, target_sprints):
-                cursor.execute(
-                    """
-                    INSERT INTO pomodoro_sessions (task_id, duration_minutes, session_type, completed_at)
-                    VALUES (?, 25, 'work', ?)
-                    """,
-                    (task_id, session_time),
-                )
-    else:
-        # If no estimate was set and no sessions exist yet, record 1 default sprint (25 minutes)
-        if current_count == 0:
-            cursor.execute(
-                """
-                INSERT INTO pomodoro_sessions (task_id, duration_minutes, session_type, completed_at)
-                VALUES (?, 25, 'work', ?)
-                """,
-                (task_id, session_time),
-            )
 
 
 def reorder_tasks(ordered_task_ids: List[int], db_path: Optional[str] = None) -> bool:
@@ -497,10 +416,7 @@ def toggle_task_completion(task_id: int, db_path: Optional[str] = None) -> bool:
         (new_state, completed_at, task_id),
     )
     affected = cursor.rowcount > 0
-    if new_state == 1:
-        # Task marked as completed: ensure focus session data is logged for analytics
-        _ensure_completed_task_sessions(cursor, task_id, completed_at)
-    elif new_state == 0:
+    if new_state == 0:
         # Task unmarked as incomplete: clear focus session data for this task
         cursor.execute("DELETE FROM pomodoro_sessions WHERE task_id = ?", (task_id,))
 
