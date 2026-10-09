@@ -22,73 +22,89 @@ class QuadrantGuideModal(ctk.CTkToplevel):
     QUADRANT_DESCRIPTIONS: Dict[str, Dict[str, Any]] = {
         "Q1_DO": {
             "name": "Q1: Urgent & Important",
-            "tagline": "Do First — Immediate crises & critical deadlines",
+            "tagline": "Do First - Immediate crises, critical deadlines & deep focus execution",
             "analytics_points": [
                 (
-                    "📈 7-Day Velocity Chart",
-                    "Tasks completed here directly drive the daily focus bars in your 7-Day Focus Velocity chart.",
+                    "🍅 Deep Work & Today's Focus (Timer-Exclusive)",
+                    "Running the 25m Pomodoro Focus Timer logs focus sprints directly into Today's Focus (🍅), Lifetime Deep Work, and Active Focus Days in Analytics.",
                 ),
                 (
-                    "🍅 Deep Work & Today's Focus",
-                    "Focus sprints completed for Q1 tasks are logged into your Today's Focus and Lifetime Deep Work stats.",
+                    "📈 7-Day Focus Velocity & Daily Cadence",
+                    "Deep work sprints completed on Q1 tasks populate the daily bar chart in your 7-Day Velocity view, illustrating your daily focus minutes and sprint volume.",
                 ),
                 (
-                    "🎯 High-Impact Execution",
-                    "Reflects your most vital, deadline-driven execution. Keeping this high ensures peak productivity.",
+                    "🏆 Most Focused Tasks Leaderboard",
+                    "Q1 tasks with high time investment compete for top positions on your leaderboard, spotlighting where your deep focus is most heavily concentrated.",
+                ),
+                (
+                    "📅 Weekly vs. All-Time Completion Impact",
+                    "Checking off Q1 tasks directly increases your overall Completion Rate and drives the Q1 distribution bar in both 'This Week' and 'All Time' views.",
                 ),
             ],
         },
         "Q2_SCHEDULE": {
             "name": "Q2: Not Urgent & Important",
-            "tagline": "Schedule — Long-term growth, planning & deep work",
+            "tagline": "Schedule - Strategic goals, planning & proactive pipeline",
             "analytics_points": [
                 (
-                    "🎯 Proactive Focus Score",
-                    "Tasks scheduled and completed here feed your weekly Proactive Pipeline target (4+ upcoming tasks).",
+                    "🎯 Proactive Focus Score (Pipeline Health)",
+                    "Q2 is the sole driver of the Focus Score card in Analytics. Scheduling 4+ upcoming, forward-looking Q2 tasks achieves an optimal 100% pipeline health rating.",
                 ),
                 (
-                    "📊 Matrix Completion Rate",
-                    "Boosts your overall completion rate and balances your Eisenhower quadrant distribution.",
+                    "🛡️ Overdue Task Penalty & Crisis Prevention",
+                    "Delayed tasks are excluded from your proactive score. Addressing Q2 goals on schedule prevents them from turning into urgent, stressful Q1 fires.",
                 ),
                 (
-                    "🛡️ Crisis Prevention",
-                    "Investing time here prevents urgent Q1 firefighting by addressing important priorities early.",
+                    "📅 Weekly Rolling Horizon vs. All-Time Roadmap",
+                    "The 'This Week' view tracks tasks scheduled within your rolling 7-day sprint window, while 'All Time' evaluates your strategic vision and lifetime habits.",
+                ),
+                (
+                    "📊 Matrix Completion & Quadrant Balance",
+                    "Completing Q2 tasks raises your overall Matrix Completion Rate and ensures your productivity is anchored in long-term high-value growth.",
                 ),
             ],
         },
         "Q3_DELEGATE": {
             "name": "Q3: Urgent & Not Important",
-            "tagline": "Delegate — Interruptions, quick requests & busywork",
+            "tagline": "Delegate - Urgent requests, interruptions & handoffs",
             "analytics_points": [
                 (
-                    "📊 Quadrant Breakdown",
-                    "Completed tasks here are tracked in your Eisenhower Quadrant Distribution overview.",
+                    "⏱️ Interruption Audit & Demand Monitoring",
+                    "Tracked in the Eisenhower Quadrant Distribution to measure how much task volume is absorbed by urgent external demands versus your core goals.",
                 ),
                 (
-                    "⏱️ Interruption Audit",
-                    "Helps you monitor how much time is consumed by urgent demands from others versus your core goals.",
+                    "📅 Weekly Sprints vs. All-Time Request Influx",
+                    "Comparing 'This Week' against 'All Time' reveals whether unexpected requests are temporarily spiking in your sprint or dominating your routine.",
                 ),
                 (
-                    "🤝 Effective Delegation",
-                    "Checking off tasks here reflects resolved administrative handoffs and quick requests.",
+                    "🤝 Effective Delegation & Handoff Throughput",
+                    "Checking off Q3 tasks reflects quickly resolved administrative handoffs, delegated duties, and brief peer responses.",
+                ),
+                (
+                    "📊 Matrix Completion Rate Contribution",
+                    "Resolving Q3 tasks contributes to your total completed task count and progress rates without pulling deep focus time away from Q1 and Q2.",
                 ),
             ],
         },
         "Q4_ELIMINATE": {
             "name": "Q4: Not Urgent & Not Important",
-            "tagline": "Eliminate — Distractions, time wasters & clutter",
+            "tagline": "Eliminate - Distractions, low-value chores & clutter",
             "analytics_points": [
                 (
-                    "📊 Matrix Distribution",
-                    "Completed tasks here are accounted for in your total completed task count and progress rates.",
+                    "🧹 Decluttering Progress & Waste Audit",
+                    "Tracked in the Eisenhower Quadrant Distribution to audit low-leverage activities. A healthy productivity profile keeps your Q4 footprint minimal.",
                 ),
                 (
-                    "🧹 Decluttering Progress",
-                    "Logging tasks here helps audit low-value activities and measure how effectively you eliminate waste.",
+                    "🧠 Cognitive Bandwidth & Mental Clarity",
+                    "Clearing non-urgent, non-important tasks eliminates backlog fatigue, freeing mental clarity for high-leverage Q1 sprints and Q2 planning.",
                 ),
                 (
-                    "🧠 Mental Clarity",
-                    "Clearing out low-priority items frees cognitive bandwidth for high-leverage Q1 and Q2 work.",
+                    "📅 Weekly vs. All-Time Clutter Ratio",
+                    "The 'This Week' view catches recent distractions entering your queue, while 'All Time' reflects your progress in pruning habitual time-wasters.",
+                ),
+                (
+                    "📥 Clean Board with Archive Integration",
+                    "Once finished, archive Q4 tasks (📥) to remove visual clutter from your matrix while preserving full historical completion accuracy in Analytics.",
                 ),
             ],
         },
@@ -114,11 +130,14 @@ class QuadrantGuideModal(ctk.CTkToplevel):
             self.q_key, self.QUADRANT_DESCRIPTIONS["Q1_DO"]
         )
 
-        self.title(f"Prior — {self.info['title']} Guide")
+        self.title(f"Prior - {self.info['title']} Guide")
         theme.apply_prior_icon(self)
 
         self._position_modal(master)
         self._build_ui()
+
+        # Keyboard shortcuts
+        self.bind("<Escape>", lambda e: self.destroy())
 
         # Reveal smoothly
         self.after(20, self._reveal_modal)
@@ -129,8 +148,8 @@ class QuadrantGuideModal(ctk.CTkToplevel):
             screen_w = self.winfo_screenwidth()
             screen_h = self.winfo_screenheight()
 
-            w = min(520, max(420, screen_w - 40))
-            h = min(620, max(460, screen_h - 80))
+            w = min(530, max(420, screen_w - 40))
+            h = min(660, max(460, screen_h - 80))
 
             x = master.winfo_x() + (master.winfo_width() - w) // 2
             y = master.winfo_y() + (master.winfo_height() - h) // 2
@@ -141,7 +160,7 @@ class QuadrantGuideModal(ctk.CTkToplevel):
             self.geometry(f"{w}x{h}+{pos_x}+{pos_y}")
             self.minsize(min(420, w), min(460, h))
         except Exception:
-            self.geometry("520x620")
+            self.geometry("530x660")
 
     def _reveal_modal(self) -> None:
         """Smoothly reveals the window and captures focus."""
@@ -198,20 +217,6 @@ class QuadrantGuideModal(ctk.CTkToplevel):
             anchor="w",
         )
         lbl_sub.pack(fill="x")
-
-        btn_close = ctk.CTkButton(
-            header_row,
-            text="✕",
-            width=28,
-            height=28,
-            corner_radius=6,
-            fg_color="transparent",
-            hover_color=theme.BG_CARD_HOVER,
-            text_color=theme.TEXT_SECONDARY,
-            font=(theme.FONT_FAMILY, 12, "bold"),
-            command=self.destroy,
-        )
-        btn_close.pack(side="right", anchor="n")
 
         # Divider
         divider = ctk.CTkFrame(container, height=1, fg_color=theme.BORDER_COLOR)
@@ -327,7 +332,7 @@ class QuadrantGuideModal(ctk.CTkToplevel):
 
         lbl_chk_desc = ctk.CTkLabel(
             text_check_box,
-            text="Checking off a task marks it done and immediately logs its completion and Pomodoro focus records into your local analytics database.",
+            text="Checking off a task marks it done, increases your overall Completion Rate, and updates your quadrant distribution across both This Week and All Time Analytics.",
             font=(theme.FONT_FAMILY, 11),
             text_color=theme.TEXT_SECONDARY,
             anchor="w",
