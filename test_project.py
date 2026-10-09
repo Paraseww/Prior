@@ -16,6 +16,7 @@ from project import (
     calculate_recommended_sprints,
     determine_quadrant,
     filter_tasks,
+    filter_tasks_by_scope,
     format_due_status,
     format_focus_duration,
     format_timer_display,
@@ -1272,6 +1273,124 @@ def test_archive_task_preserves_analytics_and_sessions(tmp_path):
     stats = database.get_daily_pomodoro_stats(quadrant="Q1_DO", db_path=db_file)
     assert stats["sprints_count"] == 2
     assert stats["total_focus_minutes"] == 50
+
+
+def test_filter_tasks_by_scope():
+    """Verify that filter_tasks_by_scope filters tasks by 7-day week window vs all-time correctly."""
+    # 1. Edge cases with empty or None input
+    assert filter_tasks_by_scope(None) == []
+    assert filter_tasks_by_scope([], scope="week") == []
+    assert filter_tasks_by_scope([], scope="all") == []
+
+    # Reference date: Friday 2026-10-09
+    ref_date = "2026-10-09"
+    # Past 7 days: 2026-10-03 to 2026-10-09
+    # Current week end (Sunday): 2026-10-11
+
+    tasks = [
+        # Completed recently (within 7 days) -> INCLUDED in week
+        {
+            "id": 1,
+            "title": "Done Recently",
+            "is_completed": 1,
+            "completed_at": "2026-10-08T14:30:00",
+            "due_date": "2026-10-08",
+            "created_at": "2026-10-05T10:00:00",
+        },
+        # Completed 2 weeks ago -> EXCLUDED from week, INCLUDED in all
+        {
+            "id": 2,
+            "title": "Done 2 Weeks Ago",
+            "is_completed": 1,
+            "completed_at": "2026-09-25T11:00:00",
+            "due_date": "2026-09-25",
+            "created_at": "2026-09-20T10:00:00",
+        },
+        # Active task due today -> INCLUDED in week
+        {
+            "id": 3,
+            "title": "Due Today",
+            "is_completed": 0,
+            "completed_at": None,
+            "due_date": "2026-10-09",
+            "created_at": "2026-10-08T10:00:00",
+        },
+        # Active task due this Sunday (upcoming sprint) -> INCLUDED in week
+        {
+            "id": 4,
+            "title": "Due Sunday",
+            "is_completed": 0,
+            "completed_at": None,
+            "due_date": "2026-10-11",
+            "created_at": "2026-10-09T08:00:00",
+        },
+        # Active task due next month -> EXCLUDED from week, INCLUDED in all
+        {
+            "id": 5,
+            "title": "Due Next Month",
+            "is_completed": 0,
+            "completed_at": None,
+            "due_date": "2026-11-15",
+            "created_at": "2026-10-09T08:00:00",
+        },
+        # Active task overdue by 2 days -> INCLUDED in week
+        {
+            "id": 6,
+            "title": "Overdue Recently",
+            "is_completed": 0,
+            "completed_at": None,
+            "due_date": "2026-10-07",
+            "created_at": "2026-10-05T08:00:00",
+        },
+        # Active task overdue by 3 weeks -> EXCLUDED from week, INCLUDED in all
+        {
+            "id": 7,
+            "title": "Overdue Ancient",
+            "is_completed": 0,
+            "completed_at": None,
+            "due_date": "2026-09-18",
+            "created_at": "2026-09-15T08:00:00",
+        },
+        # Active unscheduled task created 2 days ago -> INCLUDED in week
+        {
+            "id": 8,
+            "title": "New Unscheduled",
+            "is_completed": 0,
+            "completed_at": None,
+            "due_date": None,
+            "created_at": "2026-10-07T12:00:00",
+        },
+        # Active unscheduled task created 1 month ago -> EXCLUDED from week, INCLUDED in all
+        {
+            "id": 9,
+            "title": "Old Backlog Unscheduled",
+            "is_completed": 0,
+            "completed_at": None,
+            "due_date": None,
+            "created_at": "2026-09-01T12:00:00",
+        },
+    ]
+
+    # Test 'all' scope: returns all 9 tasks
+    all_res = filter_tasks_by_scope(tasks, scope="all", reference_date_str=ref_date)
+    assert len(all_res) == 9
+    assert [t["id"] for t in all_res] == [1, 2, 3, 4, 5, 6, 7, 8, 9]
+
+    # Test 'week' scope: only includes tasks 1, 3, 4, 6, 8
+    week_res = filter_tasks_by_scope(tasks, scope="week", reference_date_str=ref_date)
+    assert len(week_res) == 5
+    week_ids = [t["id"] for t in week_res]
+    assert 1 in week_ids  # Done recently
+    assert 3 in week_ids  # Due today
+    assert 4 in week_ids  # Due Sunday
+    assert 6 in week_ids  # Overdue recently
+    assert 8 in week_ids  # New unscheduled
+
+    assert 2 not in week_ids  # Done 2 weeks ago
+    assert 5 not in week_ids  # Due next month
+    assert 7 not in week_ids  # Ancient overdue
+    assert 9 not in week_ids  # Ancient backlog
+
 
 
 

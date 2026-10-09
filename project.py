@@ -288,6 +288,92 @@ def calculate_matrix_stats(
     }
 
 
+def filter_tasks_by_scope(
+    tasks: Optional[List[Dict[str, Any]]],
+    scope: str = "week",
+    reference_date_str: Optional[str] = None,
+) -> List[Dict[str, Any]]:
+    """
+    Filters tasks according to the selected time scope ('week' or 'all').
+
+    For 'week' (rolling 7-day sprint window + current week schedule):
+    A task belongs to 'This Week' if:
+      - It was completed within the past 7 days (or current week).
+      - OR it is active and due within the past 7 days (recently overdue) or scheduled for today/upcoming this week.
+      - OR it is active with no due date but was created within the past 7 days.
+    Any task completed outside this window, or scheduled far in the future/past, is excluded.
+
+    For 'all':
+      Returns all tasks in the provided list.
+
+    :param tasks: List of task dictionaries.
+    :param scope: 'week' for rolling sprint week or 'all' for all-time.
+    :param reference_date_str: Optional reference date in 'YYYY-MM-DD' format (defaults to today).
+    :return: Filtered list of task dictionaries.
+    """
+    if not tasks:
+        return []
+
+    if scope != "week":
+        return list(tasks)
+
+    # Determine reference date
+    if reference_date_str and isinstance(reference_date_str, str):
+        try:
+            ref_date = datetime.strptime(reference_date_str.strip()[:10], "%Y-%m-%d").date()
+        except ValueError:
+            ref_date = date.today()
+    else:
+        ref_date = date.today()
+
+    # Define the week window:
+    # - Past cutoff: 6 days ago (7-day rolling window ending today)
+    past_cutoff = ref_date - timedelta(days=6)
+    # - Future cutoff: End of current calendar week (Sunday), or at least ref_date + 6 days
+    weekday = ref_date.weekday()  # Monday = 0, Sunday = 6
+    end_of_calendar_week = ref_date + timedelta(days=(6 - weekday))
+    future_cutoff = max(end_of_calendar_week, ref_date + timedelta(days=6))
+
+    def _extract_date(val: Any) -> Optional[date]:
+        if not val:
+            return None
+        if isinstance(val, datetime):
+            return val.date()
+        if isinstance(val, date):
+            return val
+        if isinstance(val, str) and val.strip():
+            clean = val.strip()[:10]
+            try:
+                return datetime.strptime(clean, "%Y-%m-%d").date()
+            except ValueError:
+                return None
+        return None
+
+    filtered: List[Dict[str, Any]] = []
+    for task in tasks:
+        is_completed = bool(task.get("is_completed", 0))
+        comp_date = _extract_date(task.get("completed_at"))
+        due_date = _extract_date(task.get("due_date"))
+        created_date = _extract_date(task.get("created_at"))
+
+        if is_completed:
+            # Check completion date, or fallback to due_date / created_date if completed_at is null
+            check_date = comp_date or due_date or created_date
+            if check_date and past_cutoff <= check_date <= future_cutoff:
+                filtered.append(task)
+        else:
+            # Active / pending task
+            if due_date:
+                if past_cutoff <= due_date <= future_cutoff:
+                    filtered.append(task)
+            else:
+                # No due date: check if created within the past 7 days
+                if created_date and past_cutoff <= created_date <= future_cutoff:
+                    filtered.append(task)
+
+    return filtered
+
+
 def is_task_delayed(
     task: Optional[Dict[str, Any]],
     current_dt: Optional[datetime] = None,

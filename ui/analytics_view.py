@@ -9,7 +9,7 @@ from typing import Any, Dict, List
 import customtkinter as ctk
 
 import database
-from project import calculate_matrix_stats, format_focus_duration
+from project import calculate_matrix_stats, filter_tasks_by_scope, format_focus_duration
 from ui import theme
 from ui.dot_pattern import DottedScrollableFrame
 
@@ -24,12 +24,11 @@ class AnalyticsView(DottedScrollableFrame):
     def __init__(self, master: Any, tasks: List[Dict[str, Any]], **kwargs) -> None:
         super().__init__(master, **kwargs)
         self.tasks = tasks
+        self.time_scope: str = "week"
 
         self._build_ui()
 
     def _build_ui(self) -> None:
-        stats = calculate_matrix_stats(self.tasks)
-
         # Main Container
         container = ctk.CTkFrame(self, fg_color="transparent")
         container.pack(fill="both", expand=True, padx=20, pady=15)
@@ -56,148 +55,57 @@ class AnalyticsView(DottedScrollableFrame):
         # ========================================================================
         # Section 1: Eisenhower Matrix & Task Overview
         # ========================================================================
+        sec1_header_row = ctk.CTkFrame(container, fg_color="transparent")
+        sec1_header_row.pack(fill="x", pady=(0, 10))
+
         sec1_header = ctk.CTkLabel(
-            container,
+            sec1_header_row,
             text="📊 Eisenhower Matrix & Task Overview",
             font=(theme.FONT_DISPLAY, 16, "bold"),
             text_color=theme.TEXT_PRIMARY,
             anchor="w",
         )
-        sec1_header.pack(fill="x", pady=(0, 10))
+        sec1_header.pack(side="left")
 
-        # Top 3 Metrics Cards Row
-        cards_row = ctk.CTkFrame(container, fg_color="transparent")
-        cards_row.pack(fill="x", pady=(0, 14))
-
-        # 1. Total Tasks Card
-        card_total = self._create_metric_card(
-            cards_row,
-            title="Total Tasks",
-            value=str(stats["total_tasks"]),
-            subtitle=f"{stats['completed_tasks']} completed • {stats['pending_tasks']} pending",
-            accent_color=theme.ACCENT_PRIMARY,
+        # Segmented Time Toggle [ 📅 This Week ]  [ 🌐 All Time ]
+        toggle_box = ctk.CTkFrame(
+            sec1_header_row,
+            fg_color=("#EAE6DF", "#1E1E1E"),
+            corner_radius=18,
+            border_width=1,
+            border_color=theme.BORDER_COLOR,
+            height=34,
         )
-        card_total.pack(side="left", fill="both", expand=True, padx=(0, 10))
+        toggle_box.pack(side="right")
 
-        # 2. Completion Rate Card
-        card_comp = self._create_metric_card(
-            cards_row,
-            title="Completion Rate",
-            value=f"{stats['completion_rate']}%",
-            subtitle="Overall tasks completed",
-            accent_color="#10B981",
+        self.btn_scope_week = ctk.CTkButton(
+            toggle_box,
+            text="📅 This Week",
+            width=100,
+            height=26,
+            corner_radius=14,
+            font=(theme.FONT_FAMILY, 12, "bold"),
+            command=lambda: self._set_time_scope("week"),
         )
-        card_comp.pack(side="left", fill="both", expand=True, padx=(0, 10))
+        self.btn_scope_week.pack(side="left", padx=(3, 2), pady=3)
 
-        # 3. Proactive Focus Score Card (Weekly Pipeline Health Target)
-        proactive_q2 = stats.get("proactive_q2_tasks", 0)
-        target_q2 = stats.get("target_q2_tasks", 4)
-        focus_score = stats.get("focus_score", 0.0)
-
-        if proactive_q2 == 0:
-            focus_sub = f"0/{target_q2} upcoming • Schedule next goals"
-            focus_accent = "#94A3B8"
-        elif proactive_q2 == 1:
-            focus_sub = f"1/{target_q2} upcoming • Getting started"
-            focus_accent = "#3B82F6"
-        elif proactive_q2 == 2:
-            focus_sub = f"2/{target_q2} upcoming • Building momentum"
-            focus_accent = "#3B82F6"
-        elif proactive_q2 == 3:
-            focus_sub = f"3/{target_q2} upcoming • Solid weekly plan"
-            focus_accent = "#3B82F6"
-        else:
-            focus_sub = f"{proactive_q2}/{target_q2} upcoming • Optimal pipeline 🎯"
-            focus_accent = "#10B981"
-
-        card_focus = self._create_metric_card(
-            cards_row,
-            title="Focus Score (Q2 Schedule)",
-            value=f"{focus_score}%",
-            subtitle=focus_sub,
-            accent_color=focus_accent,
+        self.btn_scope_all = ctk.CTkButton(
+            toggle_box,
+            text="🌐 All Time",
+            width=90,
+            height=26,
+            corner_radius=14,
+            font=(theme.FONT_FAMILY, 12, "bold"),
+            command=lambda: self._set_time_scope("all"),
         )
-        card_focus.pack(side="left", fill="both", expand=True)
+        self.btn_scope_all.pack(side="left", padx=(2, 3), pady=3)
 
-        # Quadrant Active Task Distribution Cards
-        q_grid = ctk.CTkFrame(container, fg_color="transparent")
-        q_grid.pack(fill="x", pady=(0, 20))
+        # Dynamic Section 1 Container (Cards & Quadrants)
+        self.sec1_content = ctk.CTkFrame(container, fg_color="transparent")
+        self.sec1_content.pack(fill="x", pady=(0, 10))
 
-        quadrant_keys = ["Q1_DO", "Q2_SCHEDULE", "Q3_DELEGATE", "Q4_ELIMINATE"]
-        for q_key in quadrant_keys:
-            info = theme.QUADRANTS[q_key]
-            active_count = stats["quadrant_counts"].get(q_key, 0)
-            completed_count = stats.get("quadrant_completed", {}).get(q_key, 0)
-            total_in_q = active_count + completed_count
-            comp_pct = round((completed_count / total_in_q) * 100.0, 1) if total_in_q > 0 else 0.0
-
-            q_card = ctk.CTkFrame(
-                q_grid,
-                fg_color=theme.BG_CARD,
-                corner_radius=12,
-                border_width=1,
-                border_color=info["border"],
-            )
-            q_card.pack(fill="x", pady=5)
-
-            q_inner = ctk.CTkFrame(q_card, fg_color="transparent")
-            q_inner.pack(fill="x", padx=16, pady=(10, 6))
-
-            dot = ctk.CTkFrame(q_inner, width=12, height=12, corner_radius=6, fg_color=info["color"])
-            dot.pack(side="left", padx=(0, 10))
-
-            lbl_q_name = ctk.CTkLabel(
-                q_inner,
-                text=info["title"],
-                font=(theme.FONT_FAMILY, 14, "bold"),
-                text_color=theme.TEXT_PRIMARY,
-            )
-            lbl_q_name.pack(side="left")
-
-            lbl_q_sub = ctk.CTkLabel(
-                q_inner,
-                text=f"— {info['subtitle'].split('—')[-1].strip()}",
-                font=(theme.FONT_FAMILY, 12),
-                text_color=theme.TEXT_SECONDARY,
-            )
-            lbl_q_sub.pack(side="left", padx=(6, 0))
-
-            # Dynamic text badge accounting for both active and completed tasks
-            if total_in_q == 0:
-                count_text = "0 tasks"
-                text_col = theme.TEXT_MUTED
-                bar_val = 0.0
-            elif active_count == 0 and completed_count > 0:
-                count_text = f"✓ All {completed_count} completed (100%)"
-                text_col = ("#065F46", "#34D399")
-                bar_val = 1.0
-            elif active_count > 0 and completed_count > 0:
-                count_text = f"{active_count} active • {completed_count} done ({comp_pct}%)"
-                text_col = info["text"][0] if ctk.get_appearance_mode() == "Light" else info["text"][1]
-                bar_val = comp_pct / 100.0
-            else:
-                count_text = f"{active_count} active tasks"
-                text_col = info["text"][0] if ctk.get_appearance_mode() == "Light" else info["text"][1]
-                bar_val = 0.0
-
-            lbl_q_count = ctk.CTkLabel(
-                q_inner,
-                text=count_text,
-                font=(theme.FONT_FAMILY, 13, "bold"),
-                text_color=text_col,
-            )
-            lbl_q_count.pack(side="right")
-
-            # Proportional mini progress bar
-            bar_track = ctk.CTkProgressBar(
-                q_card,
-                height=4,
-                corner_radius=2,
-                fg_color=("#E5E0D8", "#222222"),
-                progress_color="#10B981" if (active_count == 0 and completed_count > 0) else info["color"],
-            )
-            bar_track.pack(fill="x", padx=16, pady=(0, 8))
-            bar_track.set(bar_val)
+        self._update_toggle_buttons()
+        self._render_section1_content()
 
         # ========================================================================
         # Section 2: Deep Work & Pomodoro Focus (Chunk 4 Elevation)
@@ -530,9 +438,193 @@ class AnalyticsView(DottedScrollableFrame):
 
         return card
 
+    def _set_time_scope(self, scope: str) -> None:
+        if self.time_scope == scope:
+            return
+        self.time_scope = scope
+        self._update_toggle_buttons()
+        self._render_section1_content()
+
+    def _update_toggle_buttons(self) -> None:
+        if self.time_scope == "week":
+            self.btn_scope_week.configure(
+                fg_color=theme.ACCENT_PRIMARY,
+                text_color="#FFFFFF",
+                hover_color=theme.ACCENT_HOVER,
+            )
+            self.btn_scope_all.configure(
+                fg_color="transparent",
+                text_color=theme.TEXT_SECONDARY,
+                hover_color=("#D5D0C8", "#2A2A2A"),
+            )
+        else:
+            self.btn_scope_week.configure(
+                fg_color="transparent",
+                text_color=theme.TEXT_SECONDARY,
+                hover_color=("#D5D0C8", "#2A2A2A"),
+            )
+            self.btn_scope_all.configure(
+                fg_color=theme.ACCENT_PRIMARY,
+                text_color="#FFFFFF",
+                hover_color=theme.ACCENT_HOVER,
+            )
+
+    def _render_section1_content(self) -> None:
+        for child in self.sec1_content.winfo_children():
+            child.destroy()
+
+        filtered_tasks = filter_tasks_by_scope(self.tasks, scope=self.time_scope)
+        stats = calculate_matrix_stats(filtered_tasks)
+
+        # Top 3 Metrics Cards Row
+        cards_row = ctk.CTkFrame(self.sec1_content, fg_color="transparent")
+        cards_row.pack(fill="x", pady=(0, 14))
+
+        # 1. Total Tasks Card
+        total_sub = (
+            f"{stats['completed_tasks']} completed • {stats['pending_tasks']} pending (This Week)"
+            if self.time_scope == "week"
+            else f"{stats['completed_tasks']} completed • {stats['pending_tasks']} pending (All Time)"
+        )
+        card_total = self._create_metric_card(
+            cards_row,
+            title="Total Tasks",
+            value=str(stats["total_tasks"]),
+            subtitle=total_sub,
+            accent_color=theme.ACCENT_PRIMARY,
+        )
+        card_total.pack(side="left", fill="both", expand=True, padx=(0, 10))
+
+        # 2. Completion Rate Card
+        comp_sub = (
+            "Weekly tasks completed"
+            if self.time_scope == "week"
+            else "Overall tasks completed"
+        )
+        card_comp = self._create_metric_card(
+            cards_row,
+            title="Completion Rate",
+            value=f"{stats['completion_rate']}%",
+            subtitle=comp_sub,
+            accent_color="#10B981",
+        )
+        card_comp.pack(side="left", fill="both", expand=True, padx=(0, 10))
+
+        # 3. Proactive Focus Score Card (Weekly Pipeline Health Target)
+        proactive_q2 = stats.get("proactive_q2_tasks", 0)
+        target_q2 = stats.get("target_q2_tasks", 4)
+        focus_score = stats.get("focus_score", 0.0)
+
+        if proactive_q2 == 0:
+            focus_sub = f"0/{target_q2} upcoming • Schedule next goals"
+            focus_accent = "#94A3B8"
+        elif proactive_q2 == 1:
+            focus_sub = f"1/{target_q2} upcoming • Getting started"
+            focus_accent = "#3B82F6"
+        elif proactive_q2 == 2:
+            focus_sub = f"2/{target_q2} upcoming • Building momentum"
+            focus_accent = "#3B82F6"
+        elif proactive_q2 == 3:
+            focus_sub = f"3/{target_q2} upcoming • Solid weekly plan"
+            focus_accent = "#3B82F6"
+        else:
+            focus_sub = f"{proactive_q2}/{target_q2} upcoming • Optimal pipeline 🎯"
+            focus_accent = "#10B981"
+
+        card_focus = self._create_metric_card(
+            cards_row,
+            title="Focus Score (Q2 Schedule)",
+            value=f"{focus_score}%",
+            subtitle=focus_sub,
+            accent_color=focus_accent,
+        )
+        card_focus.pack(side="left", fill="both", expand=True)
+
+        # Quadrant Active Task Distribution Cards
+        q_grid = ctk.CTkFrame(self.sec1_content, fg_color="transparent")
+        q_grid.pack(fill="x", pady=(0, 10))
+
+        quadrant_keys = ["Q1_DO", "Q2_SCHEDULE", "Q3_DELEGATE", "Q4_ELIMINATE"]
+        for q_key in quadrant_keys:
+            info = theme.QUADRANTS[q_key]
+            active_count = stats["quadrant_counts"].get(q_key, 0)
+            completed_count = stats.get("quadrant_completed", {}).get(q_key, 0)
+            total_in_q = active_count + completed_count
+            comp_pct = round((completed_count / total_in_q) * 100.0, 1) if total_in_q > 0 else 0.0
+
+            q_card = ctk.CTkFrame(
+                q_grid,
+                fg_color=theme.BG_CARD,
+                corner_radius=12,
+                border_width=1,
+                border_color=info["border"],
+            )
+            q_card.pack(fill="x", pady=5)
+
+            q_inner = ctk.CTkFrame(q_card, fg_color="transparent")
+            q_inner.pack(fill="x", padx=16, pady=(10, 6))
+
+            dot = ctk.CTkFrame(q_inner, width=12, height=12, corner_radius=6, fg_color=info["color"])
+            dot.pack(side="left", padx=(0, 10))
+
+            lbl_q_name = ctk.CTkLabel(
+                q_inner,
+                text=info["title"],
+                font=(theme.FONT_FAMILY, 14, "bold"),
+                text_color=theme.TEXT_PRIMARY,
+            )
+            lbl_q_name.pack(side="left")
+
+            lbl_q_sub = ctk.CTkLabel(
+                q_inner,
+                text=f"— {info['subtitle'].split('—')[-1].strip()}",
+                font=(theme.FONT_FAMILY, 12),
+                text_color=theme.TEXT_SECONDARY,
+            )
+            lbl_q_sub.pack(side="left", padx=(6, 0))
+
+            # Dynamic text badge accounting for both active and completed tasks
+            if total_in_q == 0:
+                count_text = "0 tasks"
+                text_col = theme.TEXT_MUTED
+                bar_val = 0.0
+            elif active_count == 0 and completed_count > 0:
+                count_text = f"✓ All {completed_count} completed (100%)"
+                text_col = ("#065F46", "#34D399")
+                bar_val = 1.0
+            elif active_count > 0 and completed_count > 0:
+                count_text = f"{active_count} active • {completed_count} done ({comp_pct}%)"
+                text_col = info["text"][0] if ctk.get_appearance_mode() == "Light" else info["text"][1]
+                bar_val = comp_pct / 100.0
+            else:
+                count_text = f"{active_count} active tasks"
+                text_col = info["text"][0] if ctk.get_appearance_mode() == "Light" else info["text"][1]
+                bar_val = 0.0
+
+            lbl_q_count = ctk.CTkLabel(
+                q_inner,
+                text=count_text,
+                font=(theme.FONT_FAMILY, 13, "bold"),
+                text_color=text_col,
+            )
+            lbl_q_count.pack(side="right")
+
+            # Proportional mini progress bar
+            bar_track = ctk.CTkProgressBar(
+                q_card,
+                height=4,
+                corner_radius=2,
+                fg_color=("#E5E0D8", "#222222"),
+                progress_color="#10B981" if (active_count == 0 and completed_count > 0) else info["color"],
+            )
+            bar_track.pack(fill="x", padx=16, pady=(0, 8))
+            bar_track.set(bar_val)
+
     def refresh_tasks(self, tasks: List[Dict[str, Any]]) -> None:
         """Refreshes matrix statistics and focus analytics with fresh task & session data."""
         self.tasks = tasks
+        saved_scope = getattr(self, "time_scope", "week")
         for child in self.winfo_children():
             child.destroy()
+        self.time_scope = saved_scope
         self._build_ui()
