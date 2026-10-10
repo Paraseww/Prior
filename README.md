@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="assets/icon.png" alt="Prior Logo" width="128" height="128">
+</p>
+
 # Prior - Eisenhower Matrix Desktop Task Manager
 
 #### Video Demo: <YOUTUBE_URL>
@@ -22,11 +26,13 @@ Prior was built to solve this friction. By forcing a two-dimensional decision on
 
 ### UI Prototyping & Wireframe Design
 
-Prior's interface originated from early wireframe prototypes in Figma to map out intuitive quadrant interactions, task cards, time estimation, and the Pomodoro focus workflow before building the custom UI components.
+> **Designed & Wireframed with [Balsamiq](https://balsamiq.com/)**
 
-![Prior Figma Wireframes](assets/wireframes/figma%20collage.png)
+Prior was built with a deliberate design-first approach. Before writing any frontend or database code, extensive effort was invested into architecting and prototyping the entire user experience using **Balsamiq**. This wireframing phase allowed for rapid iteration on visual hierarchy, quadrant layout balance, task creation ergonomics, and seamless Pomodoro workflow integration.
 
-*Figma wireframe collage illustrating the initial interface architecture: four-quadrant matrix layout, task creation modals, analytics breakdown, and the quadrant guide.*
+![Prior Balsamiq Wireframes](assets/wireframes/balsamiq_wireframes.png)
+
+*Comprehensive wireframe collage crafted using Balsamiq, establishing the complete UX/UI architecture and interaction blueprint prior to implementation.*
 
 ---
 
@@ -54,7 +60,7 @@ Prior/
 │   ├── icon.ico             # Application icon
 │   ├── icon.png             # High-res PNG logo
 │   └── wireframes/          # UI prototyping collages and diagrams
-│       └── figma collage.png
+│       └── balsamiq_wireframes.png
 └── ui/                      # Modular CustomTkinter GUI package
     ├── app.py               # Main application window, lifecycle & IPC server
     ├── theme.py             # Design tokens, quadrant color palettes & DWM titlebar hooks
