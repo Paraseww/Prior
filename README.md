@@ -18,11 +18,6 @@ Modern professionals and students frequently suffer from "urgency bias" — the 
 
 Prior was built to solve this friction. By forcing a two-dimensional decision on every task — **Is it Urgent?** and **Is it Important?** — Prior categorizes work into four distinct operational quadrants:
 
-1. 🔴 **Q1: Do First (Urgent & Important)** &nbsp;`#EF4444`&nbsp; — Immediate crises, critical bugs, and hard deadlines.
-2. 🟢 **Q2: Schedule (Not Urgent & Important)** &nbsp;`#10B981`&nbsp; — Deep work, long-term learning, strategic planning, and self-care.
-3. 🟡 **Q3: Delegate (Urgent & Not Important)** &nbsp;`#F59E0B`&nbsp; — Interruptions, quick requests, and administrative overhead.
-4. 🔵 **Q4: Eliminate (Not Urgent & Not Important)** &nbsp;`#3B82F6`&nbsp; — Time-wasters, trivia, and low-value tasks safe to drop.
-
 | Quadrant | Priority & Action | Color Code | Focus & Typical Tasks |
 | :---: | :--- | :---: | :--- |
 | 🔴 | **Q1: Do First** *(Urgent & Important)* | `#EF4444` | Immediate crises, critical bugs, and hard deadlines |
