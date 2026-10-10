@@ -1,6 +1,7 @@
 <div align="center">
-  <img src="assets/icon.png" alt="Prior Logo" width="128" height="128">
-  <h1>Prior</h1>
+  <h1>
+    <img src="assets/icon.png" alt="Prior Logo" width="72" height="72" align="absmiddle" style="vertical-align: middle;">&nbsp; Prior
+  </h1>
   <p><strong>Eisenhower Matrix Desktop Task Manager</strong></p>
 </div>
 
