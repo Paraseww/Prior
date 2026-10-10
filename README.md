@@ -1,7 +1,9 @@
 <div align="center">
-  <h1>
-    <img src="assets/icon.png" alt="Prior Logo" width="72" height="72" align="absmiddle" style="vertical-align: middle;">&nbsp; Prior
-  </h1>
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/prior_brand_dark.png">
+    <source media="(prefers-color-scheme: light)" srcset="assets/prior_brand_light.png">
+    <img src="assets/prior_brand_dark.png" alt="Prior" height="110">
+  </picture>
   <p><strong>Eisenhower Matrix Desktop Task Manager</strong></p>
 </div>
 
@@ -15,9 +17,9 @@
 
 ### 🎯 The Problem & Motivation
 
-Modern professionals and students frequently suffer from "urgency bias" — the psychological tendency to tackle whatever feels urgent at the expense of tasks that are truly important for long-term growth. Standard to-do list applications exacerbate this issue by presenting flat, unprioritized lists where a critical project deadline looks identical to a routine errand.
+Modern professionals and students frequently suffer from "urgency bias" - the psychological tendency to tackle whatever feels urgent at the expense of tasks that are truly important for long-term growth. Standard to-do list applications exacerbate this issue by presenting flat, unprioritized lists where a critical project deadline looks identical to a routine errand.
 
-Prior was built to solve this friction. By forcing a two-dimensional decision on every task — **Is it Urgent?** and **Is it Important?** — Prior categorizes work into four distinct operational quadrants:
+Prior was built to solve this friction. By forcing a two-dimensional decision on every task.**Is it Urgent?** and **Is it Important?**. Prior categorizes work into four distinct operational quadrants:
 
 | Quadrant | Priority & Action | Color Code | Focus & Typical Tasks |
 | :---: | :--- | :---: | :--- |
@@ -63,6 +65,9 @@ Prior/
 ├── assets/                  # Icons, fonts, and wireframe assets
 │   ├── icon.ico             # Application icon
 │   ├── icon.png             # High-res PNG logo
+│   ├── prior_brand_dark.png # High-res hero brand banner (Dark mode)
+│   ├── prior_brand_light.png# High-res hero brand banner (Light mode)
+│   ├── fonts/               # Bundled Comic Neue typeface assets
 │   └── wireframes/          # UI prototyping collages and diagrams
 │       └── balsamiq_wireframes.png
 └── ui/                      # Modular CustomTkinter GUI package
@@ -85,12 +90,14 @@ Prior/
 #### 🔍 Explanation of Core Files
 
 * 🚀 **`project.py`**: The application entry point containing `main()` and core standalone business logic functions:
+
   * `determine_quadrant(is_urgent: bool, is_important: bool) -> str`: Pure classifier determining quadrant assignment.
   * `filter_tasks(tasks, search_query, quadrant_filter, show_completed, include_archived) -> list`: Multi-criteria search and filter engine.
   * `calculate_drop_dead_time(due_date_str, due_time_str) -> datetime`: High-precision timestamp calculator.
   * `is_task_delayed(task, current_dt) -> bool`: Runway deadline threshold detector.
   * `get_task_notifications(tasks, current_dt) -> list`: Notification dispatch generator.
   * `is_existing_instance_running()`: IPC client that brings any already-running Prior window to the foreground via a localhost TCP socket.
+
 * 🧪 **`test_project.py`**: Comprehensive `pytest` test suite with 50 unit tests validating all top-level functions across boundary cases, leap years, overdue scenarios, and reminder triggers.
 * 🗄️ **`database.py`**: SQLite database layer managing schema migrations, task CRUD operations, user profile settings, and Pomodoro focus logs.
 * 🎨 **`ui/theme.py`**: Houses the design tokens and Windows DWM titlebar hooks that synchronize title bar colors and native Win32 window class background brushes (`GCLP_HBRBACKGROUND`) across light and dark modes.
