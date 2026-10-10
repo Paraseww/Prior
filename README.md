@@ -1,32 +1,40 @@
-<p align="center">
+<div align="center">
   <img src="assets/icon.png" alt="Prior Logo" width="128" height="128">
-</p>
+  <h1>Prior</h1>
+  <p><strong>Eisenhower Matrix Desktop Task Manager</strong></p>
+</div>
 
-# Prior - Eisenhower Matrix Desktop Task Manager
+#### 🎬 Video Demo: <YOUTUBE_URL>
 
-#### Video Demo: <YOUTUBE_URL>
-
-#### Description:
+#### 📖 Description:
 
 **Prior** is an offline-first desktop productivity application built in Python using **CustomTkinter** and **SQLite**. It implements the **Eisenhower Matrix time-management methodology**, empowering users to organize, schedule, and execute tasks based on urgency and importance rather than overwhelming, flat to-do lists.
 
 ---
 
-### The Problem & Motivation
+### 🎯 The Problem & Motivation
 
-Modern professionals and students frequently suffer from "urgency bias" - the psychological tendency to tackle whatever feels urgent at the expense of tasks that are truly important for long-term growth. Standard to-do list applications exacerbate this issue by presenting flat, unprioritized lists where a critical project deadline looks identical to a routine errand.
+Modern professionals and students frequently suffer from "urgency bias" — the psychological tendency to tackle whatever feels urgent at the expense of tasks that are truly important for long-term growth. Standard to-do list applications exacerbate this issue by presenting flat, unprioritized lists where a critical project deadline looks identical to a routine errand.
 
-Prior was built to solve this friction. By forcing a two-dimensional decision on every task - **Is it Urgent?** and **Is it Important?** - Prior categorizes work into four distinct operational quadrants:
-1. **Q1: Do First (Urgent & Important)** - Immediate crises, critical bugs, and hard deadlines.
-2. **Q2: Schedule (Not Urgent & Important)** - Deep work, long-term learning, strategic planning, and self-care.
-3. **Q3: Delegate (Urgent & Not Important)** - Interruptions, quick requests, and administrative overhead.
-4. **Q4: Eliminate (Not Urgent & Not Important)** - Time-wasters, trivia, and low-value tasks safe to drop.
+Prior was built to solve this friction. By forcing a two-dimensional decision on every task — **Is it Urgent?** and **Is it Important?** — Prior categorizes work into four distinct operational quadrants:
+
+1. 🔴 **Q1: Do First (Urgent & Important)** &nbsp;`#EF4444`&nbsp; — Immediate crises, critical bugs, and hard deadlines.
+2. 🟢 **Q2: Schedule (Not Urgent & Important)** &nbsp;`#10B981`&nbsp; — Deep work, long-term learning, strategic planning, and self-care.
+3. 🟡 **Q3: Delegate (Urgent & Not Important)** &nbsp;`#F59E0B`&nbsp; — Interruptions, quick requests, and administrative overhead.
+4. 🔵 **Q4: Eliminate (Not Urgent & Not Important)** &nbsp;`#3B82F6`&nbsp; — Time-wasters, trivia, and low-value tasks safe to drop.
+
+| Quadrant | Priority & Action | Color Code | Focus & Typical Tasks |
+| :---: | :--- | :---: | :--- |
+| 🔴 | **Q1: Do First** *(Urgent & Important)* | `#EF4444` | Immediate crises, critical bugs, and hard deadlines |
+| 🟢 | **Q2: Schedule** *(Not Urgent & Important)* | `#10B981` | Deep work, long-term learning, strategic planning, and self-care |
+| 🟡 | **Q3: Delegate** *(Urgent & Not Important)* | `#F59E0B` | Interruptions, quick requests, and administrative overhead |
+| 🔵 | **Q4: Eliminate** *(Not Urgent & Not Important)* | `#3B82F6` | Time-wasters, trivia, and low-value tasks safe to drop |
 
 ---
 
-### UI Prototyping & Wireframe Design
+### 🎨 UI Prototyping & Wireframe Design
 
-> **Designed & Wireframed with [Balsamiq](https://balsamiq.com/)**
+> ✏️ **Designed & Wireframed with [Balsamiq](https://balsamiq.com/)**
 
 Prior was built with a deliberate design-first approach. Before writing any frontend or database code, extensive effort was invested into architecting and prototyping the entire user experience using **Balsamiq**. This wireframing phase allowed for rapid iteration on visual hierarchy, quadrant layout balance, task creation ergonomics, and seamless Pomodoro workflow integration.
 
@@ -36,18 +44,18 @@ Prior was built with a deliberate design-first approach. Before writing any fron
 
 ---
 
-### Key Features
+### ✨ Key Features
 
-* **Interactive Eisenhower Matrix Workspace**: A dynamic four-quadrant board with visual color cues, custom card frames, and smooth scrolling.
-* **Smart Runway Warnings & Deadline Nudges**: Pure algorithms evaluate task estimated durations against drop-dead times to alert users before high-stakes tasks become late.
-* **Integrated Pomodoro Focus Timer**: An on-screen and modal timer that tracks deep work sprints and automatically logs productive minutes to the local database.
-* **Visual Productivity Analytics**: Dedicated analytics dashboard displaying quadrant completion ratios, weekly time-scope toggles, and daily focus trends.
-* **System Tray & Single-Instance IPC**: Minimizes to the Windows system notification area and uses a local socket server to ensure single-instance taskbar activation with zero duplicate windows.
-* **Seamless Dark and Light Modes**: Hand-tailored color tokens (Creamy Soft Paper / OLED Black) with synchronized Windows 11 DWM titlebar and Win32 background brushes to eliminate OS window flickering.
+* 🗂️ **Interactive Eisenhower Matrix Workspace**: A dynamic four-quadrant board with visual color cues, custom card frames, and smooth scrolling.
+* ⚠️ **Smart Runway Warnings & Deadline Nudges**: Pure algorithms evaluate task estimated durations against drop-dead times to alert users before high-stakes tasks become late.
+* 🍅 **Integrated Pomodoro Focus Timer**: An on-screen and modal timer that tracks deep work sprints and automatically logs productive minutes to the local database.
+* 📊 **Visual Productivity Analytics**: Dedicated analytics dashboard displaying quadrant completion ratios, weekly time-scope toggles, and daily focus trends.
+* 🔔 **System Tray & Single-Instance IPC**: Minimizes to the Windows system notification area and uses a local socket server to ensure single-instance taskbar activation with zero duplicate windows.
+* 🌓 **Seamless Dark and Light Modes**: Hand-tailored color tokens (Creamy Soft Paper / OLED Black) with synchronized Windows 11 DWM titlebar and Win32 background brushes to eliminate OS window flickering.
 
 ---
 
-### File & Module Architecture
+### 📁 File & Module Architecture
 
 ```text
 Prior/
@@ -55,7 +63,7 @@ Prior/
 ├── test_project.py          # Pytest automated test suite (unit tests)
 ├── database.py              # SQLite schema, migrations, and CRUD operations
 ├── requirements.txt         # Pip dependency manifest
-├── README.md                # project documentation
+├── README.md                # Project documentation
 ├── assets/                  # Icons, fonts, and wireframe assets
 │   ├── icon.ico             # Application icon
 │   ├── icon.png             # High-res PNG logo
@@ -78,66 +86,66 @@ Prior/
     └── windows_integration.py # Windows AppUserModelID, Start Menu shortcut & taskbar Jump List
 ```
 
-#### Explanation of Core Files
+#### 🔍 Explanation of Core Files
 
-* **`project.py`**: The application entry point containing `main()` and core standalone business logic functions:
+* 🚀 **`project.py`**: The application entry point containing `main()` and core standalone business logic functions:
   * `determine_quadrant(is_urgent: bool, is_important: bool) -> str`: Pure classifier determining quadrant assignment.
   * `filter_tasks(tasks, search_query, quadrant_filter, show_completed, include_archived) -> list`: Multi-criteria search and filter engine.
   * `calculate_drop_dead_time(due_date_str, due_time_str) -> datetime`: High-precision timestamp calculator.
   * `is_task_delayed(task, current_dt) -> bool`: Runway deadline threshold detector.
   * `get_task_notifications(tasks, current_dt) -> list`: Notification dispatch generator.
   * `is_existing_instance_running()`: IPC client that brings any already-running Prior window to the foreground via a localhost TCP socket.
-* **`test_project.py`**: Comprehensive `pytest` test suite with 50 unit tests validating all top-level functions across boundary cases, leap years, overdue scenarios, and reminder triggers.
-* **`database.py`**: SQLite database layer managing schema migrations, task CRUD operations, user profile settings, and Pomodoro focus logs.
-* **`ui/theme.py`**: Houses the design tokens and Windows DWM titlebar hooks that synchronize title bar colors and native Win32 window class background brushes (`GCLP_HBRBACKGROUND`) across light and dark modes.
+* 🧪 **`test_project.py`**: Comprehensive `pytest` test suite with 50 unit tests validating all top-level functions across boundary cases, leap years, overdue scenarios, and reminder triggers.
+* 🗄️ **`database.py`**: SQLite database layer managing schema migrations, task CRUD operations, user profile settings, and Pomodoro focus logs.
+* 🎨 **`ui/theme.py`**: Houses the design tokens and Windows DWM titlebar hooks that synchronize title bar colors and native Win32 window class background brushes (`GCLP_HBRBACKGROUND`) across light and dark modes.
 
 ---
 
-### Design Decisions & Technical Trade-offs
+### 💡 Design Decisions & Technical Trade-offs
 
-1. **CustomTkinter over PyQt / Electron**:
+1. ⚡ **CustomTkinter over PyQt / Electron**:
    * *Decision*: Used CustomTkinter for native Python desktop performance.
    * *Rationale*: Avoided the multi-hundred-megabyte memory footprint of Electron/Chromium and the heavy binary dependencies and licensing complexities of PyQt. CustomTkinter gives modern rounded widgets, dark/light appearance modes, and crisp DPI scaling while keeping the app lightweight and fast to boot.
 
-2. **SQLite over Flat Files (JSON / CSV)**:
+2. 🗃️ **SQLite over Flat Files (JSON / CSV)**:
    * *Decision*: Used SQLite (`sqlite3`) as an embedded, zero-configuration relational database.
    * *Rationale*: Storing tasks and Pomodoro session logs in SQLite ensures ACID compliance, indexed search queries, and historical analytics aggregation that flat files cannot efficiently provide.
 
-3. **Separation of Pure Business Logic in `project.py`**:
+3. 🧩 **Separation of Pure Business Logic in `project.py`**:
    * *Decision*: Kept matrix classification, runway delay formulas, search filters, and notification algorithms as pure Python functions in `project.py`, decoupled from GUI widgets.
    * *Rationale*: Enables 100% automated test coverage in `test_project.py` without requiring GUI rendering during CI/test runs.
 
-4. **Local Socket IPC for Single-Instance Control**:
+4. 🔌 **Local Socket IPC for Single-Instance Control**:
    * *Decision*: Implemented a lightweight socket listener on `127.0.0.1:49281`.
    * *Rationale*: Prevents multiple instances of Prior from running concurrently when launching from desktop or taskbar shortcuts. When clicked again, the new process communicates with the existing instance to smoothly restore the window and exits cleanly.
 
 ---
 
-### Installation & Setup
+### 🚀 Installation & Setup
 
-#### Prerequisites
-* **Python 3.10+** installed on your system.
-* Windows 10 or 11 (fully supported; macOS/Linux run with cross-platform CustomTkinter fallback).
+#### 📋 Prerequisites
+* 🐍 **Python 3.10+** installed on your system.
+* 🪟 Windows 10 or 11 (fully supported; macOS/Linux run with cross-platform CustomTkinter fallback).
 
-#### 1. Clone the Repository
+#### 1️⃣ Clone the Repository
 ```bash
 git clone https://github.com/Paraseww/Prior.git
 cd Prior
 ```
 
-#### 2. Install Dependencies
+#### 2️⃣ Install Dependencies
 ```bash
 pip install -r requirements.txt
 ```
 
-#### 3. Run the Application
+#### 3️⃣ Run the Application
 ```bash
 python project.py
 ```
 
 ---
 
-### Running the Test Suite
+### 🧪 Running the Test Suite
 
 Prior includes automated unit tests covering all required standalone functions in `project.py`. Run the tests using `pytest`:
 
