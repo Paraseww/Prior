@@ -7,7 +7,7 @@
   <p><strong>Eisenhower Matrix Desktop Task Manager</strong></p>
 </div>
 
-#### 🎬 Video Demo: <YOUTUBE_URL>
+#### 🎬 Video Demo: https://youtu.be/86WKJx5PMDs
 
 #### 📖 Description:
 
