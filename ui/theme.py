@@ -133,6 +133,18 @@ def get_font(size: int = 14, weight: str = "normal") -> tuple:
 from ui.windows_integration import apply_prior_icon
 
 
+_GDI_BRUSH_CACHE: Dict[int, int] = {}
+
+
+def _hex_to_bgr_int(hex_str: str) -> int:
+    """Converts a standard #RRGGBB hex string into Windows COLORREF integer (0x00BBGGRR)."""
+    hex_str = hex_str.lstrip("#")
+    r = int(hex_str[0:2], 16)
+    g = int(hex_str[2:4], 16)
+    b = int(hex_str[4:6], 16)
+    return (b << 16) | (g << 8) | r
+
+
 # Global hook for CustomTkinter Windows titlebar icon and smooth color switching
 try:
     import customtkinter as _ctk
@@ -141,23 +153,136 @@ try:
         apply_prior_icon(self)
 
     def _smooth_windows_set_titlebar_color(self: Any, color_mode: str) -> None:
-        """Sets Windows titlebar dark/light mode in-place without blinking, withdraw(), or unmapping."""
+        """
+        Sets Windows titlebar dark/light mode, DWM caption/border colors, and native
+        Win32 window class background brush in-place without glitching or black flashes.
+        """
+        if sys.platform != "win32":
+            return
+
+        self._current_titlebar_color_mode = color_mode
+
+        def _get_live_is_dark() -> bool:
+            prop_mode = getattr(self, "_current_titlebar_color_mode", None)
+            if prop_mode:
+                m = str(prop_mode).strip().lower()
+                if m == "dark":
+                    return True
+                if m == "light":
+                    return False
+
+            if hasattr(self, "_get_appearance_mode"):
+                try:
+                    m = str(self._get_appearance_mode()).strip().lower()
+                    if m == "dark":
+                        return True
+                    if m == "light":
+                        return False
+                except Exception:
+                    pass
+
+            try:
+                m = str(_ctk.get_appearance_mode()).strip().lower()
+                if m == "dark":
+                    return True
+                if m == "light":
+                    return False
+            except Exception:
+                pass
+
+            try:
+                import database
+                prof = database.get_profile()
+                if str(prof.get("theme", "")).strip().lower() == "dark":
+                    return True
+            except Exception:
+                pass
+
+            return False
+
         def _apply() -> None:
             try:
-                val = ctypes.c_int(1 if color_mode.lower() == "dark" else 0)
+                is_dark = _get_live_is_dark()
+                bg_hex = BG_MAIN[1] if is_dark else BG_MAIN[0]
+                text_hex = TEXT_PRIMARY[1] if is_dark else TEXT_PRIMARY[0]
+                border_hex = BORDER_COLOR[1] if is_dark else BORDER_COLOR[0]
+
+                bg_bgr = _hex_to_bgr_int(bg_hex)
+                text_bgr = _hex_to_bgr_int(text_hex)
+                border_bgr = _hex_to_bgr_int(border_hex)
+
                 wid = self.winfo_id()
-                if wid:
-                    hwnd = ctypes.windll.user32.GetParent(wid) or wid
-                    if ctypes.windll.dwmapi.DwmSetWindowAttribute(hwnd, 20, ctypes.byref(val), ctypes.sizeof(val)) != 0:
-                        ctypes.windll.dwmapi.DwmSetWindowAttribute(hwnd, 19, ctypes.byref(val), ctypes.sizeof(val))
+                if not wid:
+                    return
+                parent = ctypes.windll.user32.GetParent(wid) or wid
+
+                DWMWA_USE_IMMERSIVE_DARK_MODE = 20
+                DWMWA_USE_IMMERSIVE_DARK_MODE_BEFORE_20H1 = 19
+                DWMWA_BORDER_COLOR = 34
+                DWMWA_CAPTION_COLOR = 35
+                DWMWA_TEXT_COLOR = 36
+                GCLP_HBRBACKGROUND = -10
+
+                dark_val = ctypes.c_int(1 if is_dark else 0)
+                col_caption = ctypes.c_ulong(bg_bgr)
+                col_text = ctypes.c_ulong(text_bgr)
+                col_border = ctypes.c_ulong(border_bgr)
+
+                for h in (wid, parent):
+                    # 1. Update native Win32 window class background brush so OS restore/unminimize animations never flash black or white
+                    try:
+                        old_brush = _GDI_BRUSH_CACHE.get(h)
+                        new_brush = ctypes.windll.gdi32.CreateSolidBrush(bg_bgr)
+                        if new_brush:
+                            ctypes.windll.user32.SetClassLongPtrW(h, GCLP_HBRBACKGROUND, new_brush)
+                            _GDI_BRUSH_CACHE[h] = new_brush
+                            if old_brush and old_brush != new_brush:
+                                ctypes.windll.gdi32.DeleteObject(old_brush)
+                    except Exception:
+                        pass
+
+                    # 2. Immersive dark mode toggle for Windows 10/11
+                    if ctypes.windll.dwmapi.DwmSetWindowAttribute(
+                        h, DWMWA_USE_IMMERSIVE_DARK_MODE, ctypes.byref(dark_val), ctypes.sizeof(dark_val)
+                    ) != 0:
+                        ctypes.windll.dwmapi.DwmSetWindowAttribute(
+                            h, DWMWA_USE_IMMERSIVE_DARK_MODE_BEFORE_20H1, ctypes.byref(dark_val), ctypes.sizeof(dark_val)
+                        )
+
+                    # 3. Explicit DWM Caption Color (Windows 11 build >= 22000)
+                    ctypes.windll.dwmapi.DwmSetWindowAttribute(
+                        h, DWMWA_CAPTION_COLOR, ctypes.byref(col_caption), ctypes.sizeof(col_caption)
+                    )
+
+                    # 4. Explicit DWM Text Color (Windows 11)
+                    ctypes.windll.dwmapi.DwmSetWindowAttribute(
+                        h, DWMWA_TEXT_COLOR, ctypes.byref(col_text), ctypes.sizeof(col_text)
+                    )
+
+                    # 5. Explicit DWM Border Color (Windows 11)
+                    ctypes.windll.dwmapi.DwmSetWindowAttribute(
+                        h, DWMWA_BORDER_COLOR, ctypes.byref(col_border), ctypes.sizeof(col_border)
+                    )
             except Exception:
                 pass
 
         _apply()
         try:
-            self.after(50, _apply)
+            self.after(30, _apply)
+            self.after(100, _apply)
         except Exception:
             pass
+
+        # Re-apply whenever the window is restored from taskbar or unminimized
+        if not getattr(self, "_smooth_titlebar_map_bound", False):
+            self._smooth_titlebar_map_bound = True
+            def _on_map(event: Any) -> None:
+                if str(event.widget) == str(self):
+                    _apply()
+            try:
+                self.bind("<Map>", _on_map, add="+")
+            except Exception:
+                pass
 
     _ctk.CTk._windows_set_titlebar_icon = _custom_windows_set_titlebar_icon
     _ctk.CTkToplevel._windows_set_titlebar_icon = _custom_windows_set_titlebar_icon

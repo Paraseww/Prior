@@ -326,7 +326,6 @@ def apply_prior_icon(window: Any) -> None:
                 pass
 
             try:
-                window.update_idletasks()
                 wid = window.winfo_id()
                 if wid:
                     parent = ctypes.windll.user32.GetParent(wid) or wid

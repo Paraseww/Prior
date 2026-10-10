@@ -16,6 +16,16 @@ os.environ["TEMP"] = _temp_dir
 os.environ["TMP"] = _temp_dir
 tempfile.tempdir = _temp_dir
 
+# Immediately hide the console window upon startup if allocated to avoid black flashing
+if sys.platform == "win32":
+    try:
+        import ctypes
+        _console_hwnd = ctypes.windll.kernel32.GetConsoleWindow()
+        if _console_hwnd:
+            ctypes.windll.user32.ShowWindow(_console_hwnd, 0)
+    except Exception:
+        pass
+
 from datetime import date, datetime, timedelta
 import re
 from typing import Any, Dict, List, Optional, Tuple, Union
@@ -40,7 +50,7 @@ def is_existing_instance_running(signal_notifications: bool = False) -> bool:
                 import ctypes
                 hwnd = ctypes.windll.user32.FindWindowW(None, "Prior - Eisenhower Matrix Task Manager")
                 if hwnd:
-                    ctypes.windll.user32.ShowWindow(hwnd, 9)  # SW_RESTORE
+                    ctypes.windll.user32.SwitchToThisWindow(hwnd, True)
                     ctypes.windll.user32.SetForegroundWindow(hwnd)
             except Exception:
                 pass

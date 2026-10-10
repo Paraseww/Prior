@@ -50,7 +50,7 @@ class PriorApp(ctk.CTk):
         ctk.set_appearance_mode(app_mode)
         ctk.set_default_color_theme("blue")
 
-        super().__init__()
+        super().__init__(fg_color=theme.BG_MAIN)
 
         # Configure Window Properties (screen-adaptive to prevent cutoffs on smaller/scaled displays)
         self.title("Prior - Eisenhower Matrix Task Manager")
@@ -141,10 +141,16 @@ class PriorApp(ctk.CTk):
         if "--minimized" in sys.argv:
             self.withdraw()
         else:
-            # Bring window to front
+            # Bring window to front smoothly without -topmost flickering
             self.lift()
-            self.attributes("-topmost", True)
-            self.after(100, lambda: self.attributes("-topmost", False))
+            if sys.platform == "win32":
+                try:
+                    import ctypes
+                    wid = self.winfo_id()
+                    hwnd = ctypes.windll.user32.GetParent(wid) or wid
+                    ctypes.windll.user32.SetForegroundWindow(hwnd)
+                except Exception:
+                    pass
             self.focus_force()
 
     def _set_app_icon(self) -> None:
@@ -1297,16 +1303,16 @@ class PriorApp(ctk.CTk):
     def _restore_window(self) -> None:
         self.deiconify()
         self.lift()
-        # Temporarily force window topmost to bypass Windows OS background focus lock
-        self.attributes("-topmost", True)
-        self.after(100, lambda: self.attributes("-topmost", False))
-        try:
-            import ctypes
-            hwnd = ctypes.windll.user32.GetParent(self.winfo_id()) or self.winfo_id()
-            ctypes.windll.user32.ShowWindow(hwnd, 9)  # SW_RESTORE
-            ctypes.windll.user32.SetForegroundWindow(hwnd)
-        except Exception:
-            pass
+        if sys.platform == "win32":
+            try:
+                import ctypes
+                wid = self.winfo_id()
+                hwnd = ctypes.windll.user32.GetParent(wid) or wid
+                ctypes.windll.user32.ShowWindow(hwnd, 9)  # SW_RESTORE
+                ctypes.windll.user32.SwitchToThisWindow(hwnd, True)
+                ctypes.windll.user32.SetForegroundWindow(hwnd)
+            except Exception:
+                pass
         self.focus_force()
 
     def _start_ipc_server(self) -> None:
