@@ -7,7 +7,11 @@
   <p><strong>Eisenhower Matrix Desktop Task Manager</strong></p>
 </div>
 
-#### 🎬 Video Demo: https://youtu.be/86WKJx5PMDs
+#### 🎬 Video Demo:
+
+<div align="center">
+  <video src="assets/videos/prior-demo.mp4" controls="controls" width="100%"></video>
+</div>
 
 #### 📖 Description:
 
@@ -62,12 +66,14 @@ Prior/
 ├── database.py              # SQLite schema, migrations, and CRUD operations
 ├── requirements.txt         # Pip dependency manifest
 ├── README.md                # Project documentation
-├── assets/                  # Icons, fonts, and wireframe assets
+├── assets/                  # Icons, fonts, video demo, and wireframe assets
 │   ├── icon.ico             # Application icon
 │   ├── icon.png             # High-res PNG logo
 │   ├── prior_brand_dark.png # High-res hero brand banner (Dark mode)
 │   ├── prior_brand_light.png# High-res hero brand banner (Light mode)
 │   ├── fonts/               # Bundled Comic Neue typeface assets
+│   ├── videos/              # Video demonstration walkthrough
+│   │   └── prior-demo.mp4
 │   └── wireframes/          # UI prototyping collages and diagrams
 │       └── balsamiq_wireframes.png
 └── ui/                      # Modular CustomTkinter GUI package
