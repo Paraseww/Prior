@@ -1,7 +1,3 @@
-
-
-Uploading prior-demo.mp4…
-
 <div align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="assets/prior_brand_dark.png">
@@ -13,9 +9,7 @@ Uploading prior-demo.mp4…
 
 #### 🎬 Video Demo:
 
-<div align="center">
-  <video src="assets/videos/prior-demo.mp4" controls="controls" width="100%"></video>
-</div>
+https://github.com/user-attachments/assets/97636336-c745-4ae9-a44a-58b99b4f37b3
 
 #### 📖 Description:
 
