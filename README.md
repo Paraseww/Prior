@@ -44,6 +44,51 @@ Prior was built with a deliberate design-first approach. Before writing any fron
 
 ---
 
+### 🖥️ Final Application UI & Experience
+
+Explore the finished application interface across both Light and Dark themes, illustrating the journey from onboarding to day-to-day task execution:
+
+<table align="center" width="100%">
+  <tr>
+    <td align="center" width="50%" valign="top">
+      <a href="assets/final%20view/1.png">
+        <img src="assets/final%20view/1.png" alt="Light Mode Onboarding Flow" width="100%">
+      </a>
+      <br><br>
+      <strong>1. Onboarding & Mental Model (Light Mode)</strong>
+      <p align="left"><em>Interactive 4-step onboarding journey introducing Eisenhower Matrix methodology, urgency vs. importance principles, and profile customization.</em></p>
+    </td>
+    <td align="center" width="50%" valign="top">
+      <a href="assets/final%20view/2.png">
+        <img src="assets/final%20view/2.png" alt="Light Mode Primary Workspace Views" width="100%">
+      </a>
+      <br><br>
+      <strong>2. Primary Workspace Views (Light Mode)</strong>
+      <p align="left"><em>Core operational views: dynamic 4-quadrant matrix board with custom dot-pattern cards, tabular list view with search filters, calendar time-blocking, and productivity analytics.</em></p>
+    </td>
+  </tr>
+  <tr>
+    <td align="center" width="50%" valign="top">
+      <a href="assets/final%20view/3.png">
+        <img src="assets/final%20view/3.png" alt="Settings & Dark Mode Onboarding" width="100%">
+      </a>
+      <br><br>
+      <strong>3. Settings & Dark Mode Onboarding</strong>
+      <p align="left"><em>Centralized user settings (display name, UI zoom scaling, Windows startup toggle, database controls) paired with the sleek dark-themed welcome tour.</em></p>
+    </td>
+    <td align="center" width="50%" valign="top">
+      <a href="assets/final%20view/4.png">
+        <img src="assets/final%20view/4.png" alt="Dark Mode Primary Workspace Views" width="100%">
+      </a>
+      <br><br>
+      <strong>4. Primary Workspace Views (Dark Mode)</strong>
+      <p align="left"><em>High-contrast OLED Dark Mode featuring neon quadrant status boundaries (Red, Green, Amber, Blue), task search, completion tracking, and calendar schedules.</em></p>
+    </td>
+  </tr>
+</table>
+
+---
+
 ### ✨ Key Features
 
 * 🗂️ **Interactive Eisenhower Matrix Workspace**: A dynamic four-quadrant board with visual color cues, custom card frames, and smooth scrolling.

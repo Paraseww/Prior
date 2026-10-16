@@ -82,12 +82,13 @@ def main() -> None:
 
     database.init_db()
     
-    # Import and launch GUI application (Phase 3 & 4)
+    # Import and launch GUI application
     try:
         from ui.app import launch_app
         launch_app()
-    except ImportError:
-        print("Prior database initialized successfully. UI components will launch in Phase 3.")
+    except ImportError as exc:
+        print(f"Failed to launch UI due to missing dependencies: {exc}")
+        print("Please ensure all requirements are installed: pip install -r requirements.txt")
 
 
 def determine_quadrant(is_urgent: bool, is_important: bool) -> str:
